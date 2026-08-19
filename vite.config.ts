@@ -6,6 +6,8 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    // Prevent vite from obscuring rust errors
+    clearScreen: false,
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -17,6 +19,9 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      port: 1420,
+      strictPort: true,
     },
+    envPrefix: ['VITE_', 'TAURI_'],
   };
 });
