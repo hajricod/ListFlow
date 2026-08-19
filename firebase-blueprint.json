@@ -1,0 +1,99 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with synchronized settings and metadata",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The unique Firebase Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "Google email address" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "photoURL": { "type": "string", "description": "Avatar photo URL" },
+        "language": { "type": "string", "description": "UI language (en, ar)" },
+        "theme": { "type": "string", "description": "UI theme (light, dark, system)" },
+        "themeColor": { "type": "string", "description": "Accent theme color" },
+        "soundEnabled": { "type": "boolean", "description": "Sound effects preference" },
+        "activeListId": { "type": "string", "description": "Last active list ID" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["userId", "email"]
+    },
+    "AppList": {
+      "title": "AppList",
+      "description": "A workspace list containing groups and task items",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique list ID" },
+        "userId": { "type": "string", "description": "Owner Firebase UID" },
+        "title": { "type": "string", "description": "Title of the list", "maxLength": 100 },
+        "color": { "type": "string", "description": "Hex color code", "maxLength": 20 },
+        "icon": { "type": "string", "description": "Lucide icon name", "maxLength": 40 },
+        "isDefault": { "type": "boolean", "description": "Whether this is default list" },
+        "order": { "type": "number", "description": "Sort order index" },
+        "createdAt": { "type": "string", "description": "Creation ISO date" },
+        "updatedAt": { "type": "string", "description": "Last updated ISO date" }
+      },
+      "required": ["id", "userId", "title"]
+    },
+    "ListGroup": {
+      "title": "ListGroup",
+      "description": "A grouping or aisle within a list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique group ID" },
+        "userId": { "type": "string", "description": "Owner Firebase UID" },
+        "listId": { "type": "string", "description": "Parent list ID" },
+        "title": { "type": "string", "description": "Title of the group/section", "maxLength": 100 },
+        "icon": { "type": "string", "description": "Icon identifier", "maxLength": 40 },
+        "order": { "type": "number", "description": "Sort order index" },
+        "collapsed": { "type": "boolean", "description": "Accordion collapse state" },
+        "isGeneral": { "type": "boolean", "description": "Default uncategorized group flag" },
+        "createdAt": { "type": "string", "description": "Creation ISO date" },
+        "updatedAt": { "type": "string", "description": "Last updated ISO date" }
+      },
+      "required": ["id", "userId", "listId", "title"]
+    },
+    "ListItem": {
+      "title": "ListItem",
+      "description": "An item or task within a group and list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique item ID" },
+        "userId": { "type": "string", "description": "Owner Firebase UID" },
+        "listId": { "type": "string", "description": "Parent list ID" },
+        "groupId": { "type": "string", "description": "Parent group ID" },
+        "text": { "type": "string", "description": "Title or description of the item", "maxLength": 500 },
+        "completed": { "type": "boolean", "description": "Completion checkbox status" },
+        "quantity": { "type": "number", "description": "Quantity stepper value" },
+        "unit": { "type": "string", "description": "Unit (pcs, kg, etc.)", "maxLength": 30 },
+        "price": { "type": "number", "description": "Optional item price" },
+        "notes": { "type": "string", "description": "Optional notes or details", "maxLength": 2000 },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"], "description": "Priority flag" },
+        "tag": { "type": "string", "description": "Optional tag name", "maxLength": 50 },
+        "order": { "type": "number", "description": "Sort order index" },
+        "createdAt": { "type": "string", "description": "Creation ISO date" },
+        "updatedAt": { "type": "string", "description": "Last updated ISO date" }
+      },
+      "required": ["id", "userId", "listId", "groupId", "text", "completed"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Private user profile and synced settings"
+    },
+    "/users/{userId}/lists/{listId}": {
+      "schema": "AppList",
+      "description": "User custom and template lists"
+    },
+    "/users/{userId}/groups/{groupId}": {
+      "schema": "ListGroup",
+      "description": "Groups and sections belonging to user lists"
+    },
+    "/users/{userId}/items/{itemId}": {
+      "schema": "ListItem",
+      "description": "Tasks and grocery items belonging to user groups and lists"
+    }
+  }
+}

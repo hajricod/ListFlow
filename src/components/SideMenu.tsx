@@ -30,9 +30,11 @@ import {
   CheckCircle2,
   ListTodo,
   Settings,
+  LogOut,
 } from 'lucide-react';
 import { AppList, AppView, Language, ListGroup, ListItem } from '../types';
 import { getTranslation } from '../locales/translations';
+import { User } from 'firebase/auth';
 
 interface SideMenuProps {
   isOpen: boolean;
@@ -51,6 +53,9 @@ interface SideMenuProps {
   completedTasks: number;
   currentView?: AppView;
   onOpenSettings: () => void;
+  user?: User | null;
+  onOpenAuthModal?: () => void;
+  onSignOut?: () => void;
 }
 
 const getListIconComponent = (iconName: string) => {
@@ -115,6 +120,9 @@ export const SideMenu: React.FC<SideMenuProps> = ({
   completedTasks,
   currentView = 'workspace',
   onOpenSettings,
+  user,
+  onOpenAuthModal,
+  onSignOut,
 }) => {
   const t = getTranslation(language);
   const [listSearch, setListSearch] = useState('');
@@ -429,6 +437,97 @@ export const SideMenu: React.FC<SideMenuProps> = ({
               </span>
             </div>
           </div>
+
+          {/* User Account / Sign In card in Sidenav */}
+          {user ? (
+            <div
+              id="sidenav-user-profile-card"
+              className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white dark:bg-neutral-800/90 border border-neutral-200/90 dark:border-neutral-700/80 shadow-2xs"
+            >
+              <button
+                type="button"
+                id="sidenav-user-profile-btn"
+                onClick={() => {
+                  onOpenSettings();
+                  if (window.innerWidth < 1024) onClose();
+                }}
+                title={`${t.signedInAs}: ${user.displayName || user.email}`}
+                className="flex items-center gap-2.5 min-w-0 text-start flex-1 cursor-pointer group"
+              >
+                <div className="relative shrink-0">
+                  {user.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt={user.displayName || 'User'}
+                      referrerPolicy="no-referrer"
+                      className="w-8 h-8 rounded-lg object-cover ring-1 ring-emerald-500/30"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                      {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div
+                    className="absolute -bottom-0.5 -end-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-neutral-800"
+                    title={t.cloudSyncActive}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                    {user.displayName || user.email?.split('@')[0]}
+                  </div>
+                  <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
+                    {user.email}
+                  </div>
+                </div>
+              </button>
+
+              {onSignOut && (
+                <button
+                  type="button"
+                  id="sidenav-signout-btn"
+                  onClick={onSignOut}
+                  title={t.signOut}
+                  className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer shrink-0"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          ) : (
+            onOpenAuthModal && (
+              <button
+                type="button"
+                id="sidenav-signin-btn"
+                onClick={() => {
+                  onOpenAuthModal();
+                  if (window.innerWidth < 1024) onClose();
+                }}
+                title={t.signInWithGoogle}
+                className="w-full flex items-center justify-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-750 text-neutral-800 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 shadow-2xs hover:shadow-xs transition-all active:scale-[0.98] cursor-pointer"
+              >
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                  />
+                </svg>
+                <span>{t.signInWithGoogle}</span>
+              </button>
+            )
+          )}
 
           {/* Dedicated Settings Button at Bottom of Sidenav */}
           <div className="flex items-center justify-end">

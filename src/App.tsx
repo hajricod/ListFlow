@@ -57,8 +57,15 @@ import { TemplatesModal } from './components/TemplatesModal';
 import { ShortcutsModal } from './components/ShortcutsModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { InstallAppModal } from './components/InstallAppModal';
+import { AuthModal } from './components/AuthModal';
 import { ToastContainer } from './components/Toast';
 import { usePWAInstall } from './hooks/usePWAInstall';
+import { useAuth } from './hooks/useAuth';
+import {
+  fetchUserCloudData,
+  syncAllToFirestore,
+  syncUserProfile,
+} from './utils/firestoreSync';
 import { Plus, ListTodo, Layers } from 'lucide-react';
 
 export default function App() {
@@ -70,6 +77,19 @@ export default function App() {
 
   // PWA Installation Hook
   const pwa = usePWAInstall();
+
+  // Authentication & Cloud Sync
+  const {
+    user,
+    loading: authLoading,
+    isLoggingIn,
+    error: authError,
+    signInWithGoogle,
+    signOut: authSignOut,
+    clearError: clearAuthError,
+  } = useAuth();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const prevUserRef = React.useRef<string | null>(null);
 
   const [lists, setLists] = useState<AppList[]>(() => loadStoredLists(language));
   const [activeListId, setActiveListId] = useState<string>(() => loadActiveListId(lists));
@@ -297,6 +317,63 @@ export default function App() {
   const dismissToast = (id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   };
+
+  // Auth User Cloud Sync on Login / Logout
+  useEffect(() => {
+    if (user) {
+      if (prevUserRef.current !== user.uid) {
+        prevUserRef.current = user.uid;
+        fetchUserCloudData(user.uid).then((cloudData) => {
+          if (cloudData && cloudData.lists && cloudData.lists.length > 0) {
+            setLists(cloudData.lists);
+            if (cloudData.groups) setGroups(cloudData.groups);
+            if (cloudData.items) setItems(cloudData.items);
+            if (cloudData.language) setLanguage(cloudData.language);
+            if (cloudData.theme) setTheme(cloudData.theme);
+            if (cloudData.themeColor) setThemeColor(cloudData.themeColor);
+            if (cloudData.soundEnabled !== undefined) setSoundEnabled(cloudData.soundEnabled);
+            if (cloudData.activeListId) setActiveListId(cloudData.activeListId);
+            showToast(t.loginSuccess, undefined, 'success');
+          } else {
+            // First time login: Upload initial workspace data to cloud
+            syncAllToFirestore(user.uid, lists, groups, items);
+            syncUserProfile(user, {
+              language,
+              theme,
+              themeColor,
+              soundEnabled,
+              activeListId,
+            });
+            showToast(t.loginSuccess, undefined, 'success');
+          }
+        });
+      }
+    } else {
+      if (prevUserRef.current !== null) {
+        prevUserRef.current = null;
+        showToast(t.logoutSuccess, undefined, 'info');
+      }
+    }
+  }, [user, lists, groups, items, language, theme, themeColor, soundEnabled, activeListId, showToast, t.loginSuccess, t.logoutSuccess]);
+
+  // Real-time Cloud Sync for authenticated users
+  useEffect(() => {
+    if (user) {
+      syncAllToFirestore(user.uid, lists, groups, items);
+    }
+  }, [user, lists, groups, items]);
+
+  useEffect(() => {
+    if (user) {
+      syncUserProfile(user, {
+        language,
+        theme,
+        themeColor,
+        soundEnabled,
+        activeListId,
+      });
+    }
+  }, [user, language, theme, themeColor, soundEnabled, activeListId]);
 
   // Active List Derived Groups & Items
   const activeList = useMemo(() => {
@@ -1184,6 +1261,9 @@ export default function App() {
           sounds.playPop();
           setCurrentView('settings');
         }}
+        user={user}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onSignOut={authSignOut}
       />
 
       {/* 2. Top Navigation Bar */}
@@ -1203,6 +1283,9 @@ export default function App() {
         currentView={currentView}
         activeListName={activeList?.title}
         activeListColor={activeListColor}
+        user={user}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onSignOut={authSignOut}
       />
 
       {/* 3. Main Content Workspace or Settings Page */}
@@ -1229,6 +1312,9 @@ export default function App() {
               onImportData={handleImportJSON}
               onOpenInstallModal={() => pwa.setIsModalOpen(true)}
               isAppInstalled={pwa.isInstalled}
+              user={user}
+              onOpenAuthModal={() => setIsAuthModalOpen(true)}
+              onSignOut={authSignOut}
               onBackToWorkspace={() => setCurrentView('workspace')}
               totalLists={lists.length}
               totalGroups={groups.length}
@@ -1460,6 +1546,17 @@ export default function App() {
         canNativePrompt={pwa.canNativePrompt}
         isIOS={pwa.isIOS}
         isAndroid={pwa.isAndroid}
+        language={language}
+      />
+
+      {/* Gmail / Google Authentication Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSignInWithGoogle={signInWithGoogle}
+        isLoggingIn={isLoggingIn}
+        error={authError}
+        onClearError={clearAuthError}
         language={language}
       />
 

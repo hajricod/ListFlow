@@ -24,6 +24,8 @@ import { Language, Theme, ThemeColor } from '../types';
 import { getTranslation } from '../locales/translations';
 import { sounds } from '../utils/audio';
 import { THEME_COLOR_OPTIONS, getThemeColorName } from '../utils/themeColors';
+import { User } from 'firebase/auth';
+import { LogOut, Cloud, ShieldCheck } from 'lucide-react';
 
 interface SettingsPageProps {
   language: Language;
@@ -40,6 +42,9 @@ interface SettingsPageProps {
   onImportData: (file: File) => void;
   onOpenInstallModal?: () => void;
   isAppInstalled?: boolean;
+  user?: User | null;
+  onOpenAuthModal?: () => void;
+  onSignOut?: () => void;
   onBackToWorkspace: () => void;
   totalLists: number;
   totalGroups: number;
@@ -62,6 +67,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onImportData,
   onOpenInstallModal,
   isAppInstalled = false,
+  user,
+  onOpenAuthModal,
+  onSignOut,
   onBackToWorkspace,
   totalLists,
   totalGroups,
@@ -131,6 +139,112 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           <span>{t.backToWorkspace}</span>
         </button>
       </div>
+
+      {/* Google Account & Cloud Sync Section */}
+      <section className="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-indigo-950/30 border border-emerald-200/80 dark:border-emerald-800/60 rounded-2xl p-5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5">
+            {user ? (
+              user.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || 'User'}
+                  referrerPolicy="no-referrer"
+                  className="w-12 h-12 rounded-2xl object-cover shadow-sm ring-2 ring-emerald-500/30 shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-bold text-lg shadow-sm shadow-emerald-500/20 shrink-0">
+                  {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
+                </div>
+              )
+            ) : (
+              <div className="w-12 h-12 rounded-2xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 flex items-center justify-center shadow-xs shrink-0">
+                <svg className="w-6 h-6" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                  />
+                </svg>
+              </div>
+            )}
+
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
+                  {user ? (user.displayName || user.email) : t.guestMode}
+                </h2>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                  user
+                    ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
+                    : 'bg-neutral-200/80 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
+                }`}>
+                  {user ? t.cloudSyncActive : (language === 'ar' ? 'وضع محلي' : 'Local Storage')}
+                </span>
+              </div>
+              <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
+                {user ? user.email : t.guestModeDesc}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {user ? (
+              onSignOut && (
+                <button
+                  id="settings-signout-btn"
+                  type="button"
+                  onClick={onSignOut}
+                  className="px-3.5 py-2 rounded-xl bg-white dark:bg-neutral-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-neutral-700 dark:text-neutral-300 hover:text-red-600 dark:hover:text-red-400 border border-neutral-300 dark:border-neutral-700 font-semibold text-xs transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>{t.signOut}</span>
+                </button>
+              )
+            ) : (
+              onOpenAuthModal && (
+                <button
+                  id="settings-signin-btn"
+                  type="button"
+                  onClick={onOpenAuthModal}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-xs flex items-center gap-2 shadow-sm shadow-emerald-600/25 transition-all cursor-pointer"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <path
+                      fill="#FFFFFF"
+                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+                    />
+                    <path
+                      fill="#FFFFFF"
+                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"
+                    />
+                    <path
+                      fill="#FFFFFF"
+                      d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                    />
+                    <path
+                      fill="#FFFFFF"
+                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                    />
+                  </svg>
+                  <span>{t.signInWithGoogle}</span>
+                </button>
+              )
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* Settings Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

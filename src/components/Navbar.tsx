@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Language, Theme } from '../types';
 import { getTranslation } from '../locales/translations';
+import { User } from 'firebase/auth';
 
 interface NavbarProps {
   language: Language;
@@ -24,6 +25,9 @@ interface NavbarProps {
   currentView?: 'workspace' | 'settings';
   activeListName?: string;
   activeListColor?: string;
+  user?: User | null;
+  onOpenAuthModal?: () => void;
+  onSignOut?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -39,6 +43,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentView = 'workspace',
   activeListName,
   activeListColor = '#10b981',
+  user,
+  onOpenAuthModal,
+  onSignOut,
 }) => {
   const t = getTranslation(language);
 

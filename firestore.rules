@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // User profile and synchronized settings
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && isValidId(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+
+      // User's Lists subcollection
+      match /lists/{listId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(listId);
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
+
+      // User's Groups subcollection
+      match /groups/{groupId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(groupId);
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
+
+      // User's Items subcollection
+      match /items/{itemId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(itemId);
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}
