@@ -20,12 +20,12 @@ import {
   CheckSquare,
   Palette,
 } from 'lucide-react';
-import { Language, Theme, ThemeColor } from '../types';
+import { Language, SyncStatus, Theme, ThemeColor } from '../types';
 import { getTranslation } from '../locales/translations';
 import { sounds } from '../utils/audio';
 import { THEME_COLOR_OPTIONS, getThemeColorName } from '../utils/themeColors';
 import { User } from 'firebase/auth';
-import { LogOut, Cloud, ShieldCheck } from 'lucide-react';
+import { LogOut, Cloud, ShieldCheck, RefreshCw, CheckCircle } from 'lucide-react';
 
 interface SettingsPageProps {
   language: Language;
@@ -43,6 +43,7 @@ interface SettingsPageProps {
   onOpenInstallModal?: () => void;
   isAppInstalled?: boolean;
   user?: User | null;
+  syncStatus?: SyncStatus;
   onOpenAuthModal?: () => void;
   onSignOut?: () => void;
   onBackToWorkspace: () => void;
@@ -68,6 +69,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onOpenInstallModal,
   isAppInstalled = false,
   user,
+  syncStatus = 'idle',
   onOpenAuthModal,
   onSignOut,
   onBackToWorkspace,
@@ -185,12 +187,36 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <h2 className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
                   {user ? (user.displayName || user.email) : t.guestMode}
                 </h2>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold flex items-center gap-1 ${
                   user
-                    ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
+                    ? syncStatus === 'syncing'
+                      ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300'
+                      : syncStatus === 'offline'
+                      ? 'bg-neutral-200/80 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
+                      : syncStatus === 'error'
+                      ? 'bg-red-100 dark:bg-red-900/60 text-red-800 dark:text-red-300'
+                      : 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
                     : 'bg-neutral-200/80 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
                 }`}>
-                  {user ? t.cloudSyncActive : (language === 'ar' ? 'وضع محلي' : 'Local Storage')}
+                  {user ? (
+                    syncStatus === 'syncing' ? (
+                      <>
+                        <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                        <span>{t.syncingToCloud}</span>
+                      </>
+                    ) : syncStatus === 'offline' ? (
+                      <span>{t.syncOffline}</span>
+                    ) : syncStatus === 'error' ? (
+                      <span>{t.syncError}</span>
+                    ) : (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span>{t.syncedToCloud}</span>
+                      </>
+                    )
+                  ) : (
+                    language === 'ar' ? 'وضع محلي' : 'Local Storage'
+                  )}
                 </span>
               </div>
               <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">

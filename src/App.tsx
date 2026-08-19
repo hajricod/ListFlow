@@ -17,6 +17,7 @@ import {
   Priority,
   SortOption,
   ToastMessage,
+  SyncStatus,
 } from './types';
 import {
   loadStoredLists,
@@ -89,7 +90,11 @@ export default function App() {
     clearError: clearAuthError,
   } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const prevUserRef = React.useRef<string | null>(null);
+  const isInitialCloudLoadRef = React.useRef<boolean>(false);
+  const syncTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const prefSyncTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const [lists, setLists] = useState<AppList[]>(() => loadStoredLists(language));
   const [activeListId, setActiveListId] = useState<string>(() => loadActiveListId(lists));
@@ -323,57 +328,143 @@ export default function App() {
     if (user) {
       if (prevUserRef.current !== user.uid) {
         prevUserRef.current = user.uid;
-        fetchUserCloudData(user.uid).then((cloudData) => {
-          if (cloudData && cloudData.lists && cloudData.lists.length > 0) {
-            setLists(cloudData.lists);
-            if (cloudData.groups) setGroups(cloudData.groups);
-            if (cloudData.items) setItems(cloudData.items);
-            if (cloudData.language) setLanguage(cloudData.language);
-            if (cloudData.theme) setTheme(cloudData.theme);
-            if (cloudData.themeColor) setThemeColor(cloudData.themeColor);
-            if (cloudData.soundEnabled !== undefined) setSoundEnabled(cloudData.soundEnabled);
-            if (cloudData.activeListId) setActiveListId(cloudData.activeListId);
-            showToast(t.loginSuccess, undefined, 'success');
-          } else {
-            // First time login: Upload initial workspace data to cloud
-            syncAllToFirestore(user.uid, lists, groups, items);
-            syncUserProfile(user, {
-              language,
-              theme,
-              themeColor,
-              soundEnabled,
-              activeListId,
-            });
-            showToast(t.loginSuccess, undefined, 'success');
-          }
-        });
+        isInitialCloudLoadRef.current = true;
+        setSyncStatus('syncing');
+
+        fetchUserCloudData(user.uid)
+          .then((cloudData) => {
+            if (cloudData && cloudData.lists && cloudData.lists.length > 0) {
+              setLists(cloudData.lists);
+              if (cloudData.groups) setGroups(cloudData.groups);
+              if (cloudData.items) setItems(cloudData.items);
+              if (cloudData.language) setLanguage(cloudData.language);
+              if (cloudData.theme) setTheme(cloudData.theme);
+              if (cloudData.themeColor) setThemeColor(cloudData.themeColor);
+              if (cloudData.soundEnabled !== undefined) setSoundEnabled(cloudData.soundEnabled);
+              if (cloudData.activeListId) setActiveListId(cloudData.activeListId);
+              setSyncStatus('synced');
+              showToast(t.loginSuccess, undefined, 'success');
+            } else {
+              // First time login: Upload initial workspace data to cloud
+              syncAllToFirestore(user.uid, lists, groups, items);
+              syncUserProfile(user, {
+                language,
+                theme,
+                themeColor,
+                soundEnabled,
+                activeListId,
+              });
+              setSyncStatus('synced');
+              showToast(t.loginSuccess, undefined, 'success');
+            }
+          })
+          .catch((err) => {
+            console.error('Initial cloud data fetch error:', err);
+            setSyncStatus('error');
+          })
+          .finally(() => {
+            // Small delay to allow state to settle before enabling reactive auto-sync
+            setTimeout(() => {
+              isInitialCloudLoadRef.current = false;
+            }, 500);
+          });
       }
     } else {
       if (prevUserRef.current !== null) {
         prevUserRef.current = null;
+        isInitialCloudLoadRef.current = false;
+        setSyncStatus('idle');
         showToast(t.logoutSuccess, undefined, 'info');
       }
     }
-  }, [user, lists, groups, items, language, theme, themeColor, soundEnabled, activeListId, showToast, t.loginSuccess, t.logoutSuccess]);
+  }, [user, showToast, t.loginSuccess, t.logoutSuccess]);
 
-  // Real-time Cloud Sync for authenticated users
+  // Reactive Data Sync whenever Lists, Groups, or Items change
   useEffect(() => {
-    if (user) {
-      syncAllToFirestore(user.uid, lists, groups, items);
+    if (!user || isInitialCloudLoadRef.current) return;
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setSyncStatus('offline');
+      return;
     }
+
+    setSyncStatus('syncing');
+
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+
+    syncTimeoutRef.current = setTimeout(async () => {
+      try {
+        const ok = await syncAllToFirestore(user.uid, lists, groups, items);
+        setSyncStatus(ok ? 'synced' : 'error');
+      } catch (err) {
+        console.error('Auto sync to Firestore failed:', err);
+        setSyncStatus('error');
+      }
+    }, 400);
+
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+    };
   }, [user, lists, groups, items]);
 
+  // Reactive User Preferences Sync (Theme, Accent Color, Language, Sound, Active List)
   useEffect(() => {
-    if (user) {
-      syncUserProfile(user, {
-        language,
-        theme,
-        themeColor,
-        soundEnabled,
-        activeListId,
-      });
+    if (!user || isInitialCloudLoadRef.current) return;
+
+    if (prefSyncTimeoutRef.current) {
+      clearTimeout(prefSyncTimeoutRef.current);
     }
+
+    prefSyncTimeoutRef.current = setTimeout(async () => {
+      try {
+        await syncUserProfile(user, {
+          language,
+          theme,
+          themeColor,
+          soundEnabled,
+          activeListId,
+        });
+      } catch (err) {
+        console.error('Preferences sync to Firestore failed:', err);
+      }
+    }, 600);
+
+    return () => {
+      if (prefSyncTimeoutRef.current) {
+        clearTimeout(prefSyncTimeoutRef.current);
+      }
+    };
   }, [user, language, theme, themeColor, soundEnabled, activeListId]);
+
+  // Handle Online / Offline Connectivity Resumption
+  useEffect(() => {
+    const handleOnline = () => {
+      if (user) {
+        setSyncStatus('syncing');
+        syncAllToFirestore(user.uid, lists, groups, items).then((ok) => {
+          setSyncStatus(ok ? 'synced' : 'error');
+        });
+      }
+    };
+
+    const handleOffline = () => {
+      if (user) {
+        setSyncStatus('offline');
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [user, lists, groups, items]);
 
   // Active List Derived Groups & Items
   const activeList = useMemo(() => {
@@ -1262,6 +1353,7 @@ export default function App() {
           setCurrentView('settings');
         }}
         user={user}
+        syncStatus={syncStatus}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onSignOut={authSignOut}
       />
@@ -1313,6 +1405,7 @@ export default function App() {
               onOpenInstallModal={() => pwa.setIsModalOpen(true)}
               isAppInstalled={pwa.isInstalled}
               user={user}
+              syncStatus={syncStatus}
               onOpenAuthModal={() => setIsAuthModalOpen(true)}
               onSignOut={authSignOut}
               onBackToWorkspace={() => setCurrentView('workspace')}

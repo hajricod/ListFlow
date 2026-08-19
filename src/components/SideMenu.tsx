@@ -32,9 +32,10 @@ import {
   Settings,
   LogOut,
 } from 'lucide-react';
-import { AppList, AppView, Language, ListGroup, ListItem } from '../types';
+import { AppList, AppView, Language, ListGroup, ListItem, SyncStatus } from '../types';
 import { getTranslation } from '../locales/translations';
 import { User } from 'firebase/auth';
+import { RefreshCw, CloudCheck, CloudOff, AlertCircle } from 'lucide-react';
 
 interface SideMenuProps {
   isOpen: boolean;
@@ -54,6 +55,7 @@ interface SideMenuProps {
   currentView?: AppView;
   onOpenSettings: () => void;
   user?: User | null;
+  syncStatus?: SyncStatus;
   onOpenAuthModal?: () => void;
   onSignOut?: () => void;
 }
@@ -121,6 +123,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
   currentView = 'workspace',
   onOpenSettings,
   user,
+  syncStatus = 'idle',
   onOpenAuthModal,
   onSignOut,
 }) => {
@@ -468,16 +471,37 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                     </div>
                   )}
                   <div
-                    className="absolute -bottom-0.5 -end-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-neutral-800"
-                    title={t.cloudSyncActive}
+                    className={`absolute -bottom-0.5 -end-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-neutral-800 ${
+                      syncStatus === 'syncing'
+                        ? 'bg-amber-500 animate-pulse'
+                        : syncStatus === 'offline'
+                        ? 'bg-neutral-400'
+                        : syncStatus === 'error'
+                        ? 'bg-red-500'
+                        : 'bg-emerald-500'
+                    }`}
+                    title={
+                      syncStatus === 'syncing'
+                        ? t.syncingToCloud
+                        : syncStatus === 'offline'
+                        ? t.syncOffline
+                        : syncStatus === 'error'
+                        ? t.syncError
+                        : t.syncedToCloud
+                    }
                   />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                    {user.displayName || user.email?.split('@')[0]}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                      {user.displayName || user.email?.split('@')[0]}
+                    </span>
+                    {syncStatus === 'syncing' && (
+                      <RefreshCw className="w-2.5 h-2.5 text-amber-500 animate-spin shrink-0" />
+                    )}
                   </div>
-                  <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
-                    {user.email}
+                  <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate flex items-center gap-1">
+                    <span>{syncStatus === 'syncing' ? t.syncingToCloud : syncStatus === 'offline' ? t.syncOffline : t.syncedToCloud}</span>
                   </div>
                 </div>
               </button>

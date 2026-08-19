@@ -202,6 +202,10 @@ export const translations = {
     loginSuccess: 'Signed in successfully! Cloud sync active.',
     logoutSuccess: 'Signed out. Switched to offline local mode.',
     syncingData: 'Syncing cloud data...',
+    syncedToCloud: 'Saved to cloud',
+    syncingToCloud: 'Saving to cloud...',
+    syncOffline: 'Offline mode',
+    syncError: 'Sync issue, retrying...',
     units: {
       pcs: 'pcs',
       kg: 'kg',
@@ -426,6 +430,10 @@ export const translations = {
     loginSuccess: 'تم تسجيل الدخول بنجاح! تم تفعيل المزامنة السحابية.',
     logoutSuccess: 'تم تسجيل الخروج. الانتقال إلى الوضع المحلي.',
     syncingData: 'جاري مزامنة البيانات السحابية...',
+    syncedToCloud: 'تم الحفظ في السحابة',
+    syncingToCloud: 'جاري الحفظ في السحابة...',
+    syncOffline: 'الوضع دون اتصال',
+    syncError: 'مشكلة في المزامنة، إعادة المحاولة...',
     units: {
       pcs: 'عنصر',
       kg: 'كجم',

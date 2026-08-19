@@ -108,3 +108,5 @@ export interface AppUser {
   photoURL: string | null;
 }
 
+export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error' | 'idle';
+
