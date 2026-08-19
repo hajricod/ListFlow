@@ -7,8 +7,9 @@ import {
   Moon,
   Monitor,
   Download,
+  Database,
 } from 'lucide-react';
-import { Language, Theme } from '../types';
+import { Language, Theme, SyncStatus } from '../types';
 import { getTranslation } from '../locales/translations';
 import { User } from 'firebase/auth';
 
@@ -20,6 +21,9 @@ interface NavbarProps {
   onToggleSidebar: () => void;
   onLogoClick?: () => void;
   onOpenSettings?: () => void;
+  onOpenActivityLog?: () => void;
+  activityCount?: number;
+  syncStatus?: SyncStatus;
   onOpenInstallModal?: () => void;
   isAppInstalled?: boolean;
   currentView?: 'workspace' | 'settings';
@@ -38,6 +42,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleSidebar,
   onLogoClick,
   onOpenSettings,
+  onOpenActivityLog,
+  activityCount = 0,
+  syncStatus = 'idle',
   onOpenInstallModal,
   isAppInstalled = false,
   currentView = 'workspace',
@@ -108,6 +115,25 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Download className="w-4 h-4 stroke-[2.2] text-emerald-600 dark:text-emerald-400" />
                 <span className="hidden sm:inline">{t.installApp}</span>
+              </button>
+            )}
+
+            {/* Database Changes & History Quick Button */}
+            {onOpenActivityLog && (
+              <button
+                id="nav-activity-log-btn"
+                type="button"
+                onClick={onOpenActivityLog}
+                title={t.databaseChanges}
+                className="relative p-2 rounded-xl text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100 border border-transparent hover:border-neutral-200/80 dark:hover:border-neutral-700/80 transition-all cursor-pointer"
+              >
+                <Database className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                {activityCount > 0 && (
+                  <span className="absolute top-1.5 end-1.5 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                )}
               </button>
             )}
 

@@ -7,11 +7,100 @@ import {
   deleteDoc,
   writeBatch,
   onSnapshot,
+  query,
+  orderBy,
+  limit,
   Unsubscribe,
 } from 'firebase/firestore';
 import { User } from 'firebase/auth';
-import { db } from '../lib/firebase';
-import { AppList, ListGroup, ListItem, Language, Theme, ThemeColor } from '../types';
+import { db, auth } from '../lib/firebase';
+import {
+  AppList,
+  ListGroup,
+  ListItem,
+  Language,
+  Theme,
+  ThemeColor,
+  ActivityLog,
+  ActivityAction,
+  ActivityTargetType,
+} from '../types';
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null
+): never {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo:
+        auth.currentUser?.providerData?.map((provider) => ({
+          providerId: provider.providerId,
+          email: provider.email,
+        })) || [],
+    },
+    operationType,
+    path,
+  };
+  console.error('Firestore Error:', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+/**
+ * Recursively removes all undefined values from objects/arrays so Firestore WriteBatch / setDoc doesn't reject them.
+ */
+export function sanitizeForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return null as unknown as T;
+  }
+  if (Array.isArray(data)) {
+    return data
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item)) as unknown as T;
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const clean: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+      if (value !== undefined) {
+        clean[key] = sanitizeForFirestore(value);
+      }
+    }
+    return clean as unknown as T;
+  }
+  return data;
+}
 
 export interface UserCloudData {
   lists: AppList[];
@@ -35,6 +124,7 @@ export async function syncUserProfile(
     activeListId?: string;
   }
 ): Promise<boolean> {
+  const userPath = `users/${user.uid}`;
   try {
     const userDocRef = doc(db, 'users', user.uid);
     const existing = await getDoc(userDocRef);
@@ -60,7 +150,7 @@ export async function syncUserProfile(
       if (preferences.activeListId) payload.activeListId = preferences.activeListId;
     }
 
-    await setDoc(userDocRef, payload, { merge: true });
+    await setDoc(userDocRef, sanitizeForFirestore(payload), { merge: true });
     return true;
   } catch (error) {
     console.error('Error syncing user profile to Firestore:', error);
@@ -70,6 +160,7 @@ export async function syncUserProfile(
 
 // 2. Fetch all user data from Firestore
 export async function fetchUserCloudData(userId: string): Promise<UserCloudData | null> {
+  const userPath = `users/${userId}`;
   try {
     const userDocRef = doc(db, 'users', userId);
     const userDocSnap = await getDoc(userDocRef);
@@ -114,7 +205,6 @@ export async function fetchUserCloudData(userId: string): Promise<UserCloudData 
 }
 
 // 3. Batch Reconcile & Sync user lists, groups, and items in Firestore
-// This guarantees that added, updated, and deleted items are 100% in sync with the cloud.
 export async function syncAllToFirestore(
   userId: string,
   lists: AppList[],
@@ -137,12 +227,15 @@ export async function syncAllToFirestore(
 
     const batch = writeBatch(db);
     let opCount = 0;
+    let deletedCount = 0;
+    let upsertCount = 0;
 
     // Delete removed lists
     remoteListsSnap.forEach((docSnap) => {
       if (!localListIds.has(docSnap.id)) {
         batch.delete(docSnap.ref);
         opCount++;
+        deletedCount++;
       }
     });
 
@@ -151,6 +244,7 @@ export async function syncAllToFirestore(
       if (!localGroupIds.has(docSnap.id)) {
         batch.delete(docSnap.ref);
         opCount++;
+        deletedCount++;
       }
     });
 
@@ -159,6 +253,7 @@ export async function syncAllToFirestore(
       if (!localItemIds.has(docSnap.id)) {
         batch.delete(docSnap.ref);
         opCount++;
+        deletedCount++;
       }
     });
 
@@ -167,14 +262,15 @@ export async function syncAllToFirestore(
       const ref = doc(db, 'users', userId, 'lists', list.id);
       batch.set(
         ref,
-        {
+        sanitizeForFirestore({
           ...list,
           userId,
           updatedAt: new Date().toISOString(),
-        },
+        }),
         { merge: true }
       );
       opCount++;
+      upsertCount++;
     }
 
     // Upsert current groups
@@ -182,14 +278,15 @@ export async function syncAllToFirestore(
       const ref = doc(db, 'users', userId, 'groups', group.id);
       batch.set(
         ref,
-        {
+        sanitizeForFirestore({
           ...group,
           userId,
           updatedAt: new Date().toISOString(),
-        },
+        }),
         { merge: true }
       );
       opCount++;
+      upsertCount++;
     }
 
     // Upsert current items
@@ -197,14 +294,15 @@ export async function syncAllToFirestore(
       const ref = doc(db, 'users', userId, 'items', item.id);
       batch.set(
         ref,
-        {
+        sanitizeForFirestore({
           ...item,
           userId,
           updatedAt: new Date().toISOString(),
-        },
+        }),
         { merge: true }
       );
       opCount++;
+      upsertCount++;
     }
 
     if (opCount > 0) {
@@ -287,88 +385,114 @@ export function subscribeToUserCloudData(
   };
 }
 
-// 5. Granular Document Operations for Instant Reactivity
-export async function firestoreSaveList(userId: string, list: AppList): Promise<boolean> {
+// 5. Database Change Tracking & Activity Logging
+export async function recordActivityLogInFirestore(
+  userId: string,
+  entry: {
+    action: ActivityAction;
+    targetType: ActivityTargetType;
+    targetId?: string;
+    title: string;
+    details?: string;
+    source?: string;
+  }
+): Promise<ActivityLog | null> {
+  if (!userId) return null;
+  const activityId = `act-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const activityLog: ActivityLog = {
+    id: activityId,
+    userId,
+    action: entry.action,
+    targetType: entry.targetType,
+    targetId: entry.targetId,
+    title: entry.title,
+    details: entry.details,
+    source:
+      entry.source ||
+      (typeof navigator !== 'undefined'
+        ? navigator.userAgent.includes('Mobile')
+          ? 'Mobile Device'
+          : 'Desktop Browser'
+        : 'Web Client'),
+    timestamp: new Date().toISOString(),
+  };
+
+  const path = `users/${userId}/activities/${activityId}`;
   try {
     await setDoc(
-      doc(db, 'users', userId, 'lists', list.id),
-      {
-        ...list,
-        userId,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
+      doc(db, 'users', userId, 'activities', activityId),
+      sanitizeForFirestore(activityLog)
     );
-    return true;
+    return activityLog;
   } catch (error) {
-    console.error('Error saving list to Firestore:', error);
-    return false;
+    console.warn('Could not persist activity record to Firestore:', error);
+    return activityLog;
   }
 }
 
-export async function firestoreDeleteList(userId: string, listId: string): Promise<boolean> {
+// 6. Subscribe to Database Activity Logs in Realtime
+export function subscribeToActivityLogs(
+  userId: string,
+  onUpdate: (logs: ActivityLog[]) => void,
+  limitCount = 50
+): Unsubscribe {
+  const activitiesRef = collection(db, 'users', userId, 'activities');
+  const q = query(activitiesRef, orderBy('timestamp', 'desc'), limit(limitCount));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const logs: ActivityLog[] = [];
+      snapshot.forEach((docSnap) => {
+        logs.push(docSnap.data() as ActivityLog);
+      });
+      onUpdate(logs);
+    },
+    (err) => {
+      console.warn('Activities onSnapshot subscription error, falling back:', err);
+      // Fallback query without orderBy
+      const fallbackUnsub = onSnapshot(collection(db, 'users', userId, 'activities'), (snap) => {
+        const fallbackLogs: ActivityLog[] = [];
+        snap.forEach((d) => fallbackLogs.push(d.data() as ActivityLog));
+        fallbackLogs.sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        onUpdate(fallbackLogs.slice(0, limitCount));
+      });
+      return fallbackUnsub;
+    }
+  );
+}
+
+// 7. Fetch Activity Logs
+export async function fetchActivityLogsFromFirestore(
+  userId: string,
+  limitCount = 50
+): Promise<ActivityLog[]> {
+  if (!userId) return [];
   try {
-    await deleteDoc(doc(db, 'users', userId, 'lists', listId));
-    return true;
+    const snap = await getDocs(collection(db, 'users', userId, 'activities'));
+    const logs: ActivityLog[] = [];
+    snap.forEach((d) => logs.push(d.data() as ActivityLog));
+    logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return logs.slice(0, limitCount);
   } catch (error) {
-    console.error('Error deleting list from Firestore:', error);
-    return false;
+    console.error('Error fetching activity logs from Firestore:', error);
+    return [];
   }
 }
 
-export async function firestoreSaveGroup(userId: string, group: ListGroup): Promise<boolean> {
+// 8. Clear Database Activity Logs
+export async function clearActivityLogsFromFirestore(userId: string): Promise<boolean> {
+  if (!userId) return false;
   try {
-    await setDoc(
-      doc(db, 'users', userId, 'groups', group.id),
-      {
-        ...group,
-        userId,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    const snap = await getDocs(collection(db, 'users', userId, 'activities'));
+    const batch = writeBatch(db);
+    snap.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
     return true;
   } catch (error) {
-    console.error('Error saving group to Firestore:', error);
+    console.error('Error clearing activity logs:', error);
     return false;
   }
 }
-
-export async function firestoreDeleteGroup(userId: string, groupId: string): Promise<boolean> {
-  try {
-    await deleteDoc(doc(db, 'users', userId, 'groups', groupId));
-    return true;
-  } catch (error) {
-    console.error('Error deleting group from Firestore:', error);
-    return false;
-  }
-}
-
-export async function firestoreSaveItem(userId: string, item: ListItem): Promise<boolean> {
-  try {
-    await setDoc(
-      doc(db, 'users', userId, 'items', item.id),
-      {
-        ...item,
-        userId,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-    return true;
-  } catch (error) {
-    console.error('Error saving item to Firestore:', error);
-    return false;
-  }
-}
-
-export async function firestoreDeleteItem(userId: string, itemId: string): Promise<boolean> {
-  try {
-    await deleteDoc(doc(db, 'users', userId, 'items', itemId));
-    return true;
-  } catch (error) {
-    console.error('Error deleting item from Firestore:', error);
-    return false;
-  }
-}
-

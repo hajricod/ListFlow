@@ -110,3 +110,30 @@ export interface AppUser {
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error' | 'idle';
 
+export type ActivityAction =
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'toggle'
+  | 'reorder'
+  | 'clear'
+  | 'batch_clear'
+  | 'move'
+  | 'import'
+  | 'batch_sync';
+
+export type ActivityTargetType = 'list' | 'group' | 'item' | 'settings' | 'batch';
+
+export interface ActivityLog {
+  id: string;
+  userId: string;
+  action: ActivityAction;
+  targetType: ActivityTargetType;
+  targetId?: string;
+  title: string;
+  details?: string;
+  source?: string;
+  listId?: string;
+  timestamp: string;
+}
+

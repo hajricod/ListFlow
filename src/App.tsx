@@ -18,6 +18,9 @@ import {
   SortOption,
   ToastMessage,
   SyncStatus,
+  ActivityLog,
+  ActivityAction,
+  ActivityTargetType,
 } from './types';
 import {
   loadStoredLists,
@@ -59,6 +62,7 @@ import { ShortcutsModal } from './components/ShortcutsModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { InstallAppModal } from './components/InstallAppModal';
 import { AuthModal } from './components/AuthModal';
+import { ActivityLogModal } from './components/ActivityLogModal';
 import { ToastContainer } from './components/Toast';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import { useAuth } from './hooks/useAuth';
@@ -66,6 +70,9 @@ import {
   fetchUserCloudData,
   syncAllToFirestore,
   syncUserProfile,
+  recordActivityLogInFirestore,
+  subscribeToActivityLogs,
+  clearActivityLogsFromFirestore,
 } from './utils/firestoreSync';
 import { Plus, ListTodo, Layers } from 'lucide-react';
 
@@ -151,6 +158,10 @@ export default function App() {
     description: '',
     onConfirm: () => {},
   });
+
+  // Database Activity Change Tracking State
+  const [activities, setActivities] = useState<ActivityLog[]>([]);
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -321,6 +332,63 @@ export default function App() {
 
   const dismissToast = (id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
+
+  // Log a database change event to local state and Firestore subcollection
+  const logDatabaseChange = useCallback(
+    (
+      action: ActivityAction,
+      targetType: ActivityTargetType,
+      targetId: string,
+      title: string,
+      details?: string,
+      listId?: string
+    ) => {
+      const newLog: ActivityLog = {
+        id: `act-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        userId: user?.uid || 'local-user',
+        action,
+        targetType,
+        targetId,
+        title,
+        details,
+        timestamp: new Date().toISOString(),
+        listId: listId || activeListId,
+      };
+
+      setActivities((prev) => [newLog, ...prev.filter((l) => l.id !== newLog.id)].slice(0, 100));
+
+      if (user?.uid) {
+        recordActivityLogInFirestore(user.uid, newLog).catch((err) => {
+          console.error('Failed to log database activity to Firestore:', err);
+        });
+      }
+    },
+    [user, activeListId]
+  );
+
+  // Real-time Firestore subscription for Activity Logs
+  useEffect(() => {
+    if (!user?.uid) {
+      return;
+    }
+
+    const unsubscribe = subscribeToActivityLogs(user.uid, (logs) => {
+      setActivities(logs);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.uid]);
+
+  // Clear Activity Logs handler
+  const handleClearActivities = async () => {
+    if (user?.uid) {
+      await clearActivityLogsFromFirestore(user.uid);
+    }
+    setActivities([]);
+    showToast(t.historyCleared, undefined, 'info');
   };
 
   // Auth User Cloud Sync on Login / Logout
@@ -657,6 +725,7 @@ export default function App() {
       setLists((prev) =>
         prev.map((l) => (l.id === selectedListForEdit.id ? { ...l, ...listData } : l))
       );
+      logDatabaseChange('update', 'list', selectedListForEdit.id, listData.title, 'Updated list details', selectedListForEdit.id);
       showToast(t.listUpdated);
     } else {
       const newListId = `list-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
@@ -679,6 +748,7 @@ export default function App() {
         createdAt: new Date().toISOString(),
       };
       setGroups((prev) => [...prev, initialGroup]);
+      logDatabaseChange('create', 'list', newListId, listData.title, 'Created new list with initial aisle', newListId);
       showToast(t.listCreated);
     }
     setSelectedListForEdit(null);
@@ -707,6 +777,7 @@ export default function App() {
           setActiveListId(remainingLists[0]?.id || '');
         }
 
+        logDatabaseChange('delete', 'list', listToDelete.id, listToDelete.title, 'Deleted list and its contents', listToDelete.id);
         showToast(t.listDeleted);
       },
     });
@@ -750,6 +821,7 @@ export default function App() {
     setItems((prev) => [...prev, ...newItems]);
     setActiveListId(newListId);
 
+    logDatabaseChange('create', 'list', newListId, duplicatedList.title, 'Duplicated list and all items', newListId);
     showToast(language === 'ar' ? 'تم تكرار القائمة بنجاح' : 'List duplicated successfully');
   };
 
@@ -763,10 +835,12 @@ export default function App() {
           g.id === groupData.id ? { ...g, title: groupData.title, color: groupData.color, icon: groupData.icon } : g
         )
       );
+      logDatabaseChange('update', 'group', groupData.id, groupData.title, 'Updated aisle configuration');
     } else {
       // Create new
+      const newGroupId = `aisle-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
       const newGroup: ListGroup = {
-        id: `aisle-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        id: newGroupId,
         listId: activeListId,
         title: groupData.title,
         color: groupData.color,
@@ -775,6 +849,7 @@ export default function App() {
         createdAt: new Date().toISOString(),
       };
       setGroups((prev) => [...prev, newGroup]);
+      logDatabaseChange('create', 'group', newGroupId, groupData.title, 'Created new aisle');
     }
   };
 
@@ -799,6 +874,7 @@ export default function App() {
 
     setGroups((prev) => [...prev, newGroup]);
     setItems((prev) => [...prev, ...newItems]);
+    logDatabaseChange('create', 'group', newGroupId, newGroup.title, 'Duplicated aisle and items');
     showToast(language === 'ar' ? 'تم نسخ الممر بنجاح' : 'Aisle duplicated successfully');
   };
 
@@ -816,10 +892,13 @@ export default function App() {
         setGroups((prev) => prev.filter((g) => g.id !== groupId));
         setItems((prev) => prev.filter((i) => i.groupId !== groupId));
 
+        logDatabaseChange('delete', 'group', groupId, groupToDelete.title, 'Deleted aisle and all items');
+
         // Allow instant Undo
         showToast(t.groupDeleted, () => {
           setGroups((prev) => [...prev, groupToDelete]);
           setItems((prev) => [...prev, ...itemsToDelete]);
+          logDatabaseChange('create', 'group', groupId, groupToDelete.title, 'Restored deleted aisle');
         });
       },
     });
@@ -844,8 +923,10 @@ export default function App() {
 
     sounds.playDelete();
     setItems((prev) => prev.filter((i) => !(i.groupId === groupId && i.completed)));
+    logDatabaseChange('batch_clear', 'item', groupId, `${completedInGroup.length} items`, 'Cleared completed items in aisle');
     showToast(t.allCompletedCleared, () => {
       setItems((prev) => [...prev, ...completedInGroup]);
+      logDatabaseChange('create', 'item', groupId, `${completedInGroup.length} items`, 'Restored cleared completed items');
     });
   };
 
@@ -855,8 +936,10 @@ export default function App() {
 
     sounds.playDelete();
     setItems((prev) => prev.filter((i) => !i.completed));
+    logDatabaseChange('batch_clear', 'item', activeListId, `${completedList.length} items`, 'Cleared all completed items in active list');
     showToast(t.allCompletedCleared, () => {
       setItems((prev) => [...prev, ...completedList]);
+      logDatabaseChange('create', 'item', activeListId, `${completedList.length} items`, 'Restored all completed items');
     });
   };
 
@@ -864,6 +947,7 @@ export default function App() {
     const previousItems = [...items];
     setItems((prev) => prev.map((i) => ({ ...i, completed: false, completedAt: undefined })));
     sounds.playPop();
+    logDatabaseChange('toggle', 'item', activeListId, 'All items unchecked', 'Reset all items to active in list');
     showToast(language === 'ar' ? 'تمت إعادة تعيين جميع الأصناف إلى السلة' : 'All items unchecked', () => {
       setItems(previousItems);
     });
@@ -888,8 +972,9 @@ export default function App() {
       cleanTitle = matchPrefix[2].trim();
     }
 
+    const newItemId = `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const newItem: ListItem = {
-      id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      id: newItemId,
       groupId,
       title: cleanTitle,
       quantity: qty,
@@ -902,6 +987,7 @@ export default function App() {
       isPinned: false,
     };
     setItems((prev) => [newItem, ...prev]);
+    logDatabaseChange('create', 'item', newItemId, cleanTitle, `Added item with quantity ${qty || 1} and priority ${priority}`);
   };
 
   const handleSaveItemModal = (itemData: Partial<ListItem> & { id?: string }) => {
@@ -911,10 +997,12 @@ export default function App() {
       setItems((prev) =>
         prev.map((item) => (item.id === itemData.id ? ({ ...item, ...itemData } as ListItem) : item))
       );
+      logDatabaseChange('update', 'item', itemData.id, itemData.title || '', 'Updated item details');
     } else {
       // Add new
+      const newItemId = `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
       const newItem: ListItem = {
-        id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        id: newItemId,
         groupId: itemData.groupId || groups[0]?.id || 'default',
         title: itemData.title || '',
         quantity: itemData.quantity,
@@ -928,11 +1016,13 @@ export default function App() {
         isPinned: Boolean(itemData.isPinned),
       };
       setItems((prev) => [newItem, ...prev]);
+      logDatabaseChange('create', 'item', newItemId, newItem.title, 'Created item via modal');
     }
   };
 
   const handleToggleCompleteItem = (itemId: string) => {
     setItems((prev) => {
+      const targetItem = prev.find((i) => i.id === itemId);
       const next = prev.map((item) => {
         if (item.id === itemId) {
           const nextCompleted = !item.completed;
@@ -945,8 +1035,17 @@ export default function App() {
         return item;
       });
 
+      if (targetItem) {
+        logDatabaseChange(
+          'toggle',
+          'item',
+          itemId,
+          targetItem.title,
+          targetItem.completed ? 'Marked as uncompleted' : 'Marked as completed'
+        );
+      }
+
       // Check if all items in the grocery list are completed -> trigger celebratory confetti
-      const targetItem = prev.find((i) => i.id === itemId);
       if (targetItem && !targetItem.completed) {
         const allCompleted = next.length > 0 && next.every((i) => i.completed);
         if (allCompleted) {
@@ -971,6 +1070,7 @@ export default function App() {
         if (item.id === itemId) {
           const current = item.quantity ?? 1;
           const nextQty = Math.max(1, current + delta);
+          logDatabaseChange('update', 'item', itemId, item.title, `Quantity updated to ${nextQty}`);
           return { ...item, quantity: nextQty };
         }
         return item;
@@ -982,34 +1082,47 @@ export default function App() {
     setItems((prev) =>
       prev.map((i) => (i.id === itemId ? { ...i, title: newTitle } : i))
     );
+    logDatabaseChange('update', 'item', itemId, newTitle, 'Updated title inline');
   };
 
   const handleTogglePinItem = (itemId: string) => {
     sounds.playPop();
     setItems((prev) =>
-      prev.map((i) => (i.id === itemId ? { ...i, isPinned: !i.isPinned } : i))
+      prev.map((i) => {
+        if (i.id === itemId) {
+          const nextPinned = !i.isPinned;
+          logDatabaseChange('update', 'item', itemId, i.title, nextPinned ? 'Pinned item' : 'Unpinned item');
+          return { ...i, isPinned: nextPinned };
+        }
+        return i;
+      })
     );
   };
 
   const handleDuplicateItem = (itemToDup: ListItem) => {
     sounds.playPop();
+    const newItemId = `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const newItem: ListItem = {
       ...itemToDup,
-      id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      id: newItemId,
       title: `${itemToDup.title} (${language === 'ar' ? 'نسخة' : 'Copy'})`,
       completed: false,
       completedAt: undefined,
       createdAt: new Date().toISOString(),
     };
     setItems((prev) => [newItem, ...prev]);
+    logDatabaseChange('create', 'item', newItemId, newItem.title, 'Duplicated item');
     showToast(language === 'ar' ? 'تم نسخ الصنف' : 'Item duplicated');
   };
 
   const handleMoveToGroup = (itemId: string, targetGroupId: string) => {
     sounds.playDrop();
+    const item = items.find((i) => i.id === itemId);
+    const targetGroup = groups.find((g) => g.id === targetGroupId);
     setItems((prev) =>
       prev.map((i) => (i.id === itemId ? { ...i, groupId: targetGroupId } : i))
     );
+    logDatabaseChange('move', 'item', itemId, item?.title || itemId, `Moved to aisle "${targetGroup?.title || targetGroupId}"`);
     showToast(language === 'ar' ? 'تم نقل الصنف إلى الممر' : 'Item moved to aisle');
   };
 
@@ -1019,10 +1132,12 @@ export default function App() {
 
     sounds.playDelete();
     setItems((prev) => prev.filter((i) => i.id !== itemId));
+    logDatabaseChange('delete', 'item', itemId, itemToDelete.title, 'Deleted item');
 
     // Instant undo toast
     showToast(t.taskDeleted, () => {
       setItems((prev) => [itemToDelete, ...prev]);
+      logDatabaseChange('create', 'item', itemId, itemToDelete.title, 'Restored deleted item');
     });
   };
 
@@ -1090,6 +1205,7 @@ export default function App() {
       const insertAt = groupDropPosition === 'below' ? targetIdx + 1 : targetIdx;
       newGroups.splice(insertAt > sourceIdx ? insertAt - 1 : insertAt, 0, removed);
       setGroups(newGroups);
+      logDatabaseChange('reorder', 'group', draggingGroupId, removed.title, 'Aisle reordered via drag-and-drop');
     }
 
     setDraggingGroupId(null);
@@ -1166,6 +1282,7 @@ export default function App() {
     updatedItems.splice(insertAt > sourceIdx ? insertAt - 1 : insertAt, 0, movedItem);
 
     setItems(updatedItems);
+    logDatabaseChange('reorder', 'item', draggingItemId, movedItem.title, 'Item reordered via drag-and-drop');
     setDraggingItemId(null);
     setItemDropTargetId(null);
     setItemDropPosition(null);
@@ -1177,9 +1294,13 @@ export default function App() {
     e.stopPropagation();
 
     sounds.playDrop();
+    const movedItem = items.find((i) => i.id === draggingItemId);
     setItems((prev) =>
       prev.map((i) => (i.id === draggingItemId ? { ...i, groupId: targetGroupId } : i))
     );
+    if (movedItem) {
+      logDatabaseChange('move', 'item', draggingItemId, movedItem.title, `Moved to empty aisle ${targetGroupId}`);
+    }
     setDraggingItemId(null);
     setItemDropTargetId(null);
     setItemDropPosition(null);
@@ -1242,6 +1363,7 @@ export default function App() {
         ...prev.filter((i) => !activeListGroupIds.has(i.groupId)),
         ...newItems,
       ]);
+      logDatabaseChange('create', 'list', targetListId, tpl.name, `Applied template "${tpl.name}" (${tpl.items.length} items)`);
       showToast(language === 'ar' ? `تم تحميل "${tpl.name}" وتحديث عنوان القائمة` : `Loaded "${tpl.name}" and updated list title`);
     } else {
       // If appending to an empty list, update the title to the template's localized name as well
@@ -1262,6 +1384,7 @@ export default function App() {
 
       setGroups((prev) => [...prev, ...newGroups]);
       setItems((prev) => [...prev, ...newItems]);
+      logDatabaseChange('create', 'item', targetListId, tpl.name, `Appended items from template "${tpl.name}"`);
       showToast(language === 'ar' ? `تمت إضافة "${tpl.name}" للقائمة الحالية` : `Appended "${tpl.name}" items to list`);
     }
   };
@@ -1276,6 +1399,7 @@ export default function App() {
       lists,
       groups,
       items,
+      activities,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1284,6 +1408,7 @@ export default function App() {
     a.download = `listflow-export-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    logDatabaseChange('create', 'list', 'export', 'JSON Backup Exported', 'Downloaded complete workspace database backup');
     showToast(language === 'ar' ? 'تم تصدير مساحة العمل' : 'Workspace exported to JSON');
   };
 
@@ -1300,10 +1425,14 @@ export default function App() {
           }
           setGroups(parsed.groups);
           setItems(parsed.items);
+          if (Array.isArray(parsed.activities)) {
+            setActivities(parsed.activities);
+          }
           if (parsed.language === 'en' || parsed.language === 'ar') {
             setLanguage(parsed.language);
           }
           sounds.playComplete();
+          logDatabaseChange('create', 'list', 'import', 'JSON Backup Restored', 'Restored complete workspace database from file');
           showToast(t.importSuccess);
         } else {
           showToast(t.importError, undefined, 'error');
@@ -1352,6 +1481,8 @@ export default function App() {
           sounds.playPop();
           setCurrentView('settings');
         }}
+        onOpenActivityLog={() => setIsActivityModalOpen(true)}
+        activityCount={activities.length}
         user={user}
         syncStatus={syncStatus}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
@@ -1404,6 +1535,9 @@ export default function App() {
               onImportData={handleImportJSON}
               onOpenInstallModal={() => pwa.setIsModalOpen(true)}
               isAppInstalled={pwa.isInstalled}
+              activities={activities}
+              onOpenActivityLogModal={() => setIsActivityModalOpen(true)}
+              isLiveListening={Boolean(user?.uid)}
               user={user}
               syncStatus={syncStatus}
               onOpenAuthModal={() => setIsAuthModalOpen(true)}
@@ -1651,6 +1785,16 @@ export default function App() {
         error={authError}
         onClearError={clearAuthError}
         language={language}
+      />
+
+      {/* Database Activity Change Log Modal */}
+      <ActivityLogModal
+        isOpen={isActivityModalOpen}
+        onClose={() => setIsActivityModalOpen(false)}
+        activities={activities}
+        onClearHistory={handleClearActivities}
+        language={language}
+        isLiveListening={Boolean(user?.uid)}
       />
 
       {/* Toast Notifications */}

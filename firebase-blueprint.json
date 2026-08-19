@@ -76,6 +76,23 @@
         "updatedAt": { "type": "string", "description": "Last updated ISO date" }
       },
       "required": ["id", "userId", "listId", "groupId", "text", "completed"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "An audit record of database changes and user actions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique log entry ID" },
+        "userId": { "type": "string", "description": "Owner Firebase UID" },
+        "action": { "type": "string", "enum": ["create", "update", "delete", "toggle", "reorder", "clear", "import", "batch_sync"], "description": "Operation type" },
+        "targetType": { "type": "string", "enum": ["list", "group", "item", "settings", "batch"], "description": "Target entity category" },
+        "targetId": { "type": "string", "description": "ID of affected resource" },
+        "title": { "type": "string", "description": "Human-readable action summary", "maxLength": 300 },
+        "details": { "type": "string", "description": "Optional payload or delta notes", "maxLength": 1000 },
+        "source": { "type": "string", "description": "Origin device or client", "maxLength": 100 },
+        "timestamp": { "type": "string", "format": "date-time", "description": "ISO timestamp of event" }
+      },
+      "required": ["id", "userId", "action", "targetType", "title", "timestamp"]
     }
   },
   "firestore": {
@@ -94,6 +111,10 @@
     "/users/{userId}/items/{itemId}": {
       "schema": "ListItem",
       "description": "Tasks and grocery items belonging to user groups and lists"
+    },
+    "/users/{userId}/activities/{activityId}": {
+      "schema": "ActivityLog",
+      "description": "Audit trail and history of database changes and state modifications"
     }
   }
 }

@@ -54,6 +54,8 @@ interface SideMenuProps {
   completedTasks: number;
   currentView?: AppView;
   onOpenSettings: () => void;
+  onOpenActivityLog?: () => void;
+  activityCount?: number;
   user?: User | null;
   syncStatus?: SyncStatus;
   onOpenAuthModal?: () => void;
@@ -122,6 +124,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({
   completedTasks,
   currentView = 'workspace',
   onOpenSettings,
+  onOpenActivityLog,
+  activityCount = 0,
   user,
   syncStatus = 'idle',
   onOpenAuthModal,
@@ -553,8 +557,31 @@ export const SideMenu: React.FC<SideMenuProps> = ({
             )
           )}
 
-          {/* Dedicated Settings Button at Bottom of Sidenav */}
-          <div className="flex items-center justify-end">
+          {/* Database Changes & Settings Buttons at Bottom of Sidenav */}
+          <div className="grid grid-cols-2 gap-2">
+            {onOpenActivityLog && (
+              <button
+                type="button"
+                id="sidenav-bottom-activity-btn"
+                onClick={() => {
+                  onOpenActivityLog();
+                  if (window.innerWidth < 1024) onClose();
+                }}
+                title={t.databaseChanges}
+                className="flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-neutral-800/90 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-750 border border-neutral-200/90 dark:border-neutral-700/80 shadow-2xs transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-1.5 truncate">
+                  <RefreshCw className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="truncate">{t.databaseChanges}</span>
+                </div>
+                {activityCount > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-md font-medium bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300">
+                    {activityCount}
+                  </span>
+                )}
+              </button>
+            )}
+
             <button
               type="button"
               id="sidenav-bottom-settings-btn"
@@ -563,22 +590,32 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                 if (window.innerWidth < 1024) onClose();
               }}
               title={t.settings}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+              className={`flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                !onOpenActivityLog ? 'col-span-2' : ''
+              } ${
                 currentView === 'settings'
                   ? 'bg-emerald-50/90 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200 border-emerald-300/80 dark:border-emerald-800/70 shadow-2xs ring-1 ring-emerald-500/20'
                   : 'bg-white dark:bg-neutral-800/90 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-750 border-neutral-200/90 dark:border-neutral-700/80 shadow-2xs'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <Settings className={`w-4 h-4 ${currentView === 'settings' ? 'text-emerald-600 dark:text-emerald-400' : 'text-neutral-500 dark:text-neutral-400'}`} />
+              <div className="flex items-center gap-1.5">
+                <Settings
+                  className={`w-3.5 h-3.5 ${
+                    currentView === 'settings'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-neutral-500 dark:text-neutral-400'
+                  }`}
+                />
                 <span>{t.settings}</span>
               </div>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
-                currentView === 'settings'
-                  ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
-                  : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400'
-              }`}>
-                {language === 'en' ? 'EN' : 'العربية'}
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-md font-medium ${
+                  currentView === 'settings'
+                    ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
+                    : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400'
+                }`}
+              >
+                {language === 'en' ? 'EN' : 'ع'}
               </span>
             </button>
           </div>
