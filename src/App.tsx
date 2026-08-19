@@ -1184,8 +1184,6 @@ export default function App() {
           sounds.playPop();
           setCurrentView('settings');
         }}
-        onOpenInstallModal={() => pwa.setIsModalOpen(true)}
-        isAppInstalled={pwa.isInstalled}
       />
 
       {/* 2. Top Navigation Bar */}
