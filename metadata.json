@@ -1,0 +1,6 @@
+{
+  "name": "FreshCart: Multi-List & Grocery Manager",
+  "description": "A high-performance task and list organizer with multi-list switching, group organization, drag-and-drop, quantity steppers, dark mode, English and Arabic RTL/LTR support, and local storage persistence.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

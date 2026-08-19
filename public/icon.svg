@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="tf-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <filter id="tf-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#059669" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  <!-- Background Rounded Squircle -->
+  <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#tf-grad)" filter="url(#tf-shadow)" />
+  
+  <!-- Subtle Inner Overlay -->
+  <rect x="48" y="48" width="416" height="416" rx="96" fill="white" fill-opacity="0.08" stroke="white" stroke-width="4" stroke-opacity="0.25" />
+
+  <!-- Flow Lines & Check Graphic -->
+  <g fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Top Bar -->
+    <path d="M140 160 h150" stroke-width="28" stroke-opacity="0.9" />
+    <circle cx="340" cy="160" r="16" fill="white" />
+    
+    <!-- Middle Main Check Mark & Row -->
+    <path d="M140 256 l48 48 l104 -104" stroke-width="32" />
+    <path d="M340 256 h32" stroke-width="28" stroke-opacity="0.9" />
+
+    <!-- Bottom Bar -->
+    <path d="M140 352 h232" stroke-width="28" stroke-opacity="0.9" />
+  </g>
+</svg>

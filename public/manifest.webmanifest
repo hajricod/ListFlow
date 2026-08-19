@@ -1,0 +1,20 @@
+{
+  "name": "TaskFlow - Grouped Lists & Tasks",
+  "short_name": "TaskFlow",
+  "description": "Bilingual Drag & Drop Grouped Lists and Task Manager with dark mode and offline storage.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0a0c",
+  "theme_color": "#10b981",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
