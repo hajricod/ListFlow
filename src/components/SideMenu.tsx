@@ -30,7 +30,6 @@ import {
   CheckCircle2,
   ListTodo,
   Settings,
-  Download,
 } from 'lucide-react';
 import { AppList, AppView, Language, ListGroup, ListItem } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -52,8 +51,6 @@ interface SideMenuProps {
   completedTasks: number;
   currentView?: AppView;
   onOpenSettings: () => void;
-  onOpenInstallModal?: () => void;
-  isAppInstalled?: boolean;
 }
 
 const getListIconComponent = (iconName: string) => {
@@ -118,8 +115,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({
   completedTasks,
   currentView = 'workspace',
   onOpenSettings,
-  onOpenInstallModal,
-  isAppInstalled = false,
 }) => {
   const t = getTranslation(language);
   const [listSearch, setListSearch] = useState('');
@@ -435,29 +430,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({
             </div>
           </div>
 
-          {/* Install App and Dedicated Settings Buttons at Bottom of Sidenav */}
-          <div className="flex flex-col gap-2">
-            {onOpenInstallModal && !isAppInstalled && (
-              <button
-                type="button"
-                id="sidenav-bottom-install-btn"
-                onClick={() => {
-                  onOpenInstallModal();
-                  if (window.innerWidth < 1024) onClose();
-                }}
-                title={t.installApp}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs transition-all cursor-pointer"
-              >
-                <div className="flex items-center gap-2">
-                  <Download className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <span>{t.installApp}</span>
-                </div>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-emerald-100 dark:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300">
-                  PWA
-                </span>
-              </button>
-            )}
-
+          {/* Dedicated Settings Button at Bottom of Sidenav */}
+          <div className="flex items-center justify-end">
             <button
               type="button"
               id="sidenav-bottom-settings-btn"
