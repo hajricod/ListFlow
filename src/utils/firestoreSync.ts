@@ -175,16 +175,19 @@ export async function fetchUserCloudData(userId: string): Promise<UserCloudData 
     listsSnap.forEach((d) => {
       lists.push(d.data() as AppList);
     });
+    lists.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
     const groups: ListGroup[] = [];
     groupsSnap.forEach((d) => {
       groups.push(d.data() as ListGroup);
     });
+    groups.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
     const items: ListItem[] = [];
     itemsSnap.forEach((d) => {
       items.push(d.data() as ListItem);
     });
+    items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
     const userData = userDocSnap.data();
 
@@ -257,13 +260,15 @@ export async function syncAllToFirestore(
       }
     });
 
-    // Upsert current lists
-    for (const list of lists) {
+    // Upsert current lists with preserved index order
+    for (let i = 0; i < lists.length; i++) {
+      const list = lists[i];
       const ref = doc(db, 'users', userId, 'lists', list.id);
       batch.set(
         ref,
         sanitizeForFirestore({
           ...list,
+          order: list.order !== undefined ? list.order : i,
           userId,
           updatedAt: new Date().toISOString(),
         }),
@@ -273,13 +278,15 @@ export async function syncAllToFirestore(
       upsertCount++;
     }
 
-    // Upsert current groups
-    for (const group of groups) {
+    // Upsert current groups with preserved index order
+    for (let i = 0; i < groups.length; i++) {
+      const group = groups[i];
       const ref = doc(db, 'users', userId, 'groups', group.id);
       batch.set(
         ref,
         sanitizeForFirestore({
           ...group,
+          order: group.order !== undefined ? group.order : i,
           userId,
           updatedAt: new Date().toISOString(),
         }),
@@ -289,13 +296,15 @@ export async function syncAllToFirestore(
       upsertCount++;
     }
 
-    // Upsert current items
-    for (const item of items) {
+    // Upsert current items with preserved index order
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
       const ref = doc(db, 'users', userId, 'items', item.id);
       batch.set(
         ref,
         sanitizeForFirestore({
           ...item,
+          order: item.order !== undefined ? item.order : i,
           userId,
           updatedAt: new Date().toISOString(),
         }),
@@ -316,25 +325,58 @@ export async function syncAllToFirestore(
   }
 }
 
-// 4. Real-time Subscription for Multi-Tab / Multi-Device Synchronization
+// 4. Real-time Subscription for Multi-Tab / Multi-Device / Multi-Browser Synchronization
 export function subscribeToUserCloudData(
   userId: string,
-  onUpdate: (data: { lists: AppList[]; groups: ListGroup[]; items: ListItem[] }) => void,
+  onUpdate: (data: {
+    lists: AppList[];
+    groups: ListGroup[];
+    items: ListItem[];
+    preferences?: Partial<UserCloudData>;
+  }) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
   let latestLists: AppList[] | null = null;
   let latestGroups: ListGroup[] | null = null;
   let latestItems: ListItem[] | null = null;
+  let hasReceivedLists = false;
+  let hasReceivedGroups = false;
+  let hasReceivedItems = false;
+  let latestUserData: Partial<UserCloudData> | null = null;
 
   const checkAndEmit = () => {
-    if (latestLists !== null && latestGroups !== null && latestItems !== null) {
+    if (hasReceivedLists && hasReceivedGroups && hasReceivedItems) {
+      const sortedLists = [...(latestLists || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const sortedGroups = [...(latestGroups || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const sortedItems = [...(latestItems || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
       onUpdate({
-        lists: latestLists,
-        groups: latestGroups,
-        items: latestItems,
+        lists: sortedLists,
+        groups: sortedGroups,
+        items: sortedItems,
+        preferences: latestUserData || undefined,
       });
     }
   };
+
+  const unsubUser = onSnapshot(
+    doc(db, 'users', userId),
+    (docSnap) => {
+      if (docSnap.exists()) {
+        const u = docSnap.data();
+        latestUserData = {
+          language: u.language,
+          theme: u.theme,
+          themeColor: u.themeColor,
+          soundEnabled: u.soundEnabled,
+          activeListId: u.activeListId,
+        };
+      }
+    },
+    (err) => {
+      console.warn('User preferences onSnapshot warning:', err);
+    }
+  );
 
   const unsubLists = onSnapshot(
     collection(db, 'users', userId, 'lists'),
@@ -342,6 +384,7 @@ export function subscribeToUserCloudData(
       const arr: AppList[] = [];
       snapshot.forEach((d) => arr.push(d.data() as AppList));
       latestLists = arr;
+      hasReceivedLists = true;
       checkAndEmit();
     },
     (err) => {
@@ -356,6 +399,7 @@ export function subscribeToUserCloudData(
       const arr: ListGroup[] = [];
       snapshot.forEach((d) => arr.push(d.data() as ListGroup));
       latestGroups = arr;
+      hasReceivedGroups = true;
       checkAndEmit();
     },
     (err) => {
@@ -370,6 +414,7 @@ export function subscribeToUserCloudData(
       const arr: ListItem[] = [];
       snapshot.forEach((d) => arr.push(d.data() as ListItem));
       latestItems = arr;
+      hasReceivedItems = true;
       checkAndEmit();
     },
     (err) => {
@@ -379,6 +424,7 @@ export function subscribeToUserCloudData(
   );
 
   return () => {
+    unsubUser();
     unsubLists();
     unsubGroups();
     unsubItems();

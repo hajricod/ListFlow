@@ -32,6 +32,7 @@ export interface ListItem {
   completed: boolean;
   completedAt?: string;
   createdAt: string;
+  order?: number;
   dueDate?: string;
   priority?: Priority;
   tags?: string[];
@@ -46,6 +47,7 @@ export interface AppList {
   color: string;
   icon: string;
   description?: string;
+  order?: number;
   createdAt: string;
 }
 
@@ -56,6 +58,7 @@ export interface ListGroup {
   color: string;
   icon: string;
   isCollapsed?: boolean;
+  order?: number;
   createdAt: string;
 }
 

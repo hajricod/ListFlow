@@ -68,6 +68,7 @@ import { usePWAInstall } from './hooks/usePWAInstall';
 import { useAuth } from './hooks/useAuth';
 import {
   fetchUserCloudData,
+  subscribeToUserCloudData,
   syncAllToFirestore,
   syncUserProfile,
   recordActivityLogInFirestore,
@@ -100,6 +101,7 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const prevUserRef = React.useRef<string | null>(null);
   const isInitialCloudLoadRef = React.useRef<boolean>(false);
+  const isRemoteSyncRef = React.useRef<boolean>(false);
   const syncTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const prefSyncTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -391,65 +393,89 @@ export default function App() {
     showToast(t.historyCleared, undefined, 'info');
   };
 
-  // Auth User Cloud Sync on Login / Logout
+  // Auth User Cloud Sync & Real-Time Multi-Device / Multi-Browser Subscription
   useEffect(() => {
-    if (user) {
-      if (prevUserRef.current !== user.uid) {
-        prevUserRef.current = user.uid;
-        isInitialCloudLoadRef.current = true;
-        setSyncStatus('syncing');
-
-        fetchUserCloudData(user.uid)
-          .then((cloudData) => {
-            if (cloudData && cloudData.lists && cloudData.lists.length > 0) {
-              setLists(cloudData.lists);
-              if (cloudData.groups) setGroups(cloudData.groups);
-              if (cloudData.items) setItems(cloudData.items);
-              if (cloudData.language) setLanguage(cloudData.language);
-              if (cloudData.theme) setTheme(cloudData.theme);
-              if (cloudData.themeColor) setThemeColor(cloudData.themeColor);
-              if (cloudData.soundEnabled !== undefined) setSoundEnabled(cloudData.soundEnabled);
-              if (cloudData.activeListId) setActiveListId(cloudData.activeListId);
-              setSyncStatus('synced');
-              showToast(t.loginSuccess, undefined, 'success');
-            } else {
-              // First time login: Upload initial workspace data to cloud
-              syncAllToFirestore(user.uid, lists, groups, items);
-              syncUserProfile(user, {
-                language,
-                theme,
-                themeColor,
-                soundEnabled,
-                activeListId,
-              });
-              setSyncStatus('synced');
-              showToast(t.loginSuccess, undefined, 'success');
-            }
-          })
-          .catch((err) => {
-            console.error('Initial cloud data fetch error:', err);
-            setSyncStatus('error');
-          })
-          .finally(() => {
-            // Small delay to allow state to settle before enabling reactive auto-sync
-            setTimeout(() => {
-              isInitialCloudLoadRef.current = false;
-            }, 500);
-          });
-      }
-    } else {
+    if (!user?.uid) {
       if (prevUserRef.current !== null) {
         prevUserRef.current = null;
         isInitialCloudLoadRef.current = false;
         setSyncStatus('idle');
         showToast(t.logoutSuccess, undefined, 'info');
       }
+      return;
     }
-  }, [user, showToast, t.loginSuccess, t.logoutSuccess]);
 
-  // Reactive Data Sync whenever Lists, Groups, or Items change
+    const isNewLogin = prevUserRef.current !== user.uid;
+    prevUserRef.current = user.uid;
+    isInitialCloudLoadRef.current = isNewLogin;
+    setSyncStatus('syncing');
+
+    const unsubscribe = subscribeToUserCloudData(
+      user.uid,
+      (cloudData) => {
+        if (cloudData.lists && cloudData.lists.length > 0) {
+          isRemoteSyncRef.current = true;
+          setLists(cloudData.lists);
+          if (cloudData.groups) setGroups(cloudData.groups);
+          if (cloudData.items) setItems(cloudData.items);
+
+          // Apply cloud preferences on initial load
+          if (isInitialCloudLoadRef.current) {
+            if (cloudData.preferences?.language) setLanguage(cloudData.preferences.language);
+            if (cloudData.preferences?.theme) setTheme(cloudData.preferences.theme);
+            if (cloudData.preferences?.themeColor) setThemeColor(cloudData.preferences.themeColor);
+            if (cloudData.preferences?.soundEnabled !== undefined) {
+              setSoundEnabled(cloudData.preferences.soundEnabled);
+            }
+            if (cloudData.preferences?.activeListId) {
+              setActiveListId(cloudData.preferences.activeListId);
+            }
+            showToast(t.loginSuccess, undefined, 'success');
+            isInitialCloudLoadRef.current = false;
+          }
+
+          // Ensure activeListId points to a valid list
+          setActiveListId((curr) => {
+            const listExists = cloudData.lists.some((l) => l.id === curr);
+            return listExists ? curr : cloudData.lists[0]?.id || curr;
+          });
+
+          setSyncStatus('synced');
+        } else if (isInitialCloudLoadRef.current) {
+          // New user initial database seed
+          syncAllToFirestore(user.uid, lists, groups, items);
+          syncUserProfile(user, {
+            language,
+            theme,
+            themeColor,
+            soundEnabled,
+            activeListId,
+          });
+          isInitialCloudLoadRef.current = false;
+          showToast(t.loginSuccess, undefined, 'success');
+          setSyncStatus('synced');
+        }
+      },
+      (err) => {
+        console.error('Real-time subscription error:', err);
+        setSyncStatus('error');
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.uid, showToast, t.loginSuccess, t.logoutSuccess]);
+
+  // Reactive Data Sync whenever Lists, Groups, or Items change locally
   useEffect(() => {
     if (!user || isInitialCloudLoadRef.current) return;
+
+    // If change was initiated by a remote Firestore snapshot, skip pushing back to Firestore
+    if (isRemoteSyncRef.current) {
+      isRemoteSyncRef.current = false;
+      return;
+    }
 
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       setSyncStatus('offline');
