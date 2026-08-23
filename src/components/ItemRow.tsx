@@ -20,6 +20,7 @@ interface ItemRowProps {
   groups: ListGroup[];
   language: Language;
   searchQuery?: string;
+  isReadOnly?: boolean;
   onToggleComplete: (id: string) => void;
   onEditItem: (item: ListItem) => void;
   onDeleteItem: (id: string) => void;
@@ -66,6 +67,7 @@ export const ItemRow: React.FC<ItemRowProps> = ({
   groups,
   language,
   searchQuery,
+  isReadOnly = false,
   onToggleComplete,
   onEditItem,
   onDeleteItem,
@@ -181,19 +183,24 @@ export const ItemRow: React.FC<ItemRowProps> = ({
         {/* Left: Drag Grip, Checkbox, Pinned, Quantity */}
         <div className="flex items-center gap-2 min-w-0">
           {/* Drag Grip Handle */}
-          <div
-            className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-grab active:cursor-grabbing p-0.5 -ms-1 rounded transition-colors touch-none shrink-0"
-            title={t.dragToReorder}
-          >
-            <GripVertical className="w-4 h-4" />
-          </div>
+          {!isReadOnly && (
+            <div
+              className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-grab active:cursor-grabbing p-0.5 -ms-1 rounded transition-colors touch-none shrink-0"
+              title={t.dragToReorder}
+            >
+              <GripVertical className="w-4 h-4" />
+            </div>
+          )}
 
           {/* In-Cart Checkbox Button */}
           <button
             id={`checkbox-${item.id}`}
             type="button"
-            onClick={handleCheckboxClick}
-            className={`w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0 border cursor-pointer ${
+            onClick={!isReadOnly ? handleCheckboxClick : undefined}
+            disabled={isReadOnly}
+            className={`w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0 border ${
+              isReadOnly ? 'cursor-default opacity-80' : 'cursor-pointer'
+            } ${
               item.completed
                 ? 'bg-emerald-500 border-emerald-500 text-white shadow-2xs'
                 : 'border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800 hover:border-emerald-500 dark:hover:border-emerald-400'
@@ -213,7 +220,7 @@ export const ItemRow: React.FC<ItemRowProps> = ({
           {(item.quantity !== undefined || Boolean(item.unit)) && (
             <div className="flex items-center gap-1">
               {/* Quick Decrement */}
-              {onUpdateQuantity && item.quantity !== undefined && (
+              {!isReadOnly && onUpdateQuantity && item.quantity !== undefined && (
                 <button
                   id={`qty-minus-${item.id}`}
                   type="button"
@@ -227,8 +234,10 @@ export const ItemRow: React.FC<ItemRowProps> = ({
 
               {/* Quantity Badge */}
               <span
-                onClick={() => onEditItem(item)}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                onClick={!isReadOnly ? () => onEditItem(item) : undefined}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold ${
+                  !isReadOnly ? 'cursor-pointer' : 'cursor-default'
+                } transition-colors ${
                   item.completed
                     ? 'bg-neutral-100 dark:bg-neutral-800/80 text-neutral-400 dark:text-neutral-500'
                     : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60'
@@ -239,7 +248,7 @@ export const ItemRow: React.FC<ItemRowProps> = ({
               </span>
 
               {/* Quick Increment */}
-              {onUpdateQuantity && item.quantity !== undefined && (
+              {!isReadOnly && onUpdateQuantity && item.quantity !== undefined && (
                 <button
                   id={`qty-plus-${item.id}`}
                   type="button"
@@ -255,122 +264,124 @@ export const ItemRow: React.FC<ItemRowProps> = ({
         </div>
 
         {/* Right: More Options Menu */}
-        <div className="flex items-center gap-1 shrink-0">
-          <div className="relative" ref={menuRef}>
-            <button
-              id={`menu-trigger-${item.id}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen(!menuOpen);
-                setMoveMenuOpen(false);
-              }}
-              className="p-1 rounded-md text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
-              title={t.moreActions}
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
-
-            {menuOpen && (
-              <div
-                className={`item-menu-dropdown absolute ${
-                  language === 'ar' ? 'left-0' : 'right-0'
-                } top-full mt-1 w-44 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-xl z-50 py-1 text-xs`}
+        {!isReadOnly && (
+          <div className="flex items-center gap-1 shrink-0">
+            <div className="relative" ref={menuRef}>
+              <button
+                id={`menu-trigger-${item.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(!menuOpen);
+                  setMoveMenuOpen(false);
+                }}
+                className="p-1 rounded-md text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                title={t.moreActions}
               >
-                {/* Edit */}
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onEditItem(item);
-                  }}
-                  className="w-full px-3 py-2 text-start flex items-center gap-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
+                <MoreVertical className="w-4 h-4" />
+              </button>
+
+              {menuOpen && (
+                <div
+                  className={`item-menu-dropdown absolute ${
+                    language === 'ar' ? 'left-0' : 'right-0'
+                  } top-full mt-1 w-44 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-xl z-50 py-1 text-xs`}
                 >
-                  <Edit2 className="w-3.5 h-3.5" />
-                  <span>{t.edit}</span>
-                </button>
+                  {/* Edit */}
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onEditItem(item);
+                    }}
+                    className="w-full px-3 py-2 text-start flex items-center gap-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>{t.edit}</span>
+                  </button>
 
-                {/* Pin/Unpin */}
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onTogglePin(item.id);
-                  }}
-                  className="w-full px-3 py-2 text-start flex items-center gap-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
-                >
-                  <Pin className={`w-3.5 h-3.5 ${item.isPinned ? 'fill-amber-500 text-amber-500' : ''}`} />
-                  <span>{item.isPinned ? t.unpinItem : t.pinItem}</span>
-                </button>
+                  {/* Pin/Unpin */}
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onTogglePin(item.id);
+                    }}
+                    className="w-full px-3 py-2 text-start flex items-center gap-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
+                  >
+                    <Pin className={`w-3.5 h-3.5 ${item.isPinned ? 'fill-amber-500 text-amber-500' : ''}`} />
+                    <span>{item.isPinned ? t.unpinItem : t.pinItem}</span>
+                  </button>
 
-                {/* Duplicate */}
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDuplicateItem(item);
-                  }}
-                  className="w-full px-3 py-2 text-start flex items-center gap-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>{t.duplicate}</span>
-                </button>
+                  {/* Duplicate */}
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onDuplicateItem(item);
+                    }}
+                    className="w-full px-3 py-2 text-start flex items-center gap-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>{t.duplicate}</span>
+                  </button>
 
-                {/* Move to another Aisle */}
-                {otherGroups.length > 0 && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setMoveMenuOpen(!moveMenuOpen)}
-                      className="w-full px-3 py-2 text-start flex items-center justify-between text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
-                    >
-                      <span className="flex items-center gap-2">
-                        <FolderInput className="w-3.5 h-3.5" />
-                        <span>{t.moveToGroup}</span>
-                      </span>
-                      <span className="text-[10px] text-neutral-400">›</span>
-                    </button>
-
-                    {moveMenuOpen && (
-                      <div
-                        className={`absolute ${
-                          language === 'ar' ? 'right-full me-1' : 'left-full ms-1'
-                        } top-0 w-44 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-lg z-40 py-1`}
+                  {/* Move to another Aisle */}
+                  {otherGroups.length > 0 && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setMoveMenuOpen(!moveMenuOpen)}
+                        className="w-full px-3 py-2 text-start flex items-center justify-between text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
                       >
-                        {otherGroups.map((g) => (
-                          <button
-                            key={g.id}
-                            onClick={() => {
-                              onMoveToGroup(item.id, g.id);
-                              setMenuOpen(false);
-                              setMoveMenuOpen(false);
-                            }}
-                            className="w-full px-3 py-2 text-start flex items-center gap-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 truncate cursor-pointer"
-                          >
-                            <span
-                              className="w-2.5 h-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: g.color }}
-                            />
-                            <span className="truncate">{g.title}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                        <span className="flex items-center gap-2">
+                          <FolderInput className="w-3.5 h-3.5" />
+                          <span>{t.moveToGroup}</span>
+                        </span>
+                        <span className="text-[10px] text-neutral-400">›</span>
+                      </button>
 
-                <div className="my-1 border-t border-neutral-100 dark:border-neutral-800" />
+                      {moveMenuOpen && (
+                        <div
+                          className={`absolute ${
+                            language === 'ar' ? 'right-full me-1' : 'left-full ms-1'
+                          } top-0 w-44 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-lg z-40 py-1`}
+                        >
+                          {otherGroups.map((g) => (
+                            <button
+                              key={g.id}
+                              onClick={() => {
+                                onMoveToGroup(item.id, g.id);
+                                setMenuOpen(false);
+                                setMoveMenuOpen(false);
+                              }}
+                              className="w-full px-3 py-2 text-start flex items-center gap-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 truncate cursor-pointer"
+                            >
+                              <span
+                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: g.color }}
+                              />
+                              <span className="truncate">{g.title}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                {/* Delete */}
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDeleteItem(item.id);
-                  }}
-                  className="w-full px-3 py-2 text-start flex items-center gap-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>{t.delete}</span>
-                </button>
-              </div>
-            )}
+                  <div className="my-1 border-t border-neutral-100 dark:border-neutral-800" />
+
+                  {/* Delete */}
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onDeleteItem(item.id);
+                    }}
+                    className="w-full px-3 py-2 text-start flex items-center gap-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{t.delete}</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Dedicated Separate Row for Item Title & Notes: Maximizes Text Space */}

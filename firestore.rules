@@ -20,7 +20,64 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 128;
     }
 
-    // User profile and synchronized settings
+    function listDocExists(listId) {
+      return exists(/databases/$(database)/documents/lists/$(listId));
+    }
+
+    function listDocExistsAfter(listId) {
+      return existsAfter(/databases/$(database)/documents/lists/$(listId));
+    }
+
+    function getListData(listId) {
+      return get(/databases/$(database)/documents/lists/$(listId)).data;
+    }
+
+    function getListDataAfter(listId) {
+      return getAfter(/databases/$(database)/documents/lists/$(listId)).data;
+    }
+
+    function isParentListOwner(listId) {
+      return isSignedIn() && (
+        (listDocExists(listId) && getListData(listId).ownerId == request.auth.uid) ||
+        (listDocExistsAfter(listId) && getListDataAfter(listId).ownerId == request.auth.uid)
+      );
+    }
+
+    function isParentListMember(listId) {
+      return isSignedIn() && (
+        isParentListOwner(listId) ||
+        (listDocExists(listId) && (request.auth.uid in getListData(listId).collaboratorUids)) ||
+        (listDocExistsAfter(listId) && (request.auth.uid in getListDataAfter(listId).collaboratorUids)) ||
+        (listDocExists(listId) && getListData(listId).shareLinkEnabled == true) ||
+        (listDocExistsAfter(listId) && getListDataAfter(listId).shareLinkEnabled == true)
+      );
+    }
+
+    function isParentListEditor(listId) {
+      return isSignedIn() && (
+        isParentListOwner(listId) ||
+        (
+          listDocExists(listId) &&
+          (request.auth.uid in getListData(listId).collaboratorUids) &&
+          (
+            !('collaborators' in getListData(listId)) ||
+            !(request.auth.uid in getListData(listId).collaborators) ||
+            getListData(listId).collaborators[request.auth.uid].role == 'edit'
+          )
+        ) ||
+        (
+          listDocExistsAfter(listId) &&
+          (request.auth.uid in getListDataAfter(listId).collaboratorUids) &&
+          (
+            !('collaborators' in getListDataAfter(listId)) ||
+            !(request.auth.uid in getListDataAfter(listId).collaborators) ||
+            getListDataAfter(listId).collaborators[request.auth.uid].role == 'edit'
+          )
+        )
+      );
+    }
+
+    // User profile and synchronized personal settings
     match /users/{userId} {
       allow get: if isOwner(userId);
       allow list: if false;
@@ -28,36 +85,68 @@ service cloud.firestore {
       allow update: if isOwner(userId);
       allow delete: if isOwner(userId);
 
-      // User's Lists subcollection
+      // User's private lists subcollection (backup)
       match /lists/{listId} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidId(listId);
-        allow update: if isOwner(userId);
-        allow delete: if isOwner(userId);
+        allow read, write: if isOwner(userId);
       }
 
-      // User's Groups subcollection
+      // User's private groups subcollection
       match /groups/{groupId} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidId(groupId);
-        allow update: if isOwner(userId);
-        allow delete: if isOwner(userId);
+        allow read, write: if isOwner(userId);
       }
 
-      // User's Items subcollection
+      // User's private items subcollection
       match /items/{itemId} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidId(itemId);
-        allow update: if isOwner(userId);
-        allow delete: if isOwner(userId);
+        allow read, write: if isOwner(userId);
       }
 
-      // User's Database Activity and Change Log subcollection
+      // User's private activities
       match /activities/{activityId} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidId(activityId);
-        allow update: if isOwner(userId);
-        allow delete: if isOwner(userId);
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // Shared Workspace Lists Collection
+    match /lists/{listId} {
+      // Read: Allowed for list owner, active collaborators, or user invited by email/link
+      allow get: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (request.auth.uid in resource.data.collaboratorUids) ||
+        (resource.data.shareLinkEnabled == true) ||
+        (request.auth.token.email != null && (request.auth.token.email in resource.data.invitedEmails))
+      );
+
+      allow list: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (request.auth.uid in resource.data.collaboratorUids) ||
+        (request.auth.token.email != null && (request.auth.token.email in resource.data.invitedEmails))
+      );
+
+      // Create: Authenticated users can create a list they own
+      allow create: if isSignedIn() && isValidId(listId) && request.resource.data.ownerId == request.auth.uid;
+
+      // Update: Owner can update everything; Editor can update metadata; Collaborators can accept invites or leave
+      allow update: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (request.auth.uid in resource.data.collaboratorUids && request.resource.data.ownerId == resource.data.ownerId) ||
+        // Allowing joining via invitation or link
+        (resource.data.shareLinkEnabled == true && request.resource.data.ownerId == resource.data.ownerId) ||
+        (request.auth.token.email != null && (request.auth.token.email in resource.data.invitedEmails) && request.resource.data.ownerId == resource.data.ownerId)
+      );
+
+      // Delete: STRICT RULE - ONLY THE OWNER CAN DELETE THE LIST!
+      allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      // Subcollection: Groups / Aisles of the list
+      match /groups/{groupId} {
+        allow read: if isParentListMember(listId);
+        allow create, update, delete: if isParentListEditor(listId) && isValidId(groupId);
+      }
+
+      // Subcollection: Items / Tasks of the list
+      match /items/{itemId} {
+        allow read: if isParentListMember(listId);
+        allow create, update, delete: if isParentListEditor(listId) && isValidId(itemId);
       }
     }
   }

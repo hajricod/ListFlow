@@ -33,6 +33,7 @@ interface StatsBannerProps {
   onOpenNewItemModal?: () => void;
   gridColumns?: 1 | 2;
   onGridColumnsChange?: (cols: 1 | 2) => void;
+  isReadOnly?: boolean;
 }
 
 export const StatsBanner: React.FC<StatsBannerProps> = ({
@@ -51,6 +52,7 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
   onOpenNewItemModal,
   gridColumns = 2,
   onGridColumnsChange,
+  isReadOnly = false,
 }) => {
   const t = getTranslation(language);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -81,6 +83,18 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
   return (
     <div className="w-full max-w-full space-y-3">
       <div className="flex flex-col gap-3">
+        {/* Read-Only Notice Banner */}
+        {isReadOnly && (
+          <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between gap-2 shadow-2xs">
+            <span className="font-medium">
+              {t.viewOnlyBanner}
+            </span>
+            <span className="px-2 py-0.5 rounded-md bg-amber-200/80 dark:bg-amber-900 text-amber-900 dark:text-amber-100 font-bold text-[10px] shrink-0 uppercase tracking-wider">
+              {t.viewOnlyBadge}
+            </span>
+          </div>
+        )}
+
         {/* Card 1: Creation Actions, Search Bar & Task Count */}
         <div
           id="toolbar-creation-card"
@@ -89,7 +103,7 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
           {/* Row 1: Action Buttons & Filter Counter Pill */}
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-              {onOpenNewItemModal && (
+              {onOpenNewItemModal && !isReadOnly && (
                 <button
                   type="button"
                   id="main-add-item-btn"
@@ -101,15 +115,17 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                 </button>
               )}
 
-              <button
-                type="button"
-                id="main-add-group-btn"
-                onClick={onOpenNewGroupModal}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 h-9 sm:h-9.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/90 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 active:scale-[0.98] transition-all cursor-pointer shadow-2xs min-w-0"
-              >
-                <Plus className="w-4 h-4 stroke-[2.5] shrink-0" />
-                <span className="truncate">{t.addGroup}</span>
-              </button>
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  id="main-add-group-btn"
+                  onClick={onOpenNewGroupModal}
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 h-9 sm:h-9.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/90 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 active:scale-[0.98] transition-all cursor-pointer shadow-2xs min-w-0"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5] shrink-0" />
+                  <span className="truncate">{t.addGroup}</span>
+                </button>
+              )}
             </div>
 
             {/* Task Status Filter / Counter Pill */}

@@ -24,6 +24,7 @@ interface GroupCardProps {
   allGroups: ListGroup[];
   language: Language;
   searchQuery?: string;
+  isReadOnly?: boolean;
   onToggleCollapse: (groupId: string) => void;
   onEditGroup: (group: ListGroup) => void;
   onDeleteGroup: (groupId: string) => void;
@@ -65,6 +66,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
   allGroups,
   language,
   searchQuery,
+  isReadOnly = false,
   onToggleCollapse,
   onEditGroup,
   onDeleteGroup,
@@ -204,14 +206,16 @@ export const GroupCard: React.FC<GroupCardProps> = ({
             </div>
 
             {/* Group Drag Handle */}
-            <div
-              draggable
-              onDragStart={(e) => onGroupDragStart(e, group.id)}
-              className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-grab active:cursor-grabbing p-1 rounded-lg transition-colors touch-none"
-              title={t.dragGroup}
-            >
-              <GripHorizontal className="w-4 h-4" />
-            </div>
+            {!isReadOnly && (
+              <div
+                draggable
+                onDragStart={(e) => onGroupDragStart(e, group.id)}
+                className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-grab active:cursor-grabbing p-1 rounded-lg transition-colors touch-none"
+                title={t.dragGroup}
+              >
+                <GripHorizontal className="w-4 h-4" />
+              </div>
+            )}
 
             {/* Collapse/Expand button */}
             <button
@@ -243,153 +247,157 @@ export const GroupCard: React.FC<GroupCardProps> = ({
             )}
 
             {/* Group Menu Trigger */}
-            <div className="relative" ref={menuRef}>
-              <button
-                id={`group-menu-btn-${group.id}`}
-                onClick={() => {
-                  setMenuOpen(!menuOpen);
-                  setSortMenuOpen(false);
-                }}
-                title="Group options"
-                className="p-1.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
-              >
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
-
-              {/* Group Options Dropdown */}
-            {menuOpen && (
-              <div
-                className="absolute end-0 top-full mt-1.5 z-40 w-48 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-xl py-1 text-xs text-neutral-700 dark:text-neutral-200"
-                onClick={(e) => e.stopPropagation()}
-              >
+            {!isReadOnly && (
+              <div className="relative" ref={menuRef}>
                 <button
+                  id={`group-menu-btn-${group.id}`}
                   onClick={() => {
-                    setMenuOpen(false);
-                    onEditGroup(group);
+                    setMenuOpen(!menuOpen);
+                    setSortMenuOpen(false);
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-700/60 transition-colors cursor-pointer text-start"
+                  title="Group options"
+                  className="p-1.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
                 >
-                  <Edit2 className="w-3.5 h-3.5 text-neutral-400" />
-                  <span>{t.editGroup}</span>
+                  <MoreHorizontal className="w-4 h-4" />
                 </button>
 
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDuplicateGroup(group);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-700/60 transition-colors cursor-pointer text-start"
-                >
-                  <Copy className="w-3.5 h-3.5 text-neutral-400" />
-                  <span>{t.duplicate}</span>
-                </button>
-
-                {/* Sort sub-options */}
-                <div className="relative">
-                  <button
-                    onClick={() => setSortMenuOpen(!sortMenuOpen)}
-                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-700/60 transition-colors cursor-pointer text-start"
+                {/* Group Options Dropdown */}
+                {menuOpen && (
+                  <div
+                    className="absolute end-0 top-full mt-1.5 z-40 w-48 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-xl py-1 text-xs text-neutral-700 dark:text-neutral-200"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="flex items-center gap-2">
-                      <ArrowUpDown className="w-3.5 h-3.5 text-neutral-400" />
-                      <span>{t.sortBy}</span>
-                    </div>
-                    <span className="text-[10px] text-neutral-400">▸</span>
-                  </button>
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onEditGroup(group);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-700/60 transition-colors cursor-pointer text-start"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 text-neutral-400" />
+                      <span>{t.editGroup}</span>
+                    </button>
 
-                  {sortMenuOpen && (
-                    <div className="ps-4 pe-2 py-1 bg-neutral-50 dark:bg-neutral-900 border-y border-neutral-200 dark:border-neutral-700 space-y-1">
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDuplicateGroup(group);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-700/60 transition-colors cursor-pointer text-start"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-neutral-400" />
+                      <span>{t.duplicate}</span>
+                    </button>
+
+                    {/* Sort sub-options */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setSortMenuOpen(!sortMenuOpen)}
+                        className="w-full flex items-center justify-between px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-700/60 transition-colors cursor-pointer text-start"
+                      >
+                        <div className="flex items-center gap-2">
+                          <ArrowUpDown className="w-3.5 h-3.5 text-neutral-400" />
+                          <span>{t.sortBy}</span>
+                        </div>
+                        <span className="text-[10px] text-neutral-400">▸</span>
+                      </button>
+
+                      {sortMenuOpen && (
+                        <div className="ps-4 pe-2 py-1 bg-neutral-50 dark:bg-neutral-900 border-y border-neutral-200 dark:border-neutral-700 space-y-1">
+                          <button
+                            onClick={() => {
+                              onSortGroupItems(group.id, 'alphabetical');
+                              setMenuOpen(false);
+                            }}
+                            className="w-full text-start px-2 py-1 rounded text-[11px] hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                          >
+                            {t.sortAlpha}
+                          </button>
+                          <button
+                            onClick={() => {
+                              onSortGroupItems(group.id, 'quantity');
+                              setMenuOpen(false);
+                            }}
+                            className="w-full text-start px-2 py-1 rounded text-[11px] hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                          >
+                            {t.sortQuantity}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {completedCount > 0 && (
                       <button
                         onClick={() => {
-                          onSortGroupItems(group.id, 'alphabetical');
                           setMenuOpen(false);
+                          onClearCompletedInGroup(group.id);
                         }}
-                        className="w-full text-start px-2 py-1 rounded text-[11px] hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-700/60 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer text-start"
                       >
-                        {t.sortAlpha}
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>{t.clearCompleted} ({completedCount})</span>
                       </button>
-                      <button
-                        onClick={() => {
-                          onSortGroupItems(group.id, 'quantity');
-                          setMenuOpen(false);
-                        }}
-                        className="w-full text-start px-2 py-1 rounded text-[11px] hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
-                      >
-                        {t.sortQuantity}
-                      </button>
-                    </div>
-                  )}
-                </div>
+                    )}
 
-                {completedCount > 0 && (
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onClearCompletedInGroup(group.id);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-700/60 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer text-start"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>{t.clearCompleted} ({completedCount})</span>
-                  </button>
+                    <div className="my-1 border-t border-neutral-200 dark:border-neutral-700" />
+
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDeleteGroup(group.id);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer text-start"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{t.deleteGroup}</span>
+                    </button>
+                  </div>
                 )}
-
-                <div className="my-1 border-t border-neutral-200 dark:border-neutral-700" />
-
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDeleteGroup(group.id);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer text-start"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>{t.deleteGroup}</span>
-                </button>
               </div>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Separate Row for Group Title: Maximizes space and readability */}
-      <div className="mt-2.5 pt-0.5">
-        <h3
-          onClick={() => onToggleCollapse(group.id)}
-          className="text-base sm:text-[17px] font-bold text-neutral-900 dark:text-neutral-100 cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors leading-snug break-words"
-        >
-          {group.title}
-        </h3>
+        {/* Separate Row for Group Title: Maximizes space and readability */}
+        <div className="mt-2.5 pt-0.5">
+          <h3
+            onClick={() => onToggleCollapse(group.id)}
+            className="text-base sm:text-[17px] font-bold text-neutral-900 dark:text-neutral-100 cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors leading-snug break-words"
+          >
+            {group.title}
+          </h3>
+        </div>
       </div>
-    </div>
 
       {/* Group Body (Collapsible) */}
       {!group.isCollapsed && (
         <div className="p-3 sm:p-4 flex-1 flex flex-col space-y-2.5">
           {/* Quick Add Inline Form */}
-          <form onSubmit={handleQuickAdd} className="relative">
-            <input
-              type="text"
-              value={quickInput}
-              onChange={(e) => setQuickInput(e.target.value)}
-              placeholder={t.addItemToGroup}
-              className="w-full h-9.5 ps-3.5 pe-10 text-xs sm:text-sm bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200/80 dark:border-neutral-700/80 rounded-xl text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all"
-            />
-            <button
-              type="submit"
-              disabled={!quickInput.trim()}
-              title={t.addItem}
-              className="absolute inset-y-1 end-1 px-2.5 flex items-center justify-center rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white disabled:opacity-30 disabled:pointer-events-none hover:bg-emerald-500 active:scale-95 transition-all shadow-2xs cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            </button>
-          </form>
+          {!isReadOnly && (
+            <form onSubmit={handleQuickAdd} className="relative">
+              <input
+                type="text"
+                value={quickInput}
+                onChange={(e) => setQuickInput(e.target.value)}
+                placeholder={t.addItemToGroup}
+                className="w-full h-9.5 ps-3.5 pe-10 text-xs sm:text-sm bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200/80 dark:border-neutral-700/80 rounded-xl text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all"
+              />
+              <button
+                type="submit"
+                disabled={!quickInput.trim()}
+                title={t.addItem}
+                className="absolute inset-y-1 end-1 px-2.5 flex items-center justify-center rounded-lg bg-emerald-600 dark:bg-emerald-500 text-white disabled:opacity-30 disabled:pointer-events-none hover:bg-emerald-500 active:scale-95 transition-all shadow-2xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              </button>
+            </form>
+          )}
 
           {/* Items Container & Drop Zone */}
           <div
-            onDragOver={handleEmptyZoneDragOver}
-            onDragLeave={handleEmptyZoneDragLeave}
-            onDrop={handleEmptyZoneDrop}
+            onDragOver={!isReadOnly ? handleEmptyZoneDragOver : undefined}
+            onDragLeave={!isReadOnly ? handleEmptyZoneDragLeave : undefined}
+            onDrop={!isReadOnly ? handleEmptyZoneDrop : undefined}
             className={`space-y-2 min-h-[50px] rounded-xl p-1 transition-colors ${
               isOverEmptyZone ? 'bg-emerald-50/60 dark:bg-emerald-950/30 ring-2 ring-emerald-400/50 ring-inset' : ''
             }`}
@@ -410,6 +418,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
                   groups={allGroups}
                   language={language}
                   searchQuery={searchQuery}
+                  isReadOnly={isReadOnly}
                   onToggleComplete={onToggleComplete}
                   onEditItem={onEditItem}
                   onDeleteItem={onDeleteItem}

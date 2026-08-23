@@ -18,9 +18,7 @@ import {
   SortOption,
   ToastMessage,
   SyncStatus,
-  ActivityLog,
-  ActivityAction,
-  ActivityTargetType,
+  PendingInvitation,
 } from './types';
 import {
   loadStoredLists,
@@ -62,7 +60,8 @@ import { ShortcutsModal } from './components/ShortcutsModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { InstallAppModal } from './components/InstallAppModal';
 import { AuthModal } from './components/AuthModal';
-import { ActivityLogModal } from './components/ActivityLogModal';
+import { ShareListModal } from './components/ShareListModal';
+import { JoinListModal } from './components/JoinListModal';
 import { ToastContainer } from './components/Toast';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import { useAuth } from './hooks/useAuth';
@@ -71,9 +70,15 @@ import {
   subscribeToUserCloudData,
   syncAllToFirestore,
   syncUserProfile,
-  recordActivityLogInFirestore,
-  subscribeToActivityLogs,
-  clearActivityLogsFromFirestore,
+  shareListWithUser,
+  updateMemberRole,
+  removeMemberFromList,
+  leaveSharedList,
+  acceptListInvitation,
+  rejectListInvitation,
+  fetchListShareDetails,
+  listenToPendingInvitations,
+  updateListShareLinkSettings,
 } from './utils/firestoreSync';
 import { Plus, ListTodo, Layers } from 'lucide-react';
 
@@ -149,6 +154,13 @@ export default function App() {
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
 
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [selectedListForShare, setSelectedListForShare] = useState<AppList | null>(null);
+
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [joinModalInvitation, setJoinModalInvitation] = useState<PendingInvitation | null>(null);
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
+
   const [confirmModalState, setConfirmModalState] = useState<{
     isOpen: boolean;
     title: string;
@@ -160,10 +172,6 @@ export default function App() {
     description: '',
     onConfirm: () => {},
   });
-
-  // Database Activity Change Tracking State
-  const [activities, setActivities] = useState<ActivityLog[]>([]);
-  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -334,63 +342,6 @@ export default function App() {
 
   const dismissToast = (id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  };
-
-  // Log a database change event to local state and Firestore subcollection
-  const logDatabaseChange = useCallback(
-    (
-      action: ActivityAction,
-      targetType: ActivityTargetType,
-      targetId: string,
-      title: string,
-      details?: string,
-      listId?: string
-    ) => {
-      const newLog: ActivityLog = {
-        id: `act-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        userId: user?.uid || 'local-user',
-        action,
-        targetType,
-        targetId,
-        title,
-        details,
-        timestamp: new Date().toISOString(),
-        listId: listId || activeListId,
-      };
-
-      setActivities((prev) => [newLog, ...prev.filter((l) => l.id !== newLog.id)].slice(0, 100));
-
-      if (user?.uid) {
-        recordActivityLogInFirestore(user.uid, newLog).catch((err) => {
-          console.error('Failed to log database activity to Firestore:', err);
-        });
-      }
-    },
-    [user, activeListId]
-  );
-
-  // Real-time Firestore subscription for Activity Logs
-  useEffect(() => {
-    if (!user?.uid) {
-      return;
-    }
-
-    const unsubscribe = subscribeToActivityLogs(user.uid, (logs) => {
-      setActivities(logs);
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [user?.uid]);
-
-  // Clear Activity Logs handler
-  const handleClearActivities = async () => {
-    if (user?.uid) {
-      await clearActivityLogsFromFirestore(user.uid);
-    }
-    setActivities([]);
-    showToast(t.historyCleared, undefined, 'info');
   };
 
   // Auth User Cloud Sync & Real-Time Multi-Device / Multi-Browser Subscription
@@ -568,6 +519,80 @@ export default function App() {
     activeList?.color && activeList.color !== '#10b981'
       ? activeList.color
       : getThemeColorOption(themeColor).hex;
+
+  // Role and Permissions for Active List
+  const isOwner = useMemo(() => {
+    if (!activeList?.ownerId) return true;
+    if (!user) return true;
+    return activeList.ownerId === user.uid;
+  }, [activeList?.ownerId, user]);
+
+  const isShared = useMemo(() => {
+    return Boolean(
+      activeList?.isShared ||
+      (activeList?.ownerId && user && activeList.ownerId !== user.uid) ||
+      (activeList?.members && activeList.members.length > 0)
+    );
+  }, [activeList, user]);
+
+  const userRole = useMemo(() => {
+    if (isOwner) return 'owner';
+    if (!user) return 'read';
+    const member = activeList?.members?.find((m) => m.uid === user.uid);
+    if (member) return member.role;
+    const invite = activeList?.pendingInvites?.find(
+      (p) => p.email.toLowerCase() === user.email?.toLowerCase()
+    );
+    if (invite) return invite.role;
+    return 'read';
+  }, [isOwner, user, activeList]);
+
+  const isReadOnly = useMemo(() => {
+    return !isOwner && userRole === 'read';
+  }, [isOwner, userRole]);
+
+  // Real-time Pending Invitations for Logged In User
+  useEffect(() => {
+    if (!user?.email) {
+      setPendingInvitations([]);
+      return;
+    }
+    const unsubscribe = listenToPendingInvitations(user.email, (invites) => {
+      setPendingInvitations(invites);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.email]);
+
+  // Handle ?joinList=LIST_ID or ?share=LIST_ID in URL query parameters on initial page load
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const shareListId = urlParams.get('joinList') || urlParams.get('share');
+    const shareToken = urlParams.get('token') || '';
+    if (shareListId) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      (async () => {
+        const details = await fetchListShareDetails(shareListId);
+        if (details) {
+          if (shareToken) {
+            details.inviteToken = shareToken;
+          }
+          setJoinModalInvitation(details);
+          setIsJoinModalOpen(true);
+        } else {
+          showToast(
+            language === 'ar'
+              ? 'رابط المشاركة غير صالح أو انتهت صلاحيته'
+              : 'Shared list link is invalid or expired',
+            undefined,
+            'error'
+          );
+        }
+      })();
+    }
+  }, [language, showToast]);
 
   const activeGroups = useMemo(() => {
     return groups.filter((g) => (g.listId || 'list-groceries') === activeListId);
@@ -751,7 +776,6 @@ export default function App() {
       setLists((prev) =>
         prev.map((l) => (l.id === selectedListForEdit.id ? { ...l, ...listData } : l))
       );
-      logDatabaseChange('update', 'list', selectedListForEdit.id, listData.title, 'Updated list details', selectedListForEdit.id);
       showToast(t.listUpdated);
     } else {
       const newListId = `list-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
@@ -774,7 +798,6 @@ export default function App() {
         createdAt: new Date().toISOString(),
       };
       setGroups((prev) => [...prev, initialGroup]);
-      logDatabaseChange('create', 'list', newListId, listData.title, 'Created new list with initial aisle', newListId);
       showToast(t.listCreated);
     }
     setSelectedListForEdit(null);
@@ -783,6 +806,19 @@ export default function App() {
   const handleDeleteList = (listToDelete: AppList) => {
     if (lists.length <= 1) {
       showToast(t.cannotDeleteOnlyList, undefined, 'warning');
+      return;
+    }
+
+    // Restriction: Only the owner can delete a shared list
+    const isOwnerOfList = !listToDelete.ownerId || (user && listToDelete.ownerId === user.uid);
+    if (!isOwnerOfList) {
+      showToast(
+        language === 'ar'
+          ? 'فقط مالك القائمة يمكنه حذفها. يمكنك مغادرة القائمة بدلاً من ذلك.'
+          : 'Only the owner can delete a shared list. You can leave it instead.',
+        undefined,
+        'error'
+      );
       return;
     }
 
@@ -803,10 +839,151 @@ export default function App() {
           setActiveListId(remainingLists[0]?.id || '');
         }
 
-        logDatabaseChange('delete', 'list', listToDelete.id, listToDelete.title, 'Deleted list and its contents', listToDelete.id);
         showToast(t.listDeleted);
       },
     });
+  };
+
+  // Shared List Actions
+  const handleOpenShareModal = (listToShare?: AppList) => {
+    const target = listToShare || activeList;
+    if (!target) return;
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    setSelectedListForShare(target);
+    setIsShareModalOpen(true);
+  };
+
+  const handleShareWithEmail = async (email: string, role: 'read' | 'edit') => {
+    if (!selectedListForShare || !user) {
+      return { success: false, error: 'User not signed in or list not found' };
+    }
+    const res = await shareListWithUser(selectedListForShare.id, email, role, user);
+    if (res.success) {
+      showToast(
+        language === 'ar' ? `تمت مشاركة القائمة مع ${email}` : `Shared list with ${email}`,
+        undefined,
+        'success'
+      );
+    }
+    return res;
+  };
+
+  const handleUpdateMemberRole = async (targetUid: string, role: 'read' | 'edit') => {
+    if (!selectedListForShare || !user) return false;
+    const ok = await updateMemberRole(selectedListForShare.id, targetUid, role, user.uid);
+    if (ok) {
+      showToast(language === 'ar' ? 'تم تحديث الصلاحية' : 'Permission updated');
+    }
+    return ok;
+  };
+
+  const handleRemoveMember = async (targetUid: string) => {
+    if (!selectedListForShare || !user) return false;
+    const ok = await removeMemberFromList(selectedListForShare.id, targetUid, user.uid);
+    if (ok) {
+      showToast(language === 'ar' ? 'تمت إزالة العضو من القائمة' : 'Member removed from list');
+    }
+    return ok;
+  };
+
+  const handleLeaveList = (listToLeave: AppList) => {
+    if (!user) return;
+    setConfirmModalState({
+      isOpen: true,
+      title: language === 'ar' ? 'مغادرة القائمة المشتركة' : 'Leave Shared List',
+      description:
+        language === 'ar'
+          ? `هل أنت متأكد من مغادرة قائمة "${listToLeave.title}"؟ لن تتمكن من الوصول إليها مجدداً إلا بدعوة جديدة.`
+          : `Are you sure you want to leave "${listToLeave.title}"? You will lose access until re-invited.`,
+      onConfirm: async () => {
+        try {
+          const ok = await leaveSharedList(listToLeave.id, user.uid);
+          if (ok) {
+            setLists((prev) => prev.filter((l) => l.id !== listToLeave.id));
+            if (activeListId === listToLeave.id) {
+              const remaining = lists.filter((l) => l.id !== listToLeave.id);
+              setActiveListId(remaining[0]?.id || '');
+            }
+            showToast(
+              language === 'ar'
+                ? 'تمت مغادرة القائمة المشتركة بنجاح'
+                : 'Left the shared list successfully'
+            );
+          } else {
+            showToast(language === 'ar' ? 'فشلت المغادرة' : 'Failed to leave list', undefined, 'error');
+          }
+        } catch {
+          showToast(language === 'ar' ? 'فشلت المغادرة' : 'Failed to leave list', undefined, 'error');
+        }
+      },
+    });
+  };
+
+  const handleAcceptInvitation = async (invitation: PendingInvitation) => {
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    try {
+      const ok = await acceptListInvitation(invitation.listId, user);
+      if (ok) {
+        setPendingInvitations((prev) => prev.filter((i) => i.listId !== invitation.listId));
+        setIsJoinModalOpen(false);
+        setJoinModalInvitation(null);
+        setActiveListId(invitation.listId);
+        showToast(
+          language === 'ar'
+            ? `انضممت إلى قائمة "${invitation.listTitle}" بنجاح!`
+            : `Joined "${invitation.listTitle}" successfully!`,
+          undefined,
+          'success'
+        );
+      } else {
+        showToast(
+          language === 'ar' ? 'فشل الانضمام إلى القائمة' : 'Failed to join list',
+          undefined,
+          'error'
+        );
+      }
+    } catch {
+      showToast(
+        language === 'ar' ? 'فشل الانضمام إلى القائمة' : 'Failed to join list',
+        undefined,
+        'error'
+      );
+    }
+  };
+
+  const handleRejectInvitation = async (invitation: PendingInvitation) => {
+    if (!user?.email) return;
+    try {
+      const ok = await rejectListInvitation(invitation.listId, user.email);
+      if (ok) {
+        setPendingInvitations((prev) => prev.filter((i) => i.listId !== invitation.listId));
+        setIsJoinModalOpen(false);
+        setJoinModalInvitation(null);
+        showToast(
+          language === 'ar' ? 'تم رفض الدعوة' : 'Invitation declined',
+          undefined,
+          'info'
+        );
+      } else {
+        showToast(
+          language === 'ar' ? 'فشل رفض الدعوة' : 'Failed to decline invitation',
+          undefined,
+          'error'
+        );
+      }
+    } catch {
+      showToast(
+        language === 'ar' ? 'فشل رفض الدعوة' : 'Failed to decline invitation',
+        undefined,
+        'error'
+      );
+    }
   };
 
   const handleDuplicateList = (listToDup: AppList) => {
@@ -847,7 +1024,6 @@ export default function App() {
     setItems((prev) => [...prev, ...newItems]);
     setActiveListId(newListId);
 
-    logDatabaseChange('create', 'list', newListId, duplicatedList.title, 'Duplicated list and all items', newListId);
     showToast(language === 'ar' ? 'تم تكرار القائمة بنجاح' : 'List duplicated successfully');
   };
 
@@ -861,7 +1037,6 @@ export default function App() {
           g.id === groupData.id ? { ...g, title: groupData.title, color: groupData.color, icon: groupData.icon } : g
         )
       );
-      logDatabaseChange('update', 'group', groupData.id, groupData.title, 'Updated aisle configuration');
     } else {
       // Create new
       const newGroupId = `aisle-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
@@ -875,7 +1050,6 @@ export default function App() {
         createdAt: new Date().toISOString(),
       };
       setGroups((prev) => [...prev, newGroup]);
-      logDatabaseChange('create', 'group', newGroupId, groupData.title, 'Created new aisle');
     }
   };
 
@@ -900,7 +1074,6 @@ export default function App() {
 
     setGroups((prev) => [...prev, newGroup]);
     setItems((prev) => [...prev, ...newItems]);
-    logDatabaseChange('create', 'group', newGroupId, newGroup.title, 'Duplicated aisle and items');
     showToast(language === 'ar' ? 'تم نسخ الممر بنجاح' : 'Aisle duplicated successfully');
   };
 
@@ -918,13 +1091,10 @@ export default function App() {
         setGroups((prev) => prev.filter((g) => g.id !== groupId));
         setItems((prev) => prev.filter((i) => i.groupId !== groupId));
 
-        logDatabaseChange('delete', 'group', groupId, groupToDelete.title, 'Deleted aisle and all items');
-
         // Allow instant Undo
         showToast(t.groupDeleted, () => {
           setGroups((prev) => [...prev, groupToDelete]);
           setItems((prev) => [...prev, ...itemsToDelete]);
-          logDatabaseChange('create', 'group', groupId, groupToDelete.title, 'Restored deleted aisle');
         });
       },
     });
@@ -949,10 +1119,8 @@ export default function App() {
 
     sounds.playDelete();
     setItems((prev) => prev.filter((i) => !(i.groupId === groupId && i.completed)));
-    logDatabaseChange('batch_clear', 'item', groupId, `${completedInGroup.length} items`, 'Cleared completed items in aisle');
     showToast(t.allCompletedCleared, () => {
       setItems((prev) => [...prev, ...completedInGroup]);
-      logDatabaseChange('create', 'item', groupId, `${completedInGroup.length} items`, 'Restored cleared completed items');
     });
   };
 
@@ -962,10 +1130,8 @@ export default function App() {
 
     sounds.playDelete();
     setItems((prev) => prev.filter((i) => !i.completed));
-    logDatabaseChange('batch_clear', 'item', activeListId, `${completedList.length} items`, 'Cleared all completed items in active list');
     showToast(t.allCompletedCleared, () => {
       setItems((prev) => [...prev, ...completedList]);
-      logDatabaseChange('create', 'item', activeListId, `${completedList.length} items`, 'Restored all completed items');
     });
   };
 
@@ -973,7 +1139,6 @@ export default function App() {
     const previousItems = [...items];
     setItems((prev) => prev.map((i) => ({ ...i, completed: false, completedAt: undefined })));
     sounds.playPop();
-    logDatabaseChange('toggle', 'item', activeListId, 'All items unchecked', 'Reset all items to active in list');
     showToast(language === 'ar' ? 'تمت إعادة تعيين جميع الأصناف إلى السلة' : 'All items unchecked', () => {
       setItems(previousItems);
     });
@@ -1013,7 +1178,6 @@ export default function App() {
       isPinned: false,
     };
     setItems((prev) => [newItem, ...prev]);
-    logDatabaseChange('create', 'item', newItemId, cleanTitle, `Added item with quantity ${qty || 1} and priority ${priority}`);
   };
 
   const handleSaveItemModal = (itemData: Partial<ListItem> & { id?: string }) => {
@@ -1023,7 +1187,6 @@ export default function App() {
       setItems((prev) =>
         prev.map((item) => (item.id === itemData.id ? ({ ...item, ...itemData } as ListItem) : item))
       );
-      logDatabaseChange('update', 'item', itemData.id, itemData.title || '', 'Updated item details');
     } else {
       // Add new
       const newItemId = `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
@@ -1042,7 +1205,6 @@ export default function App() {
         isPinned: Boolean(itemData.isPinned),
       };
       setItems((prev) => [newItem, ...prev]);
-      logDatabaseChange('create', 'item', newItemId, newItem.title, 'Created item via modal');
     }
   };
 
@@ -1060,16 +1222,6 @@ export default function App() {
         }
         return item;
       });
-
-      if (targetItem) {
-        logDatabaseChange(
-          'toggle',
-          'item',
-          itemId,
-          targetItem.title,
-          targetItem.completed ? 'Marked as uncompleted' : 'Marked as completed'
-        );
-      }
 
       // Check if all items in the grocery list are completed -> trigger celebratory confetti
       if (targetItem && !targetItem.completed) {
@@ -1096,7 +1248,6 @@ export default function App() {
         if (item.id === itemId) {
           const current = item.quantity ?? 1;
           const nextQty = Math.max(1, current + delta);
-          logDatabaseChange('update', 'item', itemId, item.title, `Quantity updated to ${nextQty}`);
           return { ...item, quantity: nextQty };
         }
         return item;
@@ -1108,7 +1259,6 @@ export default function App() {
     setItems((prev) =>
       prev.map((i) => (i.id === itemId ? { ...i, title: newTitle } : i))
     );
-    logDatabaseChange('update', 'item', itemId, newTitle, 'Updated title inline');
   };
 
   const handleTogglePinItem = (itemId: string) => {
@@ -1117,7 +1267,6 @@ export default function App() {
       prev.map((i) => {
         if (i.id === itemId) {
           const nextPinned = !i.isPinned;
-          logDatabaseChange('update', 'item', itemId, i.title, nextPinned ? 'Pinned item' : 'Unpinned item');
           return { ...i, isPinned: nextPinned };
         }
         return i;
@@ -1137,18 +1286,14 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
     setItems((prev) => [newItem, ...prev]);
-    logDatabaseChange('create', 'item', newItemId, newItem.title, 'Duplicated item');
     showToast(language === 'ar' ? 'تم نسخ الصنف' : 'Item duplicated');
   };
 
   const handleMoveToGroup = (itemId: string, targetGroupId: string) => {
     sounds.playDrop();
-    const item = items.find((i) => i.id === itemId);
-    const targetGroup = groups.find((g) => g.id === targetGroupId);
     setItems((prev) =>
       prev.map((i) => (i.id === itemId ? { ...i, groupId: targetGroupId } : i))
     );
-    logDatabaseChange('move', 'item', itemId, item?.title || itemId, `Moved to aisle "${targetGroup?.title || targetGroupId}"`);
     showToast(language === 'ar' ? 'تم نقل الصنف إلى الممر' : 'Item moved to aisle');
   };
 
@@ -1158,12 +1303,10 @@ export default function App() {
 
     sounds.playDelete();
     setItems((prev) => prev.filter((i) => i.id !== itemId));
-    logDatabaseChange('delete', 'item', itemId, itemToDelete.title, 'Deleted item');
 
     // Instant undo toast
     showToast(t.taskDeleted, () => {
       setItems((prev) => [itemToDelete, ...prev]);
-      logDatabaseChange('create', 'item', itemId, itemToDelete.title, 'Restored deleted item');
     });
   };
 
@@ -1231,7 +1374,6 @@ export default function App() {
       const insertAt = groupDropPosition === 'below' ? targetIdx + 1 : targetIdx;
       newGroups.splice(insertAt > sourceIdx ? insertAt - 1 : insertAt, 0, removed);
       setGroups(newGroups);
-      logDatabaseChange('reorder', 'group', draggingGroupId, removed.title, 'Aisle reordered via drag-and-drop');
     }
 
     setDraggingGroupId(null);
@@ -1308,7 +1450,6 @@ export default function App() {
     updatedItems.splice(insertAt > sourceIdx ? insertAt - 1 : insertAt, 0, movedItem);
 
     setItems(updatedItems);
-    logDatabaseChange('reorder', 'item', draggingItemId, movedItem.title, 'Item reordered via drag-and-drop');
     setDraggingItemId(null);
     setItemDropTargetId(null);
     setItemDropPosition(null);
@@ -1320,13 +1461,9 @@ export default function App() {
     e.stopPropagation();
 
     sounds.playDrop();
-    const movedItem = items.find((i) => i.id === draggingItemId);
     setItems((prev) =>
       prev.map((i) => (i.id === draggingItemId ? { ...i, groupId: targetGroupId } : i))
     );
-    if (movedItem) {
-      logDatabaseChange('move', 'item', draggingItemId, movedItem.title, `Moved to empty aisle ${targetGroupId}`);
-    }
     setDraggingItemId(null);
     setItemDropTargetId(null);
     setItemDropPosition(null);
@@ -1389,7 +1526,6 @@ export default function App() {
         ...prev.filter((i) => !activeListGroupIds.has(i.groupId)),
         ...newItems,
       ]);
-      logDatabaseChange('create', 'list', targetListId, tpl.name, `Applied template "${tpl.name}" (${tpl.items.length} items)`);
       showToast(language === 'ar' ? `تم تحميل "${tpl.name}" وتحديث عنوان القائمة` : `Loaded "${tpl.name}" and updated list title`);
     } else {
       // If appending to an empty list, update the title to the template's localized name as well
@@ -1410,7 +1546,6 @@ export default function App() {
 
       setGroups((prev) => [...prev, ...newGroups]);
       setItems((prev) => [...prev, ...newItems]);
-      logDatabaseChange('create', 'item', targetListId, tpl.name, `Appended items from template "${tpl.name}"`);
       showToast(language === 'ar' ? `تمت إضافة "${tpl.name}" للقائمة الحالية` : `Appended "${tpl.name}" items to list`);
     }
   };
@@ -1425,7 +1560,6 @@ export default function App() {
       lists,
       groups,
       items,
-      activities,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1434,7 +1568,6 @@ export default function App() {
     a.download = `listflow-export-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    logDatabaseChange('create', 'list', 'export', 'JSON Backup Exported', 'Downloaded complete workspace database backup');
     showToast(language === 'ar' ? 'تم تصدير مساحة العمل' : 'Workspace exported to JSON');
   };
 
@@ -1451,14 +1584,10 @@ export default function App() {
           }
           setGroups(parsed.groups);
           setItems(parsed.items);
-          if (Array.isArray(parsed.activities)) {
-            setActivities(parsed.activities);
-          }
           if (parsed.language === 'en' || parsed.language === 'ar') {
             setLanguage(parsed.language);
           }
           sounds.playComplete();
-          logDatabaseChange('create', 'list', 'import', 'JSON Backup Restored', 'Restored complete workspace database from file');
           showToast(t.importSuccess);
         } else {
           showToast(t.importError, undefined, 'error');
@@ -1497,6 +1626,12 @@ export default function App() {
         }}
         onDeleteList={handleDeleteList}
         onDuplicateList={handleDuplicateList}
+        onShareList={handleOpenShareModal}
+        pendingInvitations={pendingInvitations}
+        onOpenPendingInvite={(invite) => {
+          setJoinModalInvitation(invite);
+          setIsJoinModalOpen(true);
+        }}
         groups={groups}
         items={items}
         language={language}
@@ -1507,8 +1642,6 @@ export default function App() {
           sounds.playPop();
           setCurrentView('settings');
         }}
-        onOpenActivityLog={() => setIsActivityModalOpen(true)}
-        activityCount={activities.length}
         user={user}
         syncStatus={syncStatus}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
@@ -1532,6 +1665,10 @@ export default function App() {
         currentView={currentView}
         activeListName={activeList?.title}
         activeListColor={activeListColor}
+        activeList={activeList}
+        isOwner={isOwner}
+        isShared={isShared}
+        onOpenShareModal={() => handleOpenShareModal(activeList)}
         user={user}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onSignOut={authSignOut}
@@ -1561,9 +1698,6 @@ export default function App() {
               onImportData={handleImportJSON}
               onOpenInstallModal={() => pwa.setIsModalOpen(true)}
               isAppInstalled={pwa.isInstalled}
-              activities={activities}
-              onOpenActivityLogModal={() => setIsActivityModalOpen(true)}
-              isLiveListening={Boolean(user?.uid)}
               user={user}
               syncStatus={syncStatus}
               onOpenAuthModal={() => setIsAuthModalOpen(true)}
@@ -1607,6 +1741,11 @@ export default function App() {
                 }}
                 gridColumns={gridColumns}
                 onGridColumnsChange={setGridColumns}
+                isReadOnly={isReadOnly}
+                activeList={activeList}
+                isOwner={isOwner}
+                isShared={isShared}
+                onOpenShareModal={() => handleOpenShareModal(activeList)}
               />
 
               {/* Empty State when no groups exist in active list */}
@@ -1621,27 +1760,29 @@ export default function App() {
                   <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400 max-w-md mx-auto">
                     {t.noGroupsDesc}
                   </p>
-                  <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                    <button
-                      id="empty-create-first-group-btn"
-                      onClick={() => {
-                        setSelectedGroupForEdit(null);
-                        setIsGroupModalOpen(true);
-                      }}
-                      className="px-4 py-2 text-sm font-semibold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4 stroke-[2.5]" />
-                      <span>{t.createFirstGroup}</span>
-                    </button>
-                    <button
-                      id="empty-load-templates-btn"
-                      onClick={() => setIsTemplatesModalOpen(true)}
-                      className="px-4 py-2 text-sm font-semibold rounded-xl text-neutral-700 dark:text-neutral-200 bg-neutral-100 hover:bg-neutral-200/80 dark:bg-neutral-800 dark:hover:bg-neutral-700/80 border border-neutral-200/60 dark:border-neutral-700/60 transition-colors flex items-center gap-2 cursor-pointer shadow-2xs"
-                    >
-                      <Layers className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                      <span>{t.loadTemplates}</span>
-                    </button>
-                  </div>
+                  {!isReadOnly && (
+                    <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                      <button
+                        id="empty-create-first-group-btn"
+                        onClick={() => {
+                          setSelectedGroupForEdit(null);
+                          setIsGroupModalOpen(true);
+                        }}
+                        className="px-4 py-2 text-sm font-semibold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4 stroke-[2.5]" />
+                        <span>{t.createFirstGroup}</span>
+                      </button>
+                      <button
+                        id="empty-load-templates-btn"
+                        onClick={() => setIsTemplatesModalOpen(true)}
+                        className="px-4 py-2 text-sm font-semibold rounded-xl text-neutral-700 dark:text-neutral-200 bg-neutral-100 hover:bg-neutral-200/80 dark:bg-neutral-800 dark:hover:bg-neutral-700/80 border border-neutral-200/60 dark:border-neutral-700/60 transition-colors flex items-center gap-2 cursor-pointer shadow-2xs"
+                      >
+                        <Layers className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        <span>{t.loadTemplates}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 /* Groups Masonry / Responsive Grid (2 columns default or 1 column on large screens) */
@@ -1662,6 +1803,7 @@ export default function App() {
                         allGroups={activeGroups}
                         language={language}
                         searchQuery={searchQuery}
+                        isReadOnly={isReadOnly}
                         onToggleCollapse={handleToggleCollapseGroup}
                         onEditGroup={(g) => {
                           setSelectedGroupForEdit(g);
@@ -1712,7 +1854,7 @@ export default function App() {
       </div>
 
       {/* Floating Action Button on Mobile */}
-      {currentView === 'workspace' && (
+      {currentView === 'workspace' && !isReadOnly && (
         <div className="fixed bottom-5 end-5 z-30 sm:hidden pointer-events-auto">
           <button
             id="mobile-fab-add-btn"
@@ -1791,6 +1933,67 @@ export default function App() {
         language={language}
       />
 
+      {/* Share List Modal */}
+      {selectedListForShare && (
+        <ShareListModal
+          isOpen={isShareModalOpen}
+          onClose={() => {
+            setIsShareModalOpen(false);
+            setSelectedListForShare(null);
+          }}
+          list={selectedListForShare}
+          currentUser={user}
+          language={language}
+          onInviteUser={async (email, role) => {
+            await handleShareWithEmail(email, role);
+          }}
+          onUpdateRole={async (memberKey, role) => {
+            await handleUpdateMemberRole(memberKey, role);
+          }}
+          onRemoveMember={async (memberKey, email, uid) => {
+            await handleRemoveMember(uid || memberKey);
+          }}
+          onToggleLinkSharing={async (enabled, role) => {
+            if (selectedListForShare) {
+              await updateListShareLinkSettings(selectedListForShare.id, enabled, role);
+            }
+          }}
+          onLeaveList={async () => {
+            if (selectedListForShare) {
+              handleLeaveList(selectedListForShare);
+              setIsShareModalOpen(false);
+            }
+          }}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        />
+      )}
+
+      {/* Join Shared List Modal */}
+      <JoinListModal
+        isOpen={isJoinModalOpen}
+        onClose={() => {
+          setIsJoinModalOpen(false);
+          setJoinModalInvitation(null);
+        }}
+        list={joinModalInvitation ? {
+          id: joinModalInvitation.listId,
+          title: joinModalInvitation.listTitle,
+          color: joinModalInvitation.listColor,
+          icon: joinModalInvitation.listIcon,
+          ownerEmail: joinModalInvitation.ownerEmail,
+          ownerName: joinModalInvitation.ownerName,
+          shareLinkRole: joinModalInvitation.role,
+        } : null}
+        currentUser={user}
+        language={language}
+        onJoin={async () => {
+          if (joinModalInvitation) {
+            await handleAcceptInvitation(joinModalInvitation);
+          }
+        }}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+      />
+
       {/* PWA Install Modal */}
       <InstallAppModal
         isOpen={pwa.isModalOpen}
@@ -1811,16 +2014,6 @@ export default function App() {
         error={authError}
         onClearError={clearAuthError}
         language={language}
-      />
-
-      {/* Database Activity Change Log Modal */}
-      <ActivityLogModal
-        isOpen={isActivityModalOpen}
-        onClose={() => setIsActivityModalOpen(false)}
-        activities={activities}
-        onClearHistory={handleClearActivities}
-        language={language}
-        isLiveListening={Boolean(user?.uid)}
       />
 
       {/* Toast Notifications */}

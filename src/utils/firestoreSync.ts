@@ -8,8 +8,7 @@ import {
   writeBatch,
   onSnapshot,
   query,
-  orderBy,
-  limit,
+  where,
   Unsubscribe,
 } from 'firebase/firestore';
 import { User } from 'firebase/auth';
@@ -21,9 +20,9 @@ import {
   Language,
   Theme,
   ThemeColor,
-  ActivityLog,
-  ActivityAction,
-  ActivityTargetType,
+  ShareRole,
+  ShareMember,
+  PendingInvitation,
 } from '../types';
 
 export enum OperationType {
@@ -106,6 +105,7 @@ export interface UserCloudData {
   lists: AppList[];
   groups: ListGroup[];
   items: ListItem[];
+  pendingInvitations?: PendingInvitation[];
   language?: Language;
   theme?: Theme;
   themeColor?: ThemeColor;
@@ -115,7 +115,7 @@ export interface UserCloudData {
 
 // 1. Sync User Profile / Preferences
 export async function syncUserProfile(
-  user: User,
+  userOrUid: User | string,
   preferences?: {
     language?: Language;
     theme?: Theme;
@@ -124,16 +124,22 @@ export async function syncUserProfile(
     activeListId?: string;
   }
 ): Promise<boolean> {
-  const userPath = `users/${user.uid}`;
+  const uid = typeof userOrUid === 'string' ? userOrUid : userOrUid?.uid || auth.currentUser?.uid;
+  if (!uid) return false;
+
+  const email = (typeof userOrUid === 'object' && userOrUid !== null ? userOrUid.email : auth.currentUser?.email) || '';
+  const displayName = (typeof userOrUid === 'object' && userOrUid !== null ? userOrUid.displayName : auth.currentUser?.displayName) || '';
+  const photoURL = (typeof userOrUid === 'object' && userOrUid !== null ? userOrUid.photoURL : auth.currentUser?.photoURL) || '';
+
   try {
-    const userDocRef = doc(db, 'users', user.uid);
+    const userDocRef = doc(db, 'users', uid);
     const existing = await getDoc(userDocRef);
 
     const payload: Record<string, unknown> = {
-      userId: user.uid,
-      email: user.email || '',
-      displayName: user.displayName || '',
-      photoURL: user.photoURL || '',
+      userId: uid,
+      email,
+      displayName,
+      photoURL,
       lastActiveAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -158,160 +164,146 @@ export async function syncUserProfile(
   }
 }
 
-// 2. Fetch all user data from Firestore
-export async function fetchUserCloudData(userId: string): Promise<UserCloudData | null> {
-  const userPath = `users/${userId}`;
-  try {
-    const userDocRef = doc(db, 'users', userId);
-    const userDocSnap = await getDoc(userDocRef);
-
-    const [listsSnap, groupsSnap, itemsSnap] = await Promise.all([
-      getDocs(collection(db, 'users', userId, 'lists')),
-      getDocs(collection(db, 'users', userId, 'groups')),
-      getDocs(collection(db, 'users', userId, 'items')),
-    ]);
-
-    const lists: AppList[] = [];
-    listsSnap.forEach((d) => {
-      lists.push(d.data() as AppList);
-    });
-    lists.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-    const groups: ListGroup[] = [];
-    groupsSnap.forEach((d) => {
-      groups.push(d.data() as ListGroup);
-    });
-    groups.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-    const items: ListItem[] = [];
-    itemsSnap.forEach((d) => {
-      items.push(d.data() as ListItem);
-    });
-    items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-    const userData = userDocSnap.data();
-
-    return {
-      lists,
-      groups,
-      items,
-      language: userData?.language,
-      theme: userData?.theme,
-      themeColor: userData?.themeColor,
-      soundEnabled: userData?.soundEnabled,
-      activeListId: userData?.activeListId,
-    };
-  } catch (error) {
-    console.error('Error fetching user cloud data:', error);
-    return null;
-  }
-}
-
-// 3. Batch Reconcile & Sync user lists, groups, and items in Firestore
+// 2. Sync all user lists, groups, and items in Firestore
 export async function syncAllToFirestore(
-  userId: string,
-  lists: AppList[],
-  groups: ListGroup[],
-  items: ListItem[]
+  userIdOrUser: string | User,
+  listsOrEmail: AppList[] | string,
+  groupsOrName?: ListGroup[] | string,
+  itemsOrPhoto?: ListItem[] | string,
+  maybeLists?: AppList[],
+  maybeGroups?: ListGroup[],
+  maybeItems?: ListItem[]
 ): Promise<boolean> {
+  let userId = '';
+  let userEmail = '';
+  let userName = '';
+  let userPhoto = '';
+  let lists: AppList[] = [];
+  let groups: ListGroup[] = [];
+  let items: ListItem[] = [];
+
+  if (typeof userIdOrUser === 'object' && userIdOrUser !== null) {
+    userId = userIdOrUser.uid;
+    userEmail = userIdOrUser.email || '';
+    userName = userIdOrUser.displayName || '';
+    userPhoto = userIdOrUser.photoURL || '';
+    lists = (listsOrEmail as AppList[]) || [];
+    groups = (groupsOrName as ListGroup[]) || [];
+    items = (itemsOrPhoto as ListItem[]) || [];
+  } else if (Array.isArray(listsOrEmail)) {
+    userId = String(userIdOrUser);
+    userEmail = auth.currentUser?.email || '';
+    userName = auth.currentUser?.displayName || '';
+    userPhoto = auth.currentUser?.photoURL || '';
+    lists = listsOrEmail;
+    groups = (groupsOrName as ListGroup[]) || [];
+    items = (itemsOrPhoto as ListItem[]) || [];
+  } else {
+    userId = String(userIdOrUser);
+    userEmail = String(listsOrEmail || '');
+    userName = String(groupsOrName || '');
+    userPhoto = String(itemsOrPhoto || '');
+    lists = maybeLists || [];
+    groups = maybeGroups || [];
+    items = maybeItems || [];
+  }
+
   if (!userId) return false;
 
   try {
-    // 1. Fetch remote IDs to detect deletions
-    const [remoteListsSnap, remoteGroupsSnap, remoteItemsSnap] = await Promise.all([
-      getDocs(collection(db, 'users', userId, 'lists')),
-      getDocs(collection(db, 'users', userId, 'groups')),
-      getDocs(collection(db, 'users', userId, 'items')),
-    ]);
-
-    const localListIds = new Set(lists.map((l) => l.id));
-    const localGroupIds = new Set(groups.map((g) => g.id));
-    const localItemIds = new Set(items.map((i) => i.id));
-
     const batch = writeBatch(db);
     let opCount = 0;
-    let deletedCount = 0;
-    let upsertCount = 0;
 
-    // Delete removed lists
-    remoteListsSnap.forEach((docSnap) => {
-      if (!localListIds.has(docSnap.id)) {
-        batch.delete(docSnap.ref);
-        opCount++;
-        deletedCount++;
-      }
-    });
-
-    // Delete removed groups
-    remoteGroupsSnap.forEach((docSnap) => {
-      if (!localGroupIds.has(docSnap.id)) {
-        batch.delete(docSnap.ref);
-        opCount++;
-        deletedCount++;
-      }
-    });
-
-    // Delete removed items
-    remoteItemsSnap.forEach((docSnap) => {
-      if (!localItemIds.has(docSnap.id)) {
-        batch.delete(docSnap.ref);
-        opCount++;
-        deletedCount++;
-      }
-    });
-
-    // Upsert current lists with preserved index order
+    // Upsert lists in /lists/{listId} (and /users/{userId}/lists/{listId})
     for (let i = 0; i < lists.length; i++) {
       const list = lists[i];
-      const ref = doc(db, 'users', userId, 'lists', list.id);
-      batch.set(
-        ref,
-        sanitizeForFirestore({
-          ...list,
-          order: list.order !== undefined ? list.order : i,
-          userId,
-          updatedAt: new Date().toISOString(),
-        }),
-        { merge: true }
+      const isOwner = !list.ownerId || list.ownerId === userId;
+      
+      const ownerId = list.ownerId || userId;
+      const ownerEmail = list.ownerEmail || userEmail;
+      const ownerName = list.ownerName || userName || 'User';
+
+      const collaboratorUids = Array.from(
+        new Set([...(list.collaboratorUids || []), ownerId, userId])
       );
+
+      const existingCollaborators = list.collaborators || {};
+      if (!existingCollaborators[ownerId]) {
+        existingCollaborators[ownerId] = {
+          uid: ownerId,
+          email: ownerEmail,
+          displayName: ownerName,
+          photoURL: userPhoto || '',
+          role: 'owner',
+          status: 'active',
+          invitedAt: list.createdAt || new Date().toISOString(),
+          joinedAt: list.createdAt || new Date().toISOString(),
+        };
+      }
+
+      const listPayload: AppList = {
+        ...list,
+        ownerId,
+        ownerEmail,
+        ownerName,
+        order: list.order !== undefined ? list.order : i,
+        collaboratorUids,
+        collaborators: existingCollaborators,
+        invitedEmails: list.invitedEmails || [],
+        shareLinkEnabled: list.shareLinkEnabled ?? false,
+        shareLinkRole: list.shareLinkRole ?? 'edit',
+        shareLinkToken: list.shareLinkToken || `tok_${Math.random().toString(36).substring(2, 10)}`,
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Only owner or authorized collaborator writes to /lists/{listId}
+      const listRef = doc(db, 'lists', list.id);
+      batch.set(listRef, sanitizeForFirestore(listPayload), { merge: true });
       opCount++;
-      upsertCount++;
+
+      // Also mirror to private /users/{userId}/lists for backup
+      if (isOwner) {
+        const userListRef = doc(db, 'users', userId, 'lists', list.id);
+        batch.set(userListRef, sanitizeForFirestore(listPayload), { merge: true });
+        opCount++;
+      }
     }
 
-    // Upsert current groups with preserved index order
+    // Upsert groups
     for (let i = 0; i < groups.length; i++) {
       const group = groups[i];
-      const ref = doc(db, 'users', userId, 'groups', group.id);
+      const listId = group.listId || lists[0]?.id || 'list-groceries';
+      const groupRef = doc(db, 'lists', listId, 'groups', group.id);
       batch.set(
-        ref,
+        groupRef,
         sanitizeForFirestore({
           ...group,
+          listId,
           order: group.order !== undefined ? group.order : i,
-          userId,
           updatedAt: new Date().toISOString(),
         }),
         { merge: true }
       );
       opCount++;
-      upsertCount++;
     }
 
-    // Upsert current items with preserved index order
+    // Upsert items
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      const ref = doc(db, 'users', userId, 'items', item.id);
+      const parentGroup = groups.find((g) => g.id === item.groupId);
+      const listId = parentGroup?.listId || lists[0]?.id || 'list-groceries';
+      const itemRef = doc(db, 'lists', listId, 'items', item.id);
       batch.set(
-        ref,
+        itemRef,
         sanitizeForFirestore({
           ...item,
+          listId,
           order: item.order !== undefined ? item.order : i,
-          userId,
           updatedAt: new Date().toISOString(),
         }),
         { merge: true }
       );
       opCount++;
-      upsertCount++;
     }
 
     if (opCount > 0) {
@@ -325,40 +317,177 @@ export async function syncAllToFirestore(
   }
 }
 
-// 4. Real-time Subscription for Multi-Tab / Multi-Device / Multi-Browser Synchronization
+// 3. Real-time Subscription for Multi-User & Shared Lists Synchronization
 export function subscribeToUserCloudData(
-  userId: string,
+  userOrUid: User | string,
   onUpdate: (data: {
     lists: AppList[];
     groups: ListGroup[];
     items: ListItem[];
+    pendingInvitations?: PendingInvitation[];
     preferences?: Partial<UserCloudData>;
   }) => void,
   onError?: (error: Error) => void
 ): Unsubscribe {
-  let latestLists: AppList[] | null = null;
-  let latestGroups: ListGroup[] | null = null;
-  let latestItems: ListItem[] | null = null;
-  let hasReceivedLists = false;
-  let hasReceivedGroups = false;
-  let hasReceivedItems = false;
+  let userId = '';
+  let userEmail = '';
+
+  if (typeof userOrUid === 'string') {
+    userId = userOrUid;
+    userEmail = (auth.currentUser?.email || '').toLowerCase().trim();
+  } else if (userOrUid && typeof userOrUid === 'object') {
+    userId = userOrUid.uid || '';
+    userEmail = (userOrUid.email || auth.currentUser?.email || '').toLowerCase().trim();
+  }
+
+  if (!userId) {
+    console.warn('subscribeToUserCloudData called without valid userId');
+    return () => {};
+  }
+
+  let memberLists: AppList[] = [];
+  let invitedLists: AppList[] = [];
+  let activeGroupsMap: Map<string, ListGroup> = new Map();
+  let activeItemsMap: Map<string, ListItem> = new Map();
+  let groupSubUnsubs: Map<string, Unsubscribe> = new Map();
+  let itemSubUnsubs: Map<string, Unsubscribe> = new Map();
   let latestUserData: Partial<UserCloudData> | null = null;
 
-  const checkAndEmit = () => {
-    if (hasReceivedLists && hasReceivedGroups && hasReceivedItems) {
-      const sortedLists = [...(latestLists || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      const sortedGroups = [...(latestGroups || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      const sortedItems = [...(latestItems || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const emitCombinedData = () => {
+    // Combine member lists
+    const combinedListsMap = new Map<string, AppList>();
+    memberLists.forEach((l) => {
+      const myRole: ShareRole =
+        l.ownerId === userId
+          ? 'owner'
+          : l.collaborators?.[userId]?.role || 'read';
+      const isShared =
+        (l.collaboratorUids && l.collaboratorUids.length > 1) ||
+        (l.invitedEmails && l.invitedEmails.length > 0) ||
+        l.ownerId !== userId;
 
-      onUpdate({
-        lists: sortedLists,
-        groups: sortedGroups,
-        items: sortedItems,
-        preferences: latestUserData || undefined,
+      combinedListsMap.set(l.id, {
+        ...l,
+        myRole,
+        isShared,
       });
-    }
+    });
+
+    const sortedLists = Array.from(combinedListsMap.values()).sort(
+      (a, b) => (a.order ?? 0) - (b.order ?? 0)
+    );
+
+    // Extract pending invitations for current user
+    const pendingInvites: PendingInvitation[] = [];
+    invitedLists.forEach((l) => {
+      if (!combinedListsMap.has(l.id)) {
+        const inviteInfo = Object.values(l.collaborators || {}).find(
+          (m) => m.email.toLowerCase() === userEmail && m.status === 'pending'
+        );
+        pendingInvites.push({
+          listId: l.id,
+          listTitle: l.title,
+          listColor: l.color,
+          listIcon: l.icon,
+          ownerEmail: l.ownerEmail || '',
+          ownerName: l.ownerName || '',
+          role: inviteInfo?.role || 'edit',
+          invitedAt: inviteInfo?.invitedAt || l.createdAt,
+          inviteToken: inviteInfo?.inviteToken,
+        });
+      }
+    });
+
+    const sortedGroups = Array.from(activeGroupsMap.values()).sort(
+      (a, b) => (a.order ?? 0) - (b.order ?? 0)
+    );
+    const sortedItems = Array.from(activeItemsMap.values()).sort(
+      (a, b) => (a.order ?? 0) - (b.order ?? 0)
+    );
+
+    onUpdate({
+      lists: sortedLists,
+      groups: sortedGroups,
+      items: sortedItems,
+      pendingInvitations: pendingInvites,
+      preferences: latestUserData || undefined,
+    });
   };
 
+  const updateSubcollectionsListeners = (listsList: AppList[]) => {
+    const activeListIds = new Set(listsList.map((l) => l.id));
+
+    // Cleanup unsubscribed lists
+    for (const [listId, unsub] of groupSubUnsubs.entries()) {
+      if (!activeListIds.has(listId)) {
+        unsub();
+        groupSubUnsubs.delete(listId);
+        // delete groups for this list
+        for (const [gid, g] of activeGroupsMap.entries()) {
+          if (g.listId === listId) activeGroupsMap.delete(gid);
+        }
+      }
+    }
+
+    for (const [listId, unsub] of itemSubUnsubs.entries()) {
+      if (!activeListIds.has(listId)) {
+        unsub();
+        itemSubUnsubs.delete(listId);
+        // delete items for this list
+        for (const [iid, item] of activeItemsMap.entries()) {
+          const itm = item as unknown as { listId?: string };
+          if (itm.listId === listId) activeItemsMap.delete(iid);
+        }
+      }
+    }
+
+    // Attach listeners for new lists
+    listsList.forEach((list) => {
+      if (!groupSubUnsubs.has(list.id)) {
+        const unsubG = onSnapshot(
+          collection(db, 'lists', list.id, 'groups'),
+          (snap) => {
+            snap.forEach((docSnap) => {
+              activeGroupsMap.set(docSnap.id, docSnap.data() as ListGroup);
+            });
+            snap.docChanges().forEach((change) => {
+              if (change.type === 'removed') {
+                activeGroupsMap.delete(change.doc.id);
+              }
+            });
+            emitCombinedData();
+          },
+          (err) => {
+            console.warn(`Groups listener error for list ${list.id}:`, err);
+          }
+        );
+        groupSubUnsubs.set(list.id, unsubG);
+      }
+
+      if (!itemSubUnsubs.has(list.id)) {
+        const unsubI = onSnapshot(
+          collection(db, 'lists', list.id, 'items'),
+          (snap) => {
+            snap.forEach((docSnap) => {
+              activeItemsMap.set(docSnap.id, docSnap.data() as ListItem);
+            });
+            snap.docChanges().forEach((change) => {
+              if (change.type === 'removed') {
+                activeItemsMap.delete(change.doc.id);
+              }
+            });
+            emitCombinedData();
+          },
+          (err) => {
+            console.warn(`Items listener error for list ${list.id}:`, err);
+          }
+        );
+        itemSubUnsubs.set(list.id, unsubI);
+      }
+    });
+  };
+
+  // 1. Listen to user document
   const unsubUser = onSnapshot(
     doc(db, 'users', userId),
     (docSnap) => {
@@ -371,6 +500,7 @@ export function subscribeToUserCloudData(
           soundEnabled: u.soundEnabled,
           activeListId: u.activeListId,
         };
+        emitCombinedData();
       }
     },
     (err) => {
@@ -378,167 +508,669 @@ export function subscribeToUserCloudData(
     }
   );
 
-  const unsubLists = onSnapshot(
-    collection(db, 'users', userId, 'lists'),
+  // 2. Query lists where user is owner or collaborator
+  const qMembers = query(
+    collection(db, 'lists'),
+    where('collaboratorUids', 'array-contains', userId)
+  );
+
+  const unsubMemberLists = onSnapshot(
+    qMembers,
     (snapshot) => {
       const arr: AppList[] = [];
       snapshot.forEach((d) => arr.push(d.data() as AppList));
-      latestLists = arr;
-      hasReceivedLists = true;
-      checkAndEmit();
+      memberLists = arr;
+      updateSubcollectionsListeners(memberLists);
+      emitCombinedData();
     },
     (err) => {
-      console.error('Lists onSnapshot error:', err);
+      console.error('Member lists query onSnapshot error:', err);
       if (onError) onError(err);
     }
   );
 
-  const unsubGroups = onSnapshot(
-    collection(db, 'users', userId, 'groups'),
-    (snapshot) => {
-      const arr: ListGroup[] = [];
-      snapshot.forEach((d) => arr.push(d.data() as ListGroup));
-      latestGroups = arr;
-      hasReceivedGroups = true;
-      checkAndEmit();
-    },
-    (err) => {
-      console.error('Groups onSnapshot error:', err);
-      if (onError) onError(err);
-    }
-  );
-
-  const unsubItems = onSnapshot(
-    collection(db, 'users', userId, 'items'),
-    (snapshot) => {
-      const arr: ListItem[] = [];
-      snapshot.forEach((d) => arr.push(d.data() as ListItem));
-      latestItems = arr;
-      hasReceivedItems = true;
-      checkAndEmit();
-    },
-    (err) => {
-      console.error('Items onSnapshot error:', err);
-      if (onError) onError(err);
-    }
-  );
+  // 3. Query lists where user's email is invited
+  let unsubInvitedLists: Unsubscribe = () => {};
+  if (userEmail) {
+    const qInvited = query(
+      collection(db, 'lists'),
+      where('invitedEmails', 'array-contains', userEmail)
+    );
+    unsubInvitedLists = onSnapshot(
+      qInvited,
+      (snapshot) => {
+        const arr: AppList[] = [];
+        snapshot.forEach((d) => arr.push(d.data() as AppList));
+        invitedLists = arr;
+        emitCombinedData();
+      },
+      (err) => {
+        console.warn('Invited lists query error:', err);
+      }
+    );
+  }
 
   return () => {
     unsubUser();
-    unsubLists();
-    unsubGroups();
-    unsubItems();
+    unsubMemberLists();
+    unsubInvitedLists();
+    groupSubUnsubs.forEach((unsub) => unsub());
+    itemSubUnsubs.forEach((unsub) => unsub());
   };
 }
 
-// 5. Database Change Tracking & Activity Logging
-export async function recordActivityLogInFirestore(
-  userId: string,
-  entry: {
-    action: ActivityAction;
-    targetType: ActivityTargetType;
-    targetId?: string;
-    title: string;
-    details?: string;
-    source?: string;
+// 4. Invite a User to a List (by Email)
+export async function inviteUserToList(
+  listId: string,
+  currentUser: User | { uid: string; email?: string | null; displayName?: string | null },
+  targetEmail: string,
+  role: 'read' | 'edit'
+): Promise<{ success: boolean; inviteToken: string; message?: string }> {
+  const emailNorm = targetEmail.trim().toLowerCase();
+  if (!emailNorm || !emailNorm.includes('@')) {
+    return { success: false, inviteToken: '', message: 'Invalid email address' };
   }
-): Promise<ActivityLog | null> {
-  if (!userId) return null;
-  const activityId = `act-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-  const activityLog: ActivityLog = {
-    id: activityId,
-    userId,
-    action: entry.action,
-    targetType: entry.targetType,
-    targetId: entry.targetId,
-    title: entry.title,
-    details: entry.details,
-    source:
-      entry.source ||
-      (typeof navigator !== 'undefined'
-        ? navigator.userAgent.includes('Mobile')
-          ? 'Mobile Device'
-          : 'Desktop Browser'
-        : 'Web Client'),
-    timestamp: new Date().toISOString(),
-  };
 
-  const path = `users/${userId}/activities/${activityId}`;
+  const currentUid = currentUser?.uid || auth.currentUser?.uid;
+  if (!currentUid) {
+    return { success: false, inviteToken: '', message: 'User is not authenticated' };
+  }
+
   try {
+    const listRef = doc(db, 'lists', listId);
+    let listSnap = await getDoc(listRef);
+
+    if (!listSnap.exists()) {
+      // Create it with owner info if not synced yet
+      const initialPayload: Record<string, unknown> = {
+        id: listId,
+        ownerId: currentUid,
+        ownerEmail: currentUser.email || auth.currentUser?.email || '',
+        ownerName: currentUser.displayName || auth.currentUser?.displayName || 'User',
+        collaboratorUids: [currentUid],
+        collaborators: {
+          [currentUid]: {
+            uid: currentUid,
+            email: currentUser.email || auth.currentUser?.email || '',
+            displayName: currentUser.displayName || auth.currentUser?.displayName || 'User',
+            role: 'owner',
+            status: 'active',
+            invitedAt: new Date().toISOString(),
+            joinedAt: new Date().toISOString(),
+          },
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await setDoc(listRef, sanitizeForFirestore(initialPayload), { merge: true });
+      listSnap = await getDoc(listRef);
+    }
+
+    const listData = listSnap.data() as AppList;
+    const inviteToken = `inv_${Math.random().toString(36).substring(2, 12)}`;
+
+    const collaborators = { ...(listData.collaborators || {}) };
+    const invitedEmails = new Set(listData.invitedEmails || []);
+    invitedEmails.add(emailNorm);
+
+    // Save pending invite record keyed by clean email
+    const emailKey = emailNorm.replace(/[\.\#\$\[\]]/g, '_');
+    collaborators[emailKey] = {
+      email: emailNorm,
+      role,
+      status: 'pending',
+      invitedAt: new Date().toISOString(),
+      inviteToken,
+    };
+
     await setDoc(
-      doc(db, 'users', userId, 'activities', activityId),
-      sanitizeForFirestore(activityLog)
+      listRef,
+      sanitizeForFirestore({
+        ownerId: listData.ownerId || currentUid,
+        collaborators,
+        invitedEmails: Array.from(invitedEmails),
+        updatedAt: new Date().toISOString(),
+      }),
+      { merge: true }
     );
-    return activityLog;
+
+    return { success: true, inviteToken };
   } catch (error) {
-    console.warn('Could not persist activity record to Firestore:', error);
-    return activityLog;
+    console.error('Error inviting user to list:', error);
+    return { success: false, inviteToken: '', message: String(error) };
   }
 }
 
-// 6. Subscribe to Database Activity Logs in Realtime
-export function subscribeToActivityLogs(
-  userId: string,
-  onUpdate: (logs: ActivityLog[]) => void,
-  limitCount = 50
+// 5. Update Collaborator Role (Owner only)
+export async function updateCollaboratorRole(
+  listId: string,
+  targetKey: string,
+  newRole: 'read' | 'edit'
+): Promise<boolean> {
+  try {
+    const listRef = doc(db, 'lists', listId);
+    const listSnap = await getDoc(listRef);
+    if (!listSnap.exists()) return false;
+
+    const listData = listSnap.data() as AppList;
+    const collaborators = listData.collaborators || {};
+
+    if (collaborators[targetKey]) {
+      collaborators[targetKey].role = newRole;
+      await setDoc(
+        listRef,
+        sanitizeForFirestore({
+          collaborators,
+          updatedAt: new Date().toISOString(),
+        }),
+        { merge: true }
+      );
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error updating collaborator role:', error);
+    return false;
+  }
+}
+
+// 6. Remove Collaborator from List (Owner only)
+export async function removeCollaboratorFromList(
+  listId: string,
+  targetKey: string,
+  targetEmail?: string,
+  targetUid?: string
+): Promise<boolean> {
+  try {
+    const listRef = doc(db, 'lists', listId);
+    const listSnap = await getDoc(listRef);
+    if (!listSnap.exists()) return false;
+
+    const listData = listSnap.data() as AppList;
+    const collaborators = { ...(listData.collaborators || {}) };
+    delete collaborators[targetKey];
+
+    const collaboratorUids = (listData.collaboratorUids || []).filter(
+      (uid) => uid !== targetUid && uid !== targetKey
+    );
+    const invitedEmails = (listData.invitedEmails || []).filter(
+      (em) => em.toLowerCase() !== targetEmail?.toLowerCase()
+    );
+
+    await setDoc(
+      listRef,
+      sanitizeForFirestore({
+        collaborators,
+        collaboratorUids,
+        invitedEmails,
+        updatedAt: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
+    return true;
+  } catch (error) {
+    console.error('Error removing collaborator from list:', error);
+    return false;
+  }
+}
+
+// 7. Leave a Shared List (Collaborator action)
+export async function leaveSharedList(
+  listId: string,
+  currentUser: User | { uid: string; email?: string | null; displayName?: string | null; photoURL?: string | null }
+): Promise<boolean> {
+  if (!currentUser?.uid) return false;
+  try {
+    const listRef = doc(db, 'lists', listId);
+    const listSnap = await getDoc(listRef);
+    if (!listSnap.exists()) return false;
+
+    const listData = listSnap.data() as AppList;
+    const userEmailNorm = (currentUser.email || auth.currentUser?.email || '').toLowerCase();
+    const emailKey = userEmailNorm ? userEmailNorm.replace(/[\.\#\$\[\]]/g, '_') : '';
+
+    const collaborators = { ...(listData.collaborators || {}) };
+    delete collaborators[currentUser.uid];
+    if (emailKey) {
+      delete collaborators[emailKey];
+    }
+
+    const collaboratorUids = (listData.collaboratorUids || []).filter(
+      (uid) => uid !== currentUser.uid
+    );
+    const invitedEmails = (listData.invitedEmails || []).filter(
+      (em) => userEmailNorm && em.toLowerCase() !== userEmailNorm
+    );
+
+    await setDoc(
+      listRef,
+      sanitizeForFirestore({
+        collaborators,
+        collaboratorUids,
+        invitedEmails,
+        updatedAt: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
+    return true;
+  } catch (error) {
+    console.error('Error leaving shared list:', error);
+    return false;
+  }
+}
+
+// 8. Accept a Pending List Invitation
+export async function acceptPendingInvitation(
+  listId: string,
+  currentUser: User | { uid: string; email?: string | null; displayName?: string | null; photoURL?: string | null }
+): Promise<boolean> {
+  if (!currentUser?.uid) return false;
+  try {
+    const listRef = doc(db, 'lists', listId);
+    const listSnap = await getDoc(listRef);
+    if (!listSnap.exists()) return false;
+
+    const listData = listSnap.data() as AppList;
+    const userEmailNorm = (currentUser.email || auth.currentUser?.email || '').toLowerCase();
+    const emailKey = userEmailNorm ? userEmailNorm.replace(/[\.\#\$\[\]]/g, '_') : '';
+
+    const collaborators = { ...(listData.collaborators || {}) };
+    const pendingInvite = emailKey ? collaborators[emailKey] : undefined;
+    const role: ShareRole = pendingInvite?.role || 'edit';
+
+    // Remove pending key and set active key under currentUser.uid
+    if (emailKey) {
+      delete collaborators[emailKey];
+    }
+    collaborators[currentUser.uid] = {
+      uid: currentUser.uid,
+      email: userEmailNorm,
+      displayName: currentUser.displayName || auth.currentUser?.displayName || '',
+      photoURL: currentUser.photoURL || auth.currentUser?.photoURL || '',
+      role,
+      status: 'active',
+      invitedAt: pendingInvite?.invitedAt || new Date().toISOString(),
+      joinedAt: new Date().toISOString(),
+    };
+
+    const collaboratorUids = Array.from(
+      new Set([...(listData.collaboratorUids || []), currentUser.uid])
+    );
+    const invitedEmails = (listData.invitedEmails || []).filter(
+      (em) => userEmailNorm && em.toLowerCase() !== userEmailNorm
+    );
+
+    await setDoc(
+      listRef,
+      sanitizeForFirestore({
+        collaborators,
+        collaboratorUids,
+        invitedEmails,
+        updatedAt: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
+    return true;
+  } catch (error) {
+    console.error('Error accepting list invitation:', error);
+    return false;
+  }
+}
+
+// 9. Decline a Pending List Invitation
+export async function declinePendingInvitation(
+  listId: string,
+  currentUserEmail: string
+): Promise<boolean> {
+  try {
+    const listRef = doc(db, 'lists', listId);
+    const listSnap = await getDoc(listRef);
+    if (!listSnap.exists()) return false;
+
+    const listData = listSnap.data() as AppList;
+    const userEmailNorm = currentUserEmail.toLowerCase();
+    const emailKey = userEmailNorm.replace(/[\.\#\$\[\]]/g, '_');
+
+    const collaborators = { ...(listData.collaborators || {}) };
+    delete collaborators[emailKey];
+
+    const invitedEmails = (listData.invitedEmails || []).filter(
+      (em) => em.toLowerCase() !== userEmailNorm
+    );
+
+    await setDoc(
+      listRef,
+      sanitizeForFirestore({
+        collaborators,
+        invitedEmails,
+        updatedAt: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
+    return true;
+  } catch (error) {
+    console.error('Error declining list invitation:', error);
+    return false;
+  }
+}
+
+// 10. Update Link Sharing Settings (Owner only)
+export async function updateListShareLinkSettings(
+  listId: string,
+  enabled: boolean,
+  role: 'read' | 'edit' = 'edit',
+  currentUser?: User | { uid: string; email?: string | null; displayName?: string | null }
+): Promise<string | null> {
+  const currentUid = currentUser?.uid || auth.currentUser?.uid;
+  try {
+    const listRef = doc(db, 'lists', listId);
+    let listSnap = await getDoc(listRef);
+
+    if (!listSnap.exists()) {
+      if (!currentUid) return null;
+      const token = `tok_${Math.random().toString(36).substring(2, 10)}`;
+      const initialPayload: Record<string, unknown> = {
+        id: listId,
+        ownerId: currentUid,
+        ownerEmail: currentUser?.email || auth.currentUser?.email || '',
+        ownerName: currentUser?.displayName || auth.currentUser?.displayName || 'User',
+        collaboratorUids: [currentUid],
+        shareLinkEnabled: enabled,
+        shareLinkRole: role,
+        shareLinkToken: token,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await setDoc(listRef, sanitizeForFirestore(initialPayload), { merge: true });
+      return token;
+    }
+
+    const listData = listSnap.data() as AppList;
+    const token = listData.shareLinkToken || `tok_${Math.random().toString(36).substring(2, 10)}`;
+
+    await setDoc(
+      listRef,
+      sanitizeForFirestore({
+        ownerId: listData.ownerId || currentUid,
+        shareLinkEnabled: enabled,
+        shareLinkRole: role,
+        shareLinkToken: token,
+        updatedAt: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
+
+    return token;
+  } catch (error) {
+    console.error('Error updating list share link settings:', error);
+    return null;
+  }
+}
+
+// 11. Join List via Share Link
+export async function joinListViaShareLink(
+  listId: string,
+  token: string,
+  currentUser: User | { uid: string; email?: string | null; displayName?: string | null; photoURL?: string | null }
+): Promise<{ success: boolean; list?: AppList; message?: string }> {
+  if (!currentUser?.uid) {
+    return { success: false, message: 'User is not authenticated' };
+  }
+  try {
+    const listRef = doc(db, 'lists', listId);
+    const listSnap = await getDoc(listRef);
+    if (!listSnap.exists()) {
+      return { success: false, message: 'List not found' };
+    }
+
+    const listData = listSnap.data() as AppList;
+    if (!listData.shareLinkEnabled) {
+      return { success: false, message: 'Link sharing is not enabled for this list' };
+    }
+
+    if (listData.shareLinkToken && listData.shareLinkToken !== token) {
+      return { success: false, message: 'Invalid or expired share link' };
+    }
+
+    const role: ShareRole = listData.shareLinkRole || 'edit';
+    const collaborators = { ...(listData.collaborators || {}) };
+
+    collaborators[currentUser.uid] = {
+      uid: currentUser.uid,
+      email: currentUser.email || auth.currentUser?.email || '',
+      displayName: currentUser.displayName || auth.currentUser?.displayName || '',
+      photoURL: currentUser.photoURL || auth.currentUser?.photoURL || '',
+      role,
+      status: 'active',
+      invitedAt: new Date().toISOString(),
+      joinedAt: new Date().toISOString(),
+    };
+
+    const collaboratorUids = Array.from(
+      new Set([...(listData.collaboratorUids || []), currentUser.uid])
+    );
+
+    await setDoc(
+      listRef,
+      sanitizeForFirestore({
+        collaborators,
+        collaboratorUids,
+        updatedAt: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
+
+    return {
+      success: true,
+      list: {
+        ...listData,
+        collaborators,
+        collaboratorUids,
+        myRole: role,
+      },
+    };
+  } catch (error) {
+    console.error('Error joining list via share link:', error);
+    return { success: false, message: String(error) };
+  }
+}
+
+// 12. Delete List (STRICT ENFORCEMENT: Owner only)
+export async function deleteListFromFirestore(
+  listId: string,
+  currentUser: User | { uid: string; email?: string | null; displayName?: string | null; photoURL?: string | null }
+): Promise<boolean> {
+  if (!currentUser?.uid) return false;
+  try {
+    const listRef = doc(db, 'lists', listId);
+    const listSnap = await getDoc(listRef);
+
+    if (listSnap.exists()) {
+      const listData = listSnap.data() as AppList;
+      // Strict client-side gate + rule enforcement
+      if (listData.ownerId && listData.ownerId !== currentUser.uid) {
+        throw new Error('Only the list owner can delete this list.');
+      }
+
+      // Delete subcollections
+      const [groupsSnap, itemsSnap] = await Promise.all([
+        getDocs(collection(db, 'lists', listId, 'groups')),
+        getDocs(collection(db, 'lists', listId, 'items')),
+      ]);
+
+      const batch = writeBatch(db);
+      groupsSnap.forEach((d) => batch.delete(d.ref));
+      itemsSnap.forEach((d) => batch.delete(d.ref));
+      batch.delete(listRef);
+
+      // Also remove from private backup
+      const userListRef = doc(db, 'users', currentUser.uid, 'lists', listId);
+      batch.delete(userListRef);
+
+      await batch.commit();
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error deleting list from Firestore:', error);
+    return false;
+  }
+}
+
+// 13. Fetch User Cloud Data (Single-shot)
+export async function fetchUserCloudData(userId: string): Promise<UserCloudData | null> {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    const userPref = userDoc.exists() ? userDoc.data() : {};
+
+    const listsSnap = await getDocs(
+      query(collection(db, 'lists'), where('collaboratorUids', 'array-contains', userId))
+    );
+
+    const lists: AppList[] = [];
+    const groups: ListGroup[] = [];
+    const items: ListItem[] = [];
+
+    for (const listDoc of listsSnap.docs) {
+      const l = listDoc.data() as AppList;
+      lists.push(l);
+
+      const [gSnap, iSnap] = await Promise.all([
+        getDocs(collection(db, 'lists', l.id, 'groups')),
+        getDocs(collection(db, 'lists', l.id, 'items')),
+      ]);
+
+      gSnap.forEach((g) => groups.push(g.data() as ListGroup));
+      iSnap.forEach((i) => items.push(i.data() as ListItem));
+    }
+
+    return {
+      lists,
+      groups,
+      items,
+      language: userPref.language,
+      theme: userPref.theme,
+      themeColor: userPref.themeColor,
+      soundEnabled: userPref.soundEnabled,
+      activeListId: userPref.activeListId,
+    };
+  } catch (error) {
+    console.error('Error fetching cloud data:', error);
+    return null;
+  }
+}
+
+// 14. Convenient aliases and wrappers
+export async function shareListWithUser(
+  listId: string,
+  email: string,
+  role: 'read' | 'edit',
+  currentUser: User
+): Promise<{ success: boolean; inviteToken?: string; error?: string }> {
+  const res = await inviteUserToList(listId, currentUser, email, role);
+  return {
+    success: res.success,
+    inviteToken: res.inviteToken,
+    error: res.message,
+  };
+}
+
+export async function updateMemberRole(
+  listId: string,
+  targetUid: string,
+  role: 'read' | 'edit',
+  _currentUid?: string
+): Promise<boolean> {
+  return updateCollaboratorRole(listId, targetUid, role);
+}
+
+export async function removeMemberFromList(
+  listId: string,
+  targetUid: string,
+  _currentUid?: string
+): Promise<boolean> {
+  return removeCollaboratorFromList(listId, targetUid, undefined, targetUid);
+}
+
+export async function acceptListInvitation(
+  listId: string,
+  currentUser: User
+): Promise<boolean> {
+  return acceptPendingInvitation(listId, currentUser);
+}
+
+export async function rejectListInvitation(
+  listId: string,
+  currentUserEmail: string
+): Promise<boolean> {
+  return declinePendingInvitation(listId, currentUserEmail);
+}
+
+export async function fetchListShareDetails(
+  listId: string
+): Promise<PendingInvitation | null> {
+  try {
+    const listSnap = await getDoc(doc(db, 'lists', listId));
+    if (!listSnap.exists()) return null;
+    const l = listSnap.data() as AppList;
+    return {
+      listId: l.id,
+      listTitle: l.title,
+      listColor: l.color,
+      listIcon: l.icon,
+      ownerEmail: l.ownerEmail || '',
+      ownerName: l.ownerName || '',
+      role: l.shareLinkRole || 'read',
+      invitedAt: l.createdAt || new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error('Error fetching list share details:', error);
+    return null;
+  }
+}
+
+export function listenToPendingInvitations(
+  userEmail: string,
+  callback: (invites: PendingInvitation[]) => void
 ): Unsubscribe {
-  const activitiesRef = collection(db, 'users', userId, 'activities');
-  const q = query(activitiesRef, orderBy('timestamp', 'desc'), limit(limitCount));
+  const normalizedEmail = userEmail.trim().toLowerCase();
+  if (!normalizedEmail) {
+    callback([]);
+    return () => {};
+  }
+
+  const q = query(
+    collection(db, 'lists'),
+    where('invitedEmails', 'array-contains', normalizedEmail)
+  );
 
   return onSnapshot(
     q,
-    (snapshot) => {
-      const logs: ActivityLog[] = [];
-      snapshot.forEach((docSnap) => {
-        logs.push(docSnap.data() as ActivityLog);
+    (snap) => {
+      const invites: PendingInvitation[] = [];
+      snap.forEach((docSnap) => {
+        const l = docSnap.data() as AppList;
+        const emailKey = normalizedEmail.replace(/[\.\#\$\[\]]/g, '_');
+        const inviteInfo = l.collaborators?.[emailKey];
+        if (inviteInfo && inviteInfo.status === 'pending') {
+          invites.push({
+            listId: l.id,
+            listTitle: l.title,
+            listColor: l.color,
+            listIcon: l.icon,
+            ownerEmail: l.ownerEmail || '',
+            ownerName: l.ownerName || '',
+            role: inviteInfo.role || 'read',
+            invitedAt: inviteInfo.invitedAt || l.createdAt,
+            inviteToken: inviteInfo.inviteToken,
+          });
+        }
       });
-      onUpdate(logs);
+      callback(invites);
     },
     (err) => {
-      console.warn('Activities onSnapshot subscription error, falling back:', err);
-      // Fallback query without orderBy
-      const fallbackUnsub = onSnapshot(collection(db, 'users', userId, 'activities'), (snap) => {
-        const fallbackLogs: ActivityLog[] = [];
-        snap.forEach((d) => fallbackLogs.push(d.data() as ActivityLog));
-        fallbackLogs.sort(
-          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        );
-        onUpdate(fallbackLogs.slice(0, limitCount));
-      });
-      return fallbackUnsub;
+      console.warn('Pending invitations listener error:', err);
+      callback([]);
     }
   );
-}
-
-// 7. Fetch Activity Logs
-export async function fetchActivityLogsFromFirestore(
-  userId: string,
-  limitCount = 50
-): Promise<ActivityLog[]> {
-  if (!userId) return [];
-  try {
-    const snap = await getDocs(collection(db, 'users', userId, 'activities'));
-    const logs: ActivityLog[] = [];
-    snap.forEach((d) => logs.push(d.data() as ActivityLog));
-    logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    return logs.slice(0, limitCount);
-  } catch (error) {
-    console.error('Error fetching activity logs from Firestore:', error);
-    return [];
-  }
-}
-
-// 8. Clear Database Activity Logs
-export async function clearActivityLogsFromFirestore(userId: string): Promise<boolean> {
-  if (!userId) return false;
-  try {
-    const snap = await getDocs(collection(db, 'users', userId, 'activities'));
-    const batch = writeBatch(db);
-    snap.forEach((d) => batch.delete(d.ref));
-    await batch.commit();
-    return true;
-  } catch (error) {
-    console.error('Error clearing activity logs:', error);
-    return false;
-  }
 }

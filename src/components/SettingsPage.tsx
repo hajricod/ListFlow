@@ -20,7 +20,7 @@ import {
   CheckSquare,
   Palette,
 } from 'lucide-react';
-import { Language, SyncStatus, Theme, ThemeColor, ActivityLog } from '../types';
+import { Language, SyncStatus, Theme, ThemeColor } from '../types';
 import { getTranslation } from '../locales/translations';
 import { sounds } from '../utils/audio';
 import { THEME_COLOR_OPTIONS, getThemeColorName } from '../utils/themeColors';
@@ -42,9 +42,6 @@ interface SettingsPageProps {
   onImportData: (file: File) => void;
   onOpenInstallModal?: () => void;
   isAppInstalled?: boolean;
-  activities?: ActivityLog[];
-  onOpenActivityLogModal?: () => void;
-  isLiveListening?: boolean;
   user?: User | null;
   syncStatus?: SyncStatus;
   onOpenAuthModal?: () => void;
@@ -71,9 +68,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onImportData,
   onOpenInstallModal,
   isAppInstalled = false,
-  activities = [],
-  onOpenActivityLogModal,
-  isLiveListening = true,
   user,
   syncStatus = 'idle',
   onOpenAuthModal,
@@ -275,76 +269,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               )
             )}
           </div>
-        </div>
-      </section>
-
-      {/* Database Change Tracking & Audit History Section */}
-      <section className="bg-white dark:bg-neutral-900 border border-neutral-200/80 dark:border-neutral-800 rounded-2xl p-5 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-neutral-100 dark:border-neutral-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-500/20">
-              <Database className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
-                  {t.databaseChanges}
-                </h2>
-                {isLiveListening && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    {t.databaseLiveSync}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                {activities.length > 0
-                  ? `${activities.length} ${t.recentChanges}`
-                  : t.noChangesLogged}
-              </p>
-            </div>
-          </div>
-
-          {onOpenActivityLogModal && (
-            <button
-              type="button"
-              id="settings-open-activity-modal-btn"
-              onClick={onOpenActivityLogModal}
-              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs transition-colors cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>{t.viewAllChanges}</span>
-            </button>
-          )}
-        </div>
-
-        {/* Inline Preview of Latest 3 Database Changes */}
-        <div className="pt-4 space-y-2.5">
-          {activities.length === 0 ? (
-            <p className="text-xs text-neutral-400 dark:text-neutral-500 py-3 text-center">
-              {t.noChangesLoggedDesc}
-            </p>
-          ) : (
-            activities.slice(0, 3).map((act) => (
-              <div
-                key={act.id}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-100 dark:border-neutral-800 text-xs"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-neutral-200/80 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 shrink-0">
-                    {act.action}
-                  </span>
-                  <span className="font-semibold text-neutral-800 dark:text-neutral-200 truncate">
-                    {act.title}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-neutral-400 shrink-0">
-                  <Clock className="w-3 h-3" />
-                  <span>{new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-              </div>
-            ))
-          )}
         </div>
       </section>
 

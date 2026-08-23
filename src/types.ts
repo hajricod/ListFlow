@@ -41,6 +41,20 @@ export interface ListItem {
   priceEstimate?: number;
 }
 
+export type ShareRole = 'owner' | 'edit' | 'read';
+
+export interface ShareMember {
+  uid?: string;
+  email: string;
+  displayName?: string;
+  photoURL?: string;
+  role: ShareRole;
+  status: 'active' | 'pending';
+  invitedAt: string;
+  joinedAt?: string;
+  inviteToken?: string;
+}
+
 export interface AppList {
   id: string;
   title: string;
@@ -49,6 +63,31 @@ export interface AppList {
   description?: string;
   order?: number;
   createdAt: string;
+  updatedAt?: string;
+  ownerId?: string;
+  ownerEmail?: string;
+  ownerName?: string;
+  collaborators?: Record<string, ShareMember>;
+  collaboratorUids?: string[];
+  invitedEmails?: string[];
+  shareLinkEnabled?: boolean;
+  shareLinkRole?: 'read' | 'edit';
+  shareLinkToken?: string;
+  // Computed / client-side properties
+  myRole?: ShareRole;
+  isShared?: boolean;
+}
+
+export interface PendingInvitation {
+  listId: string;
+  listTitle: string;
+  listColor: string;
+  listIcon: string;
+  ownerEmail: string;
+  ownerName?: string;
+  role: ShareRole;
+  invitedAt: string;
+  inviteToken?: string;
 }
 
 export interface ListGroup {
@@ -112,31 +151,4 @@ export interface AppUser {
 }
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error' | 'idle';
-
-export type ActivityAction =
-  | 'create'
-  | 'update'
-  | 'delete'
-  | 'toggle'
-  | 'reorder'
-  | 'clear'
-  | 'batch_clear'
-  | 'move'
-  | 'import'
-  | 'batch_sync';
-
-export type ActivityTargetType = 'list' | 'group' | 'item' | 'settings' | 'batch';
-
-export interface ActivityLog {
-  id: string;
-  userId: string;
-  action: ActivityAction;
-  targetType: ActivityTargetType;
-  targetId?: string;
-  title: string;
-  details?: string;
-  source?: string;
-  listId?: string;
-  timestamp: string;
-}
 

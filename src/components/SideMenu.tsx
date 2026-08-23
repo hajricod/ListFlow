@@ -31,8 +31,12 @@ import {
   ListTodo,
   Settings,
   LogOut,
+  Users,
+  UserPlus,
+  Eye,
+  Crown,
 } from 'lucide-react';
-import { AppList, AppView, Language, ListGroup, ListItem, SyncStatus } from '../types';
+import { AppList, AppView, Language, ListGroup, ListItem, SyncStatus, PendingInvitation } from '../types';
 import { getTranslation } from '../locales/translations';
 import { User } from 'firebase/auth';
 import { RefreshCw, CloudCheck, CloudOff, AlertCircle } from 'lucide-react';
@@ -47,6 +51,9 @@ interface SideMenuProps {
   onEditList: (list: AppList) => void;
   onDeleteList: (list: AppList) => void;
   onDuplicateList: (list: AppList) => void;
+  onShareList?: (list: AppList) => void;
+  pendingInvitations?: PendingInvitation[];
+  onOpenPendingInvite?: (invite: PendingInvitation) => void;
   groups: ListGroup[];
   items: ListItem[];
   language: Language;
@@ -54,8 +61,6 @@ interface SideMenuProps {
   completedTasks: number;
   currentView?: AppView;
   onOpenSettings: () => void;
-  onOpenActivityLog?: () => void;
-  activityCount?: number;
   user?: User | null;
   syncStatus?: SyncStatus;
   onOpenAuthModal?: () => void;
@@ -117,6 +122,9 @@ export const SideMenu: React.FC<SideMenuProps> = ({
   onEditList,
   onDeleteList,
   onDuplicateList,
+  onShareList,
+  pendingInvitations = [],
+  onOpenPendingInvite,
   groups,
   items,
   language,
@@ -124,8 +132,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({
   completedTasks,
   currentView = 'workspace',
   onOpenSettings,
-  onOpenActivityLog,
-  activityCount = 0,
   user,
   syncStatus = 'idle',
   onOpenAuthModal,
@@ -308,6 +314,35 @@ export const SideMenu: React.FC<SideMenuProps> = ({
 
         {/* Scrollable Lists Area */}
         <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5 custom-scrollbar">
+          {/* Pending Invitations Banner in Sidenav */}
+          {pendingInvitations && pendingInvitations.length > 0 && (
+            <div className="mb-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-bold text-amber-900 dark:text-amber-200">
+                <span className="flex items-center gap-1.5">
+                  <UserPlus className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>{t.pendingInvites} ({pendingInvitations.length})</span>
+                </span>
+              </div>
+              <div className="space-y-1">
+                {pendingInvitations.map((inv) => (
+                  <button
+                    key={inv.listId}
+                    type="button"
+                    onClick={() => onOpenPendingInvite && onOpenPendingInvite(inv)}
+                    className="w-full text-start p-1.5 rounded-lg bg-white/80 dark:bg-neutral-850/80 border border-amber-200/50 dark:border-amber-800/40 hover:bg-white dark:hover:bg-neutral-800 text-xs flex items-center justify-between gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <span className="font-semibold text-neutral-800 dark:text-neutral-200 truncate">
+                      {inv.listTitle}
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-300 shrink-0">
+                      {t.acceptInvite}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {filteredLists.length === 0 ? (
             <div className="text-center py-8 px-2 text-neutral-400 dark:text-neutral-500 text-xs">
               <p>{t.noListsFound}</p>
@@ -318,6 +353,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({
               const stats = getListStats(list.id);
               const IconComp = getListIconComponent(list.icon);
               const accentColor = list.color || '#10b981';
+              const isShared = list.isShared || (list.collaboratorUids && list.collaboratorUids.length > 1) || (list.invitedEmails && list.invitedEmails.length > 0);
+              const isReadOnly = list.myRole === 'read';
 
               return (
                 <div
@@ -343,16 +380,24 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div
-                        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover/item:scale-105 shadow-2xs"
+                        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover/item:scale-105 shadow-2xs relative"
                         style={{
                           backgroundColor: `${accentColor}18`,
                           color: accentColor,
                         }}
                       >
                         <IconComp className="w-4 h-4" />
+                        {isShared && (
+                          <div
+                            className="absolute -bottom-1 -end-1 w-3.5 h-3.5 rounded-full bg-white dark:bg-neutral-800 shadow-2xs flex items-center justify-center text-neutral-600 dark:text-neutral-300 ring-1 ring-neutral-200 dark:ring-neutral-700"
+                            title={t.sharedList}
+                          >
+                            <Users className="w-2.2 h-2.2" />
+                          </div>
+                        )}
                       </div>
 
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex items-center gap-1.5">
                         <span
                           className={`text-xs font-semibold block truncate ${
                             isActive
@@ -362,6 +407,15 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                         >
                           {list.title}
                         </span>
+
+                        {isReadOnly && (
+                          <span
+                            className="px-1 py-0.2 rounded bg-neutral-100 dark:bg-neutral-800 text-[9px] font-bold text-neutral-500 dark:text-neutral-400 shrink-0 flex items-center gap-0.5"
+                            title={t.viewOnlyBanner}
+                          >
+                            <Eye className="w-2.5 h-2.5" />
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -557,31 +611,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({
             )
           )}
 
-          {/* Database Changes & Settings Buttons at Bottom of Sidenav */}
-          <div className="grid grid-cols-2 gap-2">
-            {onOpenActivityLog && (
-              <button
-                type="button"
-                id="sidenav-bottom-activity-btn"
-                onClick={() => {
-                  onOpenActivityLog();
-                  if (window.innerWidth < 1024) onClose();
-                }}
-                title={t.databaseChanges}
-                className="flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-neutral-800/90 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-750 border border-neutral-200/90 dark:border-neutral-700/80 shadow-2xs transition-all cursor-pointer"
-              >
-                <div className="flex items-center gap-1.5 truncate">
-                  <RefreshCw className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <span className="truncate">{t.databaseChanges}</span>
-                </div>
-                {activityCount > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-md font-medium bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300">
-                    {activityCount}
-                  </span>
-                )}
-              </button>
-            )}
-
+          {/* Settings Button at Bottom of Sidenav */}
+          <div>
             <button
               type="button"
               id="sidenav-bottom-settings-btn"
@@ -590,17 +621,15 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                 if (window.innerWidth < 1024) onClose();
               }}
               title={t.settings}
-              className={`flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
-                !onOpenActivityLog ? 'col-span-2' : ''
-              } ${
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
                 currentView === 'settings'
                   ? 'bg-emerald-50/90 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200 border-emerald-300/80 dark:border-emerald-800/70 shadow-2xs ring-1 ring-emerald-500/20'
                   : 'bg-white dark:bg-neutral-800/90 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-750 border-neutral-200/90 dark:border-neutral-700/80 shadow-2xs'
               }`}
             >
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <Settings
-                  className={`w-3.5 h-3.5 ${
+                  className={`w-4 h-4 ${
                     currentView === 'settings'
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : 'text-neutral-500 dark:text-neutral-400'
@@ -609,7 +638,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                 <span>{t.settings}</span>
               </div>
               <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-md font-medium ${
+                className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
                   currentView === 'settings'
                     ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
                     : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400'
@@ -642,6 +671,18 @@ export const SideMenu: React.FC<SideMenuProps> = ({
             onClick={() => {
               const currentList = menuAnchor.list;
               setMenuAnchor(null);
+              if (onShareList) onShareList(currentList);
+            }}
+            className="w-full px-3 py-2 text-start flex items-center gap-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer font-medium"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>{t.shareList}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const currentList = menuAnchor.list;
+              setMenuAnchor(null);
               onEditList(currentList);
             }}
             className="w-full px-3 py-2 text-start flex items-center gap-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
@@ -664,18 +705,33 @@ export const SideMenu: React.FC<SideMenuProps> = ({
 
           <div className="h-px bg-neutral-100 dark:bg-neutral-800 my-1" />
 
-          <button
-            onClick={() => {
-              const currentList = menuAnchor.list;
-              setMenuAnchor(null);
-              onDeleteList(currentList);
-            }}
-            disabled={lists.length <= 1}
-            className="w-full px-3 py-2 text-start flex items-center gap-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>{t.deleteList}</span>
-          </button>
+          {/* Delete List (Owner only) or Leave List (Collaborators) */}
+          {(!menuAnchor.list.ownerId || (user && menuAnchor.list.ownerId === user.uid)) ? (
+            <button
+              onClick={() => {
+                const currentList = menuAnchor.list;
+                setMenuAnchor(null);
+                onDeleteList(currentList);
+              }}
+              disabled={lists.length <= 1}
+              className="w-full px-3 py-2 text-start flex items-center gap-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{t.deleteList}</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                const currentList = menuAnchor.list;
+                setMenuAnchor(null);
+                if (onShareList) onShareList(currentList);
+              }}
+              className="w-full px-3 py-2 text-start flex items-center gap-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5 rtl:rotate-180" />
+              <span>{t.leaveList}</span>
+            </button>
+          )}
         </div>
       )}
     </>
