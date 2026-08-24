@@ -49,7 +49,9 @@ service cloud.firestore {
         (listDocExists(listId) && ('collaboratorUids' in getListData(listId)) && (request.auth.uid in getListData(listId).collaboratorUids)) ||
         (listDocExistsAfter(listId) && ('collaboratorUids' in getListDataAfter(listId)) && (request.auth.uid in getListDataAfter(listId).collaboratorUids)) ||
         (listDocExists(listId) && ('shareLinkEnabled' in getListData(listId)) && getListData(listId).shareLinkEnabled == true) ||
-        (listDocExistsAfter(listId) && ('shareLinkEnabled' in getListDataAfter(listId)) && getListDataAfter(listId).shareLinkEnabled == true)
+        (listDocExistsAfter(listId) && ('shareLinkEnabled' in getListDataAfter(listId)) && getListDataAfter(listId).shareLinkEnabled == true) ||
+        (request.auth.token.email != null && listDocExists(listId) && ('invitedEmails' in getListData(listId)) && (request.auth.token.email in getListData(listId).invitedEmails)) ||
+        (request.auth.token.email != null && listDocExistsAfter(listId) && ('invitedEmails' in getListDataAfter(listId)) && (request.auth.token.email in getListDataAfter(listId).invitedEmails))
       );
     }
 
@@ -57,25 +59,57 @@ service cloud.firestore {
       return isSignedIn() && (
         isParentListOwner(listId) ||
         (
-          listDocExists(listId) &&
-          ('collaboratorUids' in getListData(listId)) &&
-          (request.auth.uid in getListData(listId).collaboratorUids) &&
-          (
-            !('collaborators' in getListData(listId)) ||
-            !(request.auth.uid in getListData(listId).collaborators) ||
-            !('role' in getListData(listId).collaborators[request.auth.uid]) ||
-            getListData(listId).collaborators[request.auth.uid].role != 'read'
+          listDocExists(listId) && (
+            (
+              ('collaboratorUids' in getListData(listId)) &&
+              (request.auth.uid in getListData(listId).collaboratorUids) &&
+              (
+                !('collaborators' in getListData(listId)) ||
+                !(request.auth.uid in getListData(listId).collaborators) ||
+                !('role' in getListData(listId).collaborators[request.auth.uid]) ||
+                getListData(listId).collaborators[request.auth.uid].role != 'read'
+              )
+            ) ||
+            (
+              ('shareLinkEnabled' in getListData(listId)) &&
+              getListData(listId).shareLinkEnabled == true &&
+              (
+                !('shareLinkRole' in getListData(listId)) ||
+                getListData(listId).shareLinkRole != 'read'
+              )
+            ) ||
+            (
+              request.auth.token.email != null &&
+              ('invitedEmails' in getListData(listId)) &&
+              (request.auth.token.email in getListData(listId).invitedEmails)
+            )
           )
         ) ||
         (
-          listDocExistsAfter(listId) &&
-          ('collaboratorUids' in getListDataAfter(listId)) &&
-          (request.auth.uid in getListDataAfter(listId).collaboratorUids) &&
-          (
-            !('collaborators' in getListDataAfter(listId)) ||
-            !(request.auth.uid in getListDataAfter(listId).collaborators) ||
-            !('role' in getListDataAfter(listId).collaborators[request.auth.uid]) ||
-            getListDataAfter(listId).collaborators[request.auth.uid].role != 'read'
+          listDocExistsAfter(listId) && (
+            (
+              ('collaboratorUids' in getListDataAfter(listId)) &&
+              (request.auth.uid in getListDataAfter(listId).collaboratorUids) &&
+              (
+                !('collaborators' in getListDataAfter(listId)) ||
+                !(request.auth.uid in getListDataAfter(listId).collaborators) ||
+                !('role' in getListDataAfter(listId).collaborators[request.auth.uid]) ||
+                getListDataAfter(listId).collaborators[request.auth.uid].role != 'read'
+              )
+            ) ||
+            (
+              ('shareLinkEnabled' in getListDataAfter(listId)) &&
+              getListDataAfter(listId).shareLinkEnabled == true &&
+              (
+                !('shareLinkRole' in getListDataAfter(listId)) ||
+                getListDataAfter(listId).shareLinkRole != 'read'
+              )
+            ) ||
+            (
+              request.auth.token.email != null &&
+              ('invitedEmails' in getListDataAfter(listId)) &&
+              (request.auth.token.email in getListDataAfter(listId).invitedEmails)
+            )
           )
         )
       );

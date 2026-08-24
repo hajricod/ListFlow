@@ -272,7 +272,8 @@ export async function syncAllToFirestore(
     // Upsert groups
     for (let i = 0; i < groups.length; i++) {
       const group = groups[i];
-      const listId = group.listId || lists[0]?.id || 'list-groceries';
+      const targetList = lists.find((l) => l.id === group.listId) || lists[0];
+      const listId = group.listId || targetList?.id || 'list-groceries';
       const groupRef = doc(db, 'lists', listId, 'groups', group.id);
       batch.set(
         groupRef,
@@ -291,7 +292,9 @@ export async function syncAllToFirestore(
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const parentGroup = groups.find((g) => g.id === item.groupId);
-      const listId = parentGroup?.listId || lists[0]?.id || 'list-groceries';
+      const itemExplicitListId = (item as unknown as { listId?: string }).listId;
+      const targetList = lists.find((l) => l.id === itemExplicitListId || l.id === parentGroup?.listId) || lists[0];
+      const listId = itemExplicitListId || parentGroup?.listId || targetList?.id || 'list-groceries';
       const itemRef = doc(db, 'lists', listId, 'items', item.id);
       batch.set(
         itemRef,
@@ -357,10 +360,26 @@ export function subscribeToUserCloudData(
     // Combine member lists
     const combinedListsMap = new Map<string, AppList>();
     memberLists.forEach((l) => {
+      // Look up current user's role in this list
+      let roleFound: ShareRole | undefined = l.collaborators?.[userId]?.role;
+      if (!roleFound && userEmail) {
+        const emailKey = userEmail.replace(/[\.\#\$\[\]]/g, '_');
+        if (l.collaborators?.[emailKey]?.role) {
+          roleFound = l.collaborators[emailKey].role;
+        } else {
+          const match = Object.values(l.collaborators || {}).find(
+            (m) =>
+              (m.uid && m.uid === userId) ||
+              (m.email && m.email.toLowerCase() === userEmail)
+          );
+          if (match?.role) roleFound = match.role;
+        }
+      }
+
       const myRole: ShareRole =
         l.ownerId === userId
           ? 'owner'
-          : l.collaborators?.[userId]?.role || 'read';
+          : (roleFound || l.shareLinkRole || (l.collaboratorUids?.includes(userId) ? 'edit' : 'read'));
       const isShared =
         (l.collaboratorUids && l.collaboratorUids.length > 1) ||
         (l.invitedEmails && l.invitedEmails.length > 0) ||
@@ -653,13 +672,30 @@ export async function updateCollaboratorRole(
     if (!listSnap.exists()) return false;
 
     const listData = listSnap.data() as AppList;
-    const collaborators = listData.collaborators || {};
+    const collaborators = { ...(listData.collaborators || {}) };
 
-    if (collaborators[targetKey]) {
-      collaborators[targetKey].role = newRole;
+    // Search for collaborator by direct key, uid, or email
+    let matchedKey = targetKey;
+    if (!collaborators[matchedKey]) {
+      const foundKey = Object.keys(collaborators).find(
+        (k) =>
+          k === targetKey ||
+          collaborators[k]?.uid === targetKey ||
+          collaborators[k]?.email?.toLowerCase() === targetKey.toLowerCase()
+      );
+      if (foundKey) matchedKey = foundKey;
+    }
+
+    if (collaborators[matchedKey]) {
+      collaborators[matchedKey] = {
+        ...collaborators[matchedKey],
+        role: newRole,
+      };
+
       await setDoc(
         listRef,
         sanitizeForFirestore({
+          ownerId: listData.ownerId,
           collaborators,
           updatedAt: new Date().toISOString(),
         }),
@@ -688,7 +724,25 @@ export async function removeCollaboratorFromList(
 
     const listData = listSnap.data() as AppList;
     const collaborators = { ...(listData.collaborators || {}) };
+
+    // Find and delete matching entries
     delete collaborators[targetKey];
+    if (targetUid && collaborators[targetUid]) {
+      delete collaborators[targetUid];
+    }
+    if (targetEmail) {
+      const emailKey = targetEmail.toLowerCase().replace(/[\.\#\$\[\]]/g, '_');
+      delete collaborators[emailKey];
+    }
+    Object.keys(collaborators).forEach((k) => {
+      const m = collaborators[k];
+      if (
+        (targetUid && m.uid === targetUid) ||
+        (targetEmail && m.email?.toLowerCase() === targetEmail.toLowerCase())
+      ) {
+        delete collaborators[k];
+      }
+    });
 
     const collaboratorUids = (listData.collaboratorUids || []).filter(
       (uid) => uid !== targetUid && uid !== targetKey
@@ -700,6 +754,7 @@ export async function removeCollaboratorFromList(
     await setDoc(
       listRef,
       sanitizeForFirestore({
+        ownerId: listData.ownerId,
         collaborators,
         collaboratorUids,
         invitedEmails,
@@ -775,7 +830,18 @@ export async function acceptPendingInvitation(
     const emailKey = userEmailNorm ? userEmailNorm.replace(/[\.\#\$\[\]]/g, '_') : '';
 
     const collaborators = { ...(listData.collaborators || {}) };
-    const pendingInvite = emailKey ? collaborators[emailKey] : undefined;
+    let pendingInvite = emailKey ? collaborators[emailKey] : undefined;
+    if (!pendingInvite) {
+      const matchKey = Object.keys(collaborators).find(
+        (k) =>
+          collaborators[k]?.email?.toLowerCase() === userEmailNorm ||
+          collaborators[k]?.uid === currentUser.uid
+      );
+      if (matchKey) {
+        pendingInvite = collaborators[matchKey];
+        delete collaborators[matchKey];
+      }
+    }
     const role: ShareRole = pendingInvite?.role || 'edit';
 
     // Remove pending key and set active key under currentUser.uid
@@ -803,6 +869,7 @@ export async function acceptPendingInvitation(
     await setDoc(
       listRef,
       sanitizeForFirestore({
+        ownerId: listData.ownerId,
         collaborators,
         collaboratorUids,
         invitedEmails,

@@ -19,6 +19,8 @@ import {
   ToastMessage,
   SyncStatus,
   PendingInvitation,
+  ShareRole,
+  ShareMember,
 } from './types';
 import {
   loadStoredLists,
@@ -80,7 +82,7 @@ import {
   listenToPendingInvitations,
   updateListShareLinkSettings,
 } from './utils/firestoreSync';
-import { Plus, ListTodo, Layers } from 'lucide-react';
+import { Plus, ListTodo, Layers, Users, Check } from 'lucide-react';
 
 export default function App() {
   // 1. Core State
@@ -524,27 +526,47 @@ export default function App() {
   const isOwner = useMemo(() => {
     if (!activeList?.ownerId) return true;
     if (!user) return true;
-    return activeList.ownerId === user.uid;
+    return activeList.ownerId === user.uid || activeList.ownerId === 'local-user';
   }, [activeList?.ownerId, user]);
 
   const isShared = useMemo(() => {
     return Boolean(
       activeList?.isShared ||
-      (activeList?.ownerId && user && activeList.ownerId !== user.uid) ||
-      (activeList?.members && activeList.members.length > 0)
+      (activeList?.ownerId && user && activeList.ownerId !== user.uid && activeList.ownerId !== 'local-user') ||
+      (activeList?.collaboratorUids && activeList.collaboratorUids.length > 1) ||
+      (activeList?.invitedEmails && activeList.invitedEmails.length > 0)
     );
   }, [activeList, user]);
 
-  const userRole = useMemo(() => {
+  const userRole = useMemo((): ShareRole => {
     if (isOwner) return 'owner';
+    if (activeList?.myRole) return activeList.myRole;
     if (!user) return 'read';
-    const member = activeList?.members?.find((m) => m.uid === user.uid);
-    if (member) return member.role;
-    const invite = activeList?.pendingInvites?.find(
-      (p) => p.email.toLowerCase() === user.email?.toLowerCase()
-    );
-    if (invite) return invite.role;
-    return 'read';
+
+    const userEmailNorm = (user.email || '').toLowerCase().trim();
+    const emailKey = userEmailNorm ? userEmailNorm.replace(/[\.\#\$\[\]]/g, '_') : '';
+    const collaborators = activeList?.collaborators || {};
+
+    const member =
+      collaborators[user.uid] ||
+      (emailKey ? collaborators[emailKey] : undefined) ||
+      (Object.values(collaborators) as ShareMember[]).find(
+        (m: ShareMember) =>
+          (m.uid && m.uid === user.uid) ||
+          (m.email && m.email.toLowerCase() === userEmailNorm)
+      );
+
+    if (member?.role) return member.role;
+
+    if (activeList?.shareLinkEnabled && activeList.shareLinkRole) {
+      return activeList.shareLinkRole;
+    }
+
+    if (activeList?.collaboratorUids?.includes(user.uid)) {
+      return 'edit';
+    }
+
+    return 'edit';
   }, [isOwner, user, activeList]);
 
   const isReadOnly = useMemo(() => {
@@ -871,18 +893,68 @@ export default function App() {
     return res;
   };
 
-  const handleUpdateMemberRole = async (targetUid: string, role: 'read' | 'edit') => {
+  const handleUpdateMemberRole = async (targetKey: string, role: 'read' | 'edit') => {
     if (!selectedListForShare || !user) return false;
-    const ok = await updateMemberRole(selectedListForShare.id, targetUid, role, user.uid);
+
+    // Optimistically update list collaborators
+    const updateCollaborators = (prevList: AppList): AppList => {
+      const collabs = { ...(prevList.collaborators || {}) };
+      if (collabs[targetKey]) {
+        collabs[targetKey] = { ...collabs[targetKey], role };
+      } else {
+        const found = Object.keys(collabs).find(
+          (k) =>
+            k === targetKey ||
+            collabs[k]?.uid === targetKey ||
+            collabs[k]?.email?.toLowerCase() === targetKey.toLowerCase()
+        );
+        if (found) collabs[found] = { ...collabs[found], role };
+      }
+      return { ...prevList, collaborators: collabs };
+    };
+
+    setSelectedListForShare((prev) => (prev ? updateCollaborators(prev) : prev));
+    setLists((prev) =>
+      prev.map((l) => (l.id === selectedListForShare.id ? updateCollaborators(l) : l))
+    );
+
+    const ok = await updateMemberRole(selectedListForShare.id, targetKey, role, user.uid);
     if (ok) {
-      showToast(language === 'ar' ? 'تم تحديث الصلاحية' : 'Permission updated');
+      showToast(language === 'ar' ? 'تم تحديث الصلاحية بنجاح' : 'Permission updated successfully');
     }
     return ok;
   };
 
-  const handleRemoveMember = async (targetUid: string) => {
+  const handleRemoveMember = async (targetKey: string, email?: string, uid?: string) => {
     if (!selectedListForShare || !user) return false;
-    const ok = await removeMemberFromList(selectedListForShare.id, targetUid, user.uid);
+
+    // Optimistically remove member from list
+    const removeMember = (prevList: AppList): AppList => {
+      const collabs = { ...(prevList.collaborators || {}) };
+      delete collabs[targetKey];
+      if (uid && collabs[uid]) delete collabs[uid];
+      if (email) {
+        const emKey = email.toLowerCase().replace(/[\.\#\$\[\]]/g, '_');
+        delete collabs[emKey];
+      }
+      return {
+        ...prevList,
+        collaborators: collabs,
+        collaboratorUids: (prevList.collaboratorUids || []).filter(
+          (id) => id !== uid && id !== targetKey
+        ),
+        invitedEmails: (prevList.invitedEmails || []).filter(
+          (em) => em.toLowerCase() !== email?.toLowerCase()
+        ),
+      };
+    };
+
+    setSelectedListForShare((prev) => (prev ? removeMember(prev) : prev));
+    setLists((prev) =>
+      prev.map((l) => (l.id === selectedListForShare.id ? removeMember(l) : l))
+    );
+
+    const ok = await removeMemberFromList(selectedListForShare.id, targetKey, user.uid);
     if (ok) {
       showToast(language === 'ar' ? 'تمت إزالة العضو من القائمة' : 'Member removed from list');
     }
@@ -1710,6 +1782,53 @@ export default function App() {
             />
           ) : (
             <div className="w-full max-w-7xl 2xl:max-w-[1600px] mx-auto space-y-6">
+              {/* Pending Invitations Banner */}
+              {pendingInvitations.length > 0 && (
+                <div className="space-y-3">
+                  {pendingInvitations.map((invitation) => (
+                    <div
+                      key={invitation.listId}
+                      className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                          <Users className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                            {language === 'ar'
+                              ? `تمت دعوتك للانضمام إلى قائمة "${invitation.listTitle}"`
+                              : `You've been invited to join "${invitation.listTitle}"`}
+                          </p>
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                            {language === 'ar'
+                              ? `بصلاحية ${invitation.role === 'edit' ? 'تعديل كامل' : 'عرض فقط'} بواسطة ${invitation.ownerName || invitation.ownerEmail || 'المالك'}`
+                              : `With ${invitation.role === 'edit' ? 'Full Edit' : 'View Only'} permissions by ${invitation.ownerName || invitation.ownerEmail || 'Owner'}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => handleRejectInvitation(invitation)}
+                          className="px-3 py-1.5 text-xs font-medium rounded-xl text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                        >
+                          {language === 'ar' ? 'تجاهل' : 'Ignore'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAcceptInvitation(invitation)}
+                          className="px-4 py-1.5 text-xs font-semibold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>{language === 'ar' ? 'قبول والانضمام' : 'Accept & Join'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Filter and Group Action Toolbar with Search, Add Item & Add Group */}
               <StatsBanner
                 language={language}
@@ -1951,7 +2070,7 @@ export default function App() {
             await handleUpdateMemberRole(memberKey, role);
           }}
           onRemoveMember={async (memberKey, email, uid) => {
-            await handleRemoveMember(uid || memberKey);
+            await handleRemoveMember(memberKey, email, uid);
           }}
           onToggleLinkSharing={async (enabled, role) => {
             if (selectedListForShare) {
