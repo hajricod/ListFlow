@@ -4,7 +4,9 @@ import {
   getDocs,
   getDoc,
   setDoc,
+  updateDoc,
   deleteDoc,
+  deleteField,
   writeBatch,
   onSnapshot,
   query,
@@ -692,15 +694,22 @@ export async function updateCollaboratorRole(
         role: newRole,
       };
 
-      await setDoc(
-        listRef,
-        sanitizeForFirestore({
-          ownerId: listData.ownerId,
-          collaborators,
+      try {
+        await updateDoc(listRef, {
+          [`collaborators.${matchedKey}.role`]: newRole,
           updatedAt: new Date().toISOString(),
-        }),
-        { merge: true }
-      );
+        });
+      } catch {
+        await setDoc(
+          listRef,
+          sanitizeForFirestore({
+            ownerId: listData.ownerId,
+            collaborators,
+            updatedAt: new Date().toISOString(),
+          }),
+          { merge: true }
+        );
+      }
       return true;
     }
     return false;
@@ -725,43 +734,93 @@ export async function removeCollaboratorFromList(
     const listData = listSnap.data() as AppList;
     const collaborators = { ...(listData.collaborators || {}) };
 
-    // Find and delete matching entries
-    delete collaborators[targetKey];
-    if (targetUid && collaborators[targetUid]) {
-      delete collaborators[targetUid];
-    }
-    if (targetEmail) {
-      const emailKey = targetEmail.toLowerCase().replace(/[\.\#\$\[\]]/g, '_');
-      delete collaborators[emailKey];
-    }
-    Object.keys(collaborators).forEach((k) => {
-      const m = collaborators[k];
+    const emailNorm = (targetEmail || '').toLowerCase().trim();
+    const emailKey = emailNorm ? emailNorm.replace(/[\.\#\$\[\]]/g, '_') : '';
+    const targetKeyNorm = (targetKey || '').toLowerCase().trim();
+    const targetKeyEmailKey = targetKeyNorm.includes('@')
+      ? targetKeyNorm.replace(/[\.\#\$\[\]]/g, '_')
+      : '';
+
+    // Collect all matching collaborator map keys to remove
+    const keysToRemove = new Set<string>();
+    if (targetKey) keysToRemove.add(targetKey);
+    if (targetUid) keysToRemove.add(targetUid);
+    if (emailKey) keysToRemove.add(emailKey);
+    if (targetKeyEmailKey) keysToRemove.add(targetKeyEmailKey);
+
+    // Deep match by email and uid inside collaborator objects
+    Object.entries(collaborators).forEach(([k, m]) => {
       if (
         (targetUid && m.uid === targetUid) ||
-        (targetEmail && m.email?.toLowerCase() === targetEmail.toLowerCase())
+        (targetKey && m.uid === targetKey) ||
+        (emailNorm && m.email?.toLowerCase() === emailNorm) ||
+        (targetKeyNorm && m.email?.toLowerCase() === targetKeyNorm)
       ) {
-        delete collaborators[k];
+        keysToRemove.add(k);
       }
     });
 
+    // Remove from local memory map
+    keysToRemove.forEach((k) => {
+      delete collaborators[k];
+    });
+
     const collaboratorUids = (listData.collaboratorUids || []).filter(
-      (uid) => uid !== targetUid && uid !== targetKey
-    );
-    const invitedEmails = (listData.invitedEmails || []).filter(
-      (em) => em.toLowerCase() !== targetEmail?.toLowerCase()
+      (uid) => uid !== targetUid && uid !== targetKey && !keysToRemove.has(uid)
     );
 
-    await setDoc(
-      listRef,
-      sanitizeForFirestore({
-        ownerId: listData.ownerId,
-        collaborators,
-        collaboratorUids,
-        invitedEmails,
-        updatedAt: new Date().toISOString(),
-      }),
-      { merge: true }
-    );
+    const invitedEmails = (listData.invitedEmails || []).filter((em) => {
+      const emLower = em.toLowerCase().trim();
+      return (
+        emLower !== emailNorm &&
+        emLower !== targetKeyNorm &&
+        !Array.from(keysToRemove).some(
+          (k) =>
+            k.toLowerCase() === emLower ||
+            k === emLower.replace(/[\.\#\$\[\]]/g, '_')
+        )
+      );
+    });
+
+    // Prepare atomic update with deleteField()
+    const updates: Record<string, unknown> = {
+      ownerId: listData.ownerId,
+      collaboratorUids,
+      invitedEmails,
+      updatedAt: new Date().toISOString(),
+    };
+
+    keysToRemove.forEach((k) => {
+      updates[`collaborators.${k}`] = deleteField();
+    });
+
+    try {
+      await updateDoc(listRef, updates);
+    } catch {
+      // Fallback: full document rewrite
+      await setDoc(
+        listRef,
+        sanitizeForFirestore({
+          ...listData,
+          collaborators,
+          collaboratorUids,
+          invitedEmails,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+    }
+
+    // Clean up member private list reference if applicable
+    const resolvedUid = targetUid || (collaborators[targetKey]?.uid) || (!targetKey.includes('@') ? targetKey : undefined);
+    if (resolvedUid && resolvedUid !== listData.ownerId) {
+      try {
+        const userListRef = doc(db, 'users', resolvedUid, 'lists', listId);
+        await deleteDoc(userListRef);
+      } catch {
+        // Non-fatal if private subcollection is not writable
+      }
+    }
+
     return true;
   } catch (error) {
     console.error('Error removing collaborator from list:', error);
@@ -772,41 +831,78 @@ export async function removeCollaboratorFromList(
 // 7. Leave a Shared List (Collaborator action)
 export async function leaveSharedList(
   listId: string,
-  currentUser: User | { uid: string; email?: string | null; displayName?: string | null; photoURL?: string | null }
+  currentUser: string | User | { uid: string; email?: string | null; displayName?: string | null; photoURL?: string | null }
 ): Promise<boolean> {
-  if (!currentUser?.uid) return false;
+  const currentUid = typeof currentUser === 'string' ? currentUser : currentUser?.uid;
+  if (!currentUid) return false;
   try {
     const listRef = doc(db, 'lists', listId);
     const listSnap = await getDoc(listRef);
     if (!listSnap.exists()) return false;
 
     const listData = listSnap.data() as AppList;
-    const userEmailNorm = (currentUser.email || auth.currentUser?.email || '').toLowerCase();
+    const userEmailNorm = (
+      typeof currentUser === 'object' && currentUser.email
+        ? currentUser.email
+        : auth.currentUser?.email || ''
+    ).toLowerCase().trim();
     const emailKey = userEmailNorm ? userEmailNorm.replace(/[\.\#\$\[\]]/g, '_') : '';
 
     const collaborators = { ...(listData.collaborators || {}) };
-    delete collaborators[currentUser.uid];
-    if (emailKey) {
-      delete collaborators[emailKey];
-    }
+    const keysToRemove = new Set<string>();
+    keysToRemove.add(currentUid);
+    if (emailKey) keysToRemove.add(emailKey);
+
+    Object.entries(collaborators).forEach(([k, m]) => {
+      if (
+        m.uid === currentUid ||
+        (userEmailNorm && m.email?.toLowerCase() === userEmailNorm)
+      ) {
+        keysToRemove.add(k);
+      }
+    });
+
+    keysToRemove.forEach((k) => delete collaborators[k]);
 
     const collaboratorUids = (listData.collaboratorUids || []).filter(
-      (uid) => uid !== currentUser.uid
+      (uid) => uid !== currentUid && !keysToRemove.has(uid)
     );
     const invitedEmails = (listData.invitedEmails || []).filter(
-      (em) => userEmailNorm && em.toLowerCase() !== userEmailNorm
+      (em) => userEmailNorm && em.toLowerCase().trim() !== userEmailNorm
     );
 
-    await setDoc(
-      listRef,
-      sanitizeForFirestore({
-        collaborators,
-        collaboratorUids,
-        invitedEmails,
-        updatedAt: new Date().toISOString(),
-      }),
-      { merge: true }
-    );
+    const updates: Record<string, unknown> = {
+      ownerId: listData.ownerId,
+      collaboratorUids,
+      invitedEmails,
+      updatedAt: new Date().toISOString(),
+    };
+    keysToRemove.forEach((k) => {
+      updates[`collaborators.${k}`] = deleteField();
+    });
+
+    try {
+      await updateDoc(listRef, updates);
+    } catch {
+      await setDoc(
+        listRef,
+        sanitizeForFirestore({
+          ...listData,
+          collaborators,
+          collaboratorUids,
+          invitedEmails,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+    }
+
+    try {
+      const userListRef = doc(db, 'users', currentUid, 'lists', listId);
+      await deleteDoc(userListRef);
+    } catch {
+      // ignore
+    }
+
     return true;
   } catch (error) {
     console.error('Error leaving shared list:', error);
@@ -826,57 +922,70 @@ export async function acceptPendingInvitation(
     if (!listSnap.exists()) return false;
 
     const listData = listSnap.data() as AppList;
-    const userEmailNorm = (currentUser.email || auth.currentUser?.email || '').toLowerCase();
+    const userEmailNorm = (currentUser.email || auth.currentUser?.email || '').toLowerCase().trim();
     const emailKey = userEmailNorm ? userEmailNorm.replace(/[\.\#\$\[\]]/g, '_') : '';
 
     const collaborators = { ...(listData.collaborators || {}) };
     let pendingInvite = emailKey ? collaborators[emailKey] : undefined;
-    if (!pendingInvite) {
-      const matchKey = Object.keys(collaborators).find(
-        (k) =>
-          collaborators[k]?.email?.toLowerCase() === userEmailNorm ||
-          collaborators[k]?.uid === currentUser.uid
-      );
-      if (matchKey) {
-        pendingInvite = collaborators[matchKey];
-        delete collaborators[matchKey];
+    const keysToRemove = new Set<string>();
+    if (emailKey) keysToRemove.add(emailKey);
+
+    Object.entries(collaborators).forEach(([k, m]) => {
+      if (m.email?.toLowerCase().trim() === userEmailNorm && m.status === 'pending') {
+        pendingInvite = pendingInvite || m;
+        keysToRemove.add(k);
       }
-    }
+    });
+
+    keysToRemove.forEach((k) => delete collaborators[k]);
     const role: ShareRole = pendingInvite?.role || 'edit';
 
-    // Remove pending key and set active key under currentUser.uid
-    if (emailKey) {
-      delete collaborators[emailKey];
-    }
-    collaborators[currentUser.uid] = {
+    const activeMember: ShareMember = {
       uid: currentUser.uid,
-      email: userEmailNorm,
-      displayName: currentUser.displayName || auth.currentUser?.displayName || '',
+      email: userEmailNorm || currentUser.email || '',
+      displayName: currentUser.displayName || auth.currentUser?.displayName || 'Collaborator',
       photoURL: currentUser.photoURL || auth.currentUser?.photoURL || '',
       role,
       status: 'active',
       invitedAt: pendingInvite?.invitedAt || new Date().toISOString(),
       joinedAt: new Date().toISOString(),
     };
+    collaborators[currentUser.uid] = activeMember;
 
     const collaboratorUids = Array.from(
       new Set([...(listData.collaboratorUids || []), currentUser.uid])
     );
     const invitedEmails = (listData.invitedEmails || []).filter(
-      (em) => userEmailNorm && em.toLowerCase() !== userEmailNorm
+      (em) => userEmailNorm && em.toLowerCase().trim() !== userEmailNorm
     );
 
-    await setDoc(
-      listRef,
-      sanitizeForFirestore({
-        ownerId: listData.ownerId,
-        collaborators,
-        collaboratorUids,
-        invitedEmails,
-        updatedAt: new Date().toISOString(),
-      }),
-      { merge: true }
-    );
+    const updates: Record<string, unknown> = {
+      ownerId: listData.ownerId,
+      collaboratorUids,
+      invitedEmails,
+      [`collaborators.${currentUser.uid}`]: activeMember,
+      updatedAt: new Date().toISOString(),
+    };
+    keysToRemove.forEach((k) => {
+      if (k !== currentUser.uid) {
+        updates[`collaborators.${k}`] = deleteField();
+      }
+    });
+
+    try {
+      await updateDoc(listRef, updates);
+    } catch {
+      await setDoc(
+        listRef,
+        sanitizeForFirestore({
+          ...listData,
+          collaborators,
+          collaboratorUids,
+          invitedEmails,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+    }
     return true;
   } catch (error) {
     console.error('Error accepting list invitation:', error);
@@ -895,25 +1004,47 @@ export async function declinePendingInvitation(
     if (!listSnap.exists()) return false;
 
     const listData = listSnap.data() as AppList;
-    const userEmailNorm = currentUserEmail.toLowerCase();
+    const userEmailNorm = currentUserEmail.toLowerCase().trim();
     const emailKey = userEmailNorm.replace(/[\.\#\$\[\]]/g, '_');
 
     const collaborators = { ...(listData.collaborators || {}) };
-    delete collaborators[emailKey];
+    const keysToRemove = new Set<string>();
+    if (emailKey) keysToRemove.add(emailKey);
+
+    Object.entries(collaborators).forEach(([k, m]) => {
+      if (m.email?.toLowerCase().trim() === userEmailNorm) {
+        keysToRemove.add(k);
+      }
+    });
+
+    keysToRemove.forEach((k) => delete collaborators[k]);
 
     const invitedEmails = (listData.invitedEmails || []).filter(
-      (em) => em.toLowerCase() !== userEmailNorm
+      (em) => em.toLowerCase().trim() !== userEmailNorm
     );
 
-    await setDoc(
-      listRef,
-      sanitizeForFirestore({
-        collaborators,
-        invitedEmails,
-        updatedAt: new Date().toISOString(),
-      }),
-      { merge: true }
-    );
+    const updates: Record<string, unknown> = {
+      ownerId: listData.ownerId,
+      invitedEmails,
+      updatedAt: new Date().toISOString(),
+    };
+    keysToRemove.forEach((k) => {
+      updates[`collaborators.${k}`] = deleteField();
+    });
+
+    try {
+      await updateDoc(listRef, updates);
+    } catch {
+      await setDoc(
+        listRef,
+        sanitizeForFirestore({
+          ...listData,
+          collaborators,
+          invitedEmails,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+    }
     return true;
   } catch (error) {
     console.error('Error declining list invitation:', error);
@@ -1153,10 +1284,12 @@ export async function updateMemberRole(
 
 export async function removeMemberFromList(
   listId: string,
-  targetUid: string,
-  _currentUid?: string
+  targetKey: string,
+  _currentUid?: string,
+  targetEmail?: string,
+  targetUid?: string
 ): Promise<boolean> {
-  return removeCollaboratorFromList(listId, targetUid, undefined, targetUid);
+  return removeCollaboratorFromList(listId, targetKey, targetEmail, targetUid);
 }
 
 export async function acceptListInvitation(

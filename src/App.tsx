@@ -372,6 +372,11 @@ export default function App() {
           if (cloudData.groups) setGroups(cloudData.groups);
           if (cloudData.items) setItems(cloudData.items);
 
+          // Keep selectedListForShare synchronized with incoming cloud updates
+          setSelectedListForShare((curr) =>
+            curr ? cloudData.lists.find((l) => l.id === curr.id) || null : null
+          );
+
           // Apply cloud preferences on initial load
           if (isInitialCloudLoadRef.current) {
             if (cloudData.preferences?.language) setLanguage(cloudData.preferences.language);
@@ -931,12 +936,27 @@ export default function App() {
     // Optimistically remove member from list
     const removeMember = (prevList: AppList): AppList => {
       const collabs = { ...(prevList.collaborators || {}) };
+      const emailNorm = (email || '').toLowerCase().trim();
+      const targetKeyNorm = (targetKey || '').toLowerCase().trim();
+
       delete collabs[targetKey];
       if (uid && collabs[uid]) delete collabs[uid];
-      if (email) {
-        const emKey = email.toLowerCase().replace(/[\.\#\$\[\]]/g, '_');
+      if (emailNorm) {
+        const emKey = emailNorm.replace(/[\.\#\$\[\]]/g, '_');
         delete collabs[emKey];
       }
+
+      Object.entries(collabs).forEach(([k, m]) => {
+        if (
+          (uid && m.uid === uid) ||
+          (targetKey && m.uid === targetKey) ||
+          (emailNorm && m.email?.toLowerCase() === emailNorm) ||
+          (targetKeyNorm && m.email?.toLowerCase() === targetKeyNorm)
+        ) {
+          delete collabs[k];
+        }
+      });
+
       return {
         ...prevList,
         collaborators: collabs,
@@ -944,7 +964,9 @@ export default function App() {
           (id) => id !== uid && id !== targetKey
         ),
         invitedEmails: (prevList.invitedEmails || []).filter(
-          (em) => em.toLowerCase() !== email?.toLowerCase()
+          (em) =>
+            em.toLowerCase() !== emailNorm &&
+            em.toLowerCase() !== targetKeyNorm
         ),
       };
     };
@@ -954,7 +976,13 @@ export default function App() {
       prev.map((l) => (l.id === selectedListForShare.id ? removeMember(l) : l))
     );
 
-    const ok = await removeMemberFromList(selectedListForShare.id, targetKey, user.uid);
+    const ok = await removeMemberFromList(
+      selectedListForShare.id,
+      targetKey,
+      user.uid,
+      email,
+      uid
+    );
     if (ok) {
       showToast(language === 'ar' ? 'تمت إزالة العضو من القائمة' : 'Member removed from list');
     }
