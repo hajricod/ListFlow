@@ -81,6 +81,10 @@ import {
   fetchListShareDetails,
   listenToPendingInvitations,
   updateListShareLinkSettings,
+  deleteItemFromFirestore,
+  deleteItemsFromFirestore,
+  deleteGroupFromFirestore,
+  deleteListFromFirestore,
 } from './utils/firestoreSync';
 import { Plus, ListTodo, Layers, Users, Check } from 'lucide-react';
 
@@ -853,7 +857,7 @@ export default function App() {
       isOpen: true,
       title: t.deleteListConfirmTitle,
       description: t.deleteListConfirmDesc,
-      onConfirm: () => {
+      onConfirm: async () => {
         sounds.playDelete();
         const remainingLists = lists.filter((l) => l.id !== listToDelete.id);
         setLists(remainingLists);
@@ -867,6 +871,14 @@ export default function App() {
         }
 
         showToast(t.listDeleted);
+
+        if (user) {
+          try {
+            await deleteListFromFirestore(listToDelete.id, user);
+          } catch (err) {
+            console.error('Failed to delete list from Firestore:', err);
+          }
+        }
       },
     });
   };
@@ -1182,19 +1194,33 @@ export default function App() {
     const itemsToDelete = items.filter((i) => i.groupId === groupId);
     if (!groupToDelete) return;
 
+    const targetListId = groupToDelete.listId || activeListId || 'list-groceries';
+    const itemIdsToDelete = itemsToDelete.map((i) => i.id);
+
     setConfirmModalState({
       isOpen: true,
       title: t.deleteGroupConfirmTitle,
       description: t.deleteGroupConfirmDesc,
-      onConfirm: () => {
+      onConfirm: async () => {
         sounds.playDelete();
         setGroups((prev) => prev.filter((g) => g.id !== groupId));
         setItems((prev) => prev.filter((i) => i.groupId !== groupId));
+
+        if (user) {
+          try {
+            await deleteGroupFromFirestore(targetListId, groupId, itemIdsToDelete);
+          } catch (err) {
+            console.error('Failed to delete group from Firestore:', err);
+          }
+        }
 
         // Allow instant Undo
         showToast(t.groupDeleted, () => {
           setGroups((prev) => [...prev, groupToDelete]);
           setItems((prev) => [...prev, ...itemsToDelete]);
+          if (user) {
+            syncAllToFirestore(user.uid, lists, [...groups, groupToDelete], [...items, ...itemsToDelete]);
+          }
         });
       },
     });
@@ -1213,25 +1239,65 @@ export default function App() {
     setGroups((prev) => prev.map((g) => ({ ...g, isCollapsed: nextState })));
   };
 
-  const handleClearCompletedInGroup = (groupId: string) => {
+  const handleClearCompletedInGroup = async (groupId: string) => {
     const completedInGroup = items.filter((i) => i.groupId === groupId && i.completed);
     if (completedInGroup.length === 0) return;
 
+    const targetGroup = groups.find((g) => g.id === groupId);
+    const targetListId = targetGroup?.listId || activeListId || 'list-groceries';
+    const itemIdsToDelete = completedInGroup.map((i) => i.id);
+
     sounds.playDelete();
     setItems((prev) => prev.filter((i) => !(i.groupId === groupId && i.completed)));
+
+    if (user) {
+      try {
+        await deleteItemsFromFirestore(targetListId, itemIdsToDelete);
+      } catch (err) {
+        console.error('Failed to clear completed items from Firestore:', err);
+      }
+    }
+
     showToast(t.allCompletedCleared, () => {
       setItems((prev) => [...prev, ...completedInGroup]);
+      if (user) {
+        syncAllToFirestore(user.uid, lists, groups, [...items, ...completedInGroup]);
+      }
     });
   };
 
-  const handleClearAllCompleted = () => {
+  const handleClearAllCompleted = async () => {
     const completedList = items.filter((i) => i.completed);
     if (completedList.length === 0) return;
 
     sounds.playDelete();
     setItems((prev) => prev.filter((i) => !i.completed));
+
+    if (user) {
+      const listItemsMap = new Map<string, string[]>();
+      completedList.forEach((item) => {
+        const parentGroup = groups.find((g) => g.id === item.groupId);
+        const itemExplicitListId = (item as unknown as { listId?: string }).listId;
+        const listId = itemExplicitListId || parentGroup?.listId || activeListId || 'list-groceries';
+        const arr = listItemsMap.get(listId) || [];
+        arr.push(item.id);
+        listItemsMap.set(listId, arr);
+      });
+
+      for (const [listId, itemIds] of listItemsMap.entries()) {
+        try {
+          await deleteItemsFromFirestore(listId, itemIds);
+        } catch (err) {
+          console.error(`Failed to delete items for list ${listId}:`, err);
+        }
+      }
+    }
+
     showToast(t.allCompletedCleared, () => {
       setItems((prev) => [...prev, ...completedList]);
+      if (user) {
+        syncAllToFirestore(user.uid, lists, groups, [...items, ...completedList]);
+      }
     });
   };
 
@@ -1397,16 +1463,31 @@ export default function App() {
     showToast(language === 'ar' ? 'تم نقل الصنف إلى الممر' : 'Item moved to aisle');
   };
 
-  const handleDeleteItem = (itemId: string) => {
+  const handleDeleteItem = async (itemId: string) => {
     const itemToDelete = items.find((i) => i.id === itemId);
     if (!itemToDelete) return;
+
+    const parentGroup = groups.find((g) => g.id === itemToDelete.groupId);
+    const itemExplicitListId = (itemToDelete as unknown as { listId?: string }).listId;
+    const targetListId = itemExplicitListId || parentGroup?.listId || activeListId || 'list-groceries';
 
     sounds.playDelete();
     setItems((prev) => prev.filter((i) => i.id !== itemId));
 
+    if (user) {
+      try {
+        await deleteItemFromFirestore(targetListId, itemId);
+      } catch (err) {
+        console.error('Failed to delete item from Firestore:', err);
+      }
+    }
+
     // Instant undo toast
     showToast(t.taskDeleted, () => {
       setItems((prev) => [itemToDelete, ...prev]);
+      if (user) {
+        syncAllToFirestore(user.uid, lists, groups, [itemToDelete, ...items]);
+      }
     });
   };
 

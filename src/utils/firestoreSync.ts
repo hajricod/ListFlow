@@ -352,10 +352,10 @@ export function subscribeToUserCloudData(
 
   let memberLists: AppList[] = [];
   let invitedLists: AppList[] = [];
-  let activeGroupsMap: Map<string, ListGroup> = new Map();
-  let activeItemsMap: Map<string, ListItem> = new Map();
-  let groupSubUnsubs: Map<string, Unsubscribe> = new Map();
-  let itemSubUnsubs: Map<string, Unsubscribe> = new Map();
+  const allListsGroupsMap: Map<string, Map<string, ListGroup>> = new Map();
+  const allListsItemsMap: Map<string, Map<string, ListItem>> = new Map();
+  const groupSubUnsubs: Map<string, Unsubscribe> = new Map();
+  const itemSubUnsubs: Map<string, Unsubscribe> = new Map();
   let latestUserData: Partial<UserCloudData> | null = null;
 
   const emitCombinedData = () => {
@@ -419,12 +419,23 @@ export function subscribeToUserCloudData(
       }
     });
 
-    const sortedGroups = Array.from(activeGroupsMap.values()).sort(
-      (a, b) => (a.order ?? 0) - (b.order ?? 0)
-    );
-    const sortedItems = Array.from(activeItemsMap.values()).sort(
-      (a, b) => (a.order ?? 0) - (b.order ?? 0)
-    );
+    // Aggregate all groups across lists
+    const allGroups: ListGroup[] = [];
+    for (const groupsMap of allListsGroupsMap.values()) {
+      for (const g of groupsMap.values()) {
+        allGroups.push(g);
+      }
+    }
+    const sortedGroups = allGroups.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    // Aggregate all items across lists
+    const allItems: ListItem[] = [];
+    for (const itemsMap of allListsItemsMap.values()) {
+      for (const it of itemsMap.values()) {
+        allItems.push(it);
+      }
+    }
+    const sortedItems = allItems.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
     onUpdate({
       lists: sortedLists,
@@ -443,10 +454,7 @@ export function subscribeToUserCloudData(
       if (!activeListIds.has(listId)) {
         unsub();
         groupSubUnsubs.delete(listId);
-        // delete groups for this list
-        for (const [gid, g] of activeGroupsMap.entries()) {
-          if (g.listId === listId) activeGroupsMap.delete(gid);
-        }
+        allListsGroupsMap.delete(listId);
       }
     }
 
@@ -454,11 +462,7 @@ export function subscribeToUserCloudData(
       if (!activeListIds.has(listId)) {
         unsub();
         itemSubUnsubs.delete(listId);
-        // delete items for this list
-        for (const [iid, item] of activeItemsMap.entries()) {
-          const itm = item as unknown as { listId?: string };
-          if (itm.listId === listId) activeItemsMap.delete(iid);
-        }
+        allListsItemsMap.delete(listId);
       }
     }
 
@@ -468,14 +472,11 @@ export function subscribeToUserCloudData(
         const unsubG = onSnapshot(
           collection(db, 'lists', list.id, 'groups'),
           (snap) => {
+            const listGroups = new Map<string, ListGroup>();
             snap.forEach((docSnap) => {
-              activeGroupsMap.set(docSnap.id, docSnap.data() as ListGroup);
+              listGroups.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as ListGroup);
             });
-            snap.docChanges().forEach((change) => {
-              if (change.type === 'removed') {
-                activeGroupsMap.delete(change.doc.id);
-              }
-            });
+            allListsGroupsMap.set(list.id, listGroups);
             emitCombinedData();
           },
           (err) => {
@@ -489,14 +490,11 @@ export function subscribeToUserCloudData(
         const unsubI = onSnapshot(
           collection(db, 'lists', list.id, 'items'),
           (snap) => {
+            const listItems = new Map<string, ListItem>();
             snap.forEach((docSnap) => {
-              activeItemsMap.set(docSnap.id, docSnap.data() as ListItem);
+              listItems.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as ListItem);
             });
-            snap.docChanges().forEach((change) => {
-              if (change.type === 'removed') {
-                activeItemsMap.delete(change.doc.id);
-              }
-            });
+            allListsItemsMap.set(list.id, listItems);
             emitCombinedData();
           },
           (err) => {
@@ -1173,12 +1171,71 @@ export async function joinListViaShareLink(
   }
 }
 
+// 12. Deletion Functions (Items, Groups, and Lists)
+
+export async function deleteItemFromFirestore(
+  listId: string,
+  itemId: string
+): Promise<boolean> {
+  if (!listId || !itemId) return false;
+  try {
+    const itemRef = doc(db, 'lists', listId, 'items', itemId);
+    await deleteDoc(itemRef);
+    return true;
+  } catch (error) {
+    console.error(`Error deleting item ${itemId} from list ${listId}:`, error);
+    return false;
+  }
+}
+
+export async function deleteItemsFromFirestore(
+  listId: string,
+  itemIds: string[]
+): Promise<boolean> {
+  if (!listId || !itemIds.length) return true;
+  try {
+    const batch = writeBatch(db);
+    itemIds.forEach((id) => {
+      batch.delete(doc(db, 'lists', listId, 'items', id));
+    });
+    await batch.commit();
+    return true;
+  } catch (error) {
+    console.error(`Error deleting items from list ${listId}:`, error);
+    return false;
+  }
+}
+
+export async function deleteGroupFromFirestore(
+  listId: string,
+  groupId: string,
+  itemIds: string[] = []
+): Promise<boolean> {
+  if (!listId || !groupId) return false;
+  try {
+    const batch = writeBatch(db);
+    const groupRef = doc(db, 'lists', listId, 'groups', groupId);
+    batch.delete(groupRef);
+
+    // Also delete any items associated with this group in this list
+    itemIds.forEach((id) => {
+      batch.delete(doc(db, 'lists', listId, 'items', id));
+    });
+
+    await batch.commit();
+    return true;
+  } catch (error) {
+    console.error(`Error deleting group ${groupId} from list ${listId}:`, error);
+    return false;
+  }
+}
+
 // 12. Delete List (STRICT ENFORCEMENT: Owner only)
 export async function deleteListFromFirestore(
   listId: string,
   currentUser: User | { uid: string; email?: string | null; displayName?: string | null; photoURL?: string | null }
 ): Promise<boolean> {
-  if (!currentUser?.uid) return false;
+  if (!currentUser?.uid || !listId) return false;
   try {
     const listRef = doc(db, 'lists', listId);
     const listSnap = await getDoc(listRef);
@@ -1202,13 +1259,21 @@ export async function deleteListFromFirestore(
       batch.delete(listRef);
 
       // Also remove from private backup
-      const userListRef = doc(db, 'users', currentUser.uid, 'lists', listId);
-      batch.delete(userListRef);
+      try {
+        const userListRef = doc(db, 'users', currentUser.uid, 'lists', listId);
+        batch.delete(userListRef);
+      } catch {}
 
       await batch.commit();
       return true;
+    } else {
+      // If listDoc is missing from shared, ensure user mirror is removed
+      try {
+        const userListRef = doc(db, 'users', currentUser.uid, 'lists', listId);
+        await deleteDoc(userListRef);
+      } catch {}
+      return true;
     }
-    return false;
   } catch (error) {
     console.error('Error deleting list from Firestore:', error);
     return false;
