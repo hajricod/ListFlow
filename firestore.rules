@@ -38,18 +38,18 @@ service cloud.firestore {
 
     function isParentListOwner(listId) {
       return isSignedIn() && (
-        (listDocExists(listId) && getListData(listId).ownerId == request.auth.uid) ||
-        (listDocExistsAfter(listId) && getListDataAfter(listId).ownerId == request.auth.uid)
+        (listDocExists(listId) && ('ownerId' in getListData(listId)) && getListData(listId).ownerId == request.auth.uid) ||
+        (listDocExistsAfter(listId) && ('ownerId' in getListDataAfter(listId)) && getListDataAfter(listId).ownerId == request.auth.uid)
       );
     }
 
     function isParentListMember(listId) {
       return isSignedIn() && (
         isParentListOwner(listId) ||
-        (listDocExists(listId) && (request.auth.uid in getListData(listId).collaboratorUids)) ||
-        (listDocExistsAfter(listId) && (request.auth.uid in getListDataAfter(listId).collaboratorUids)) ||
-        (listDocExists(listId) && getListData(listId).shareLinkEnabled == true) ||
-        (listDocExistsAfter(listId) && getListDataAfter(listId).shareLinkEnabled == true)
+        (listDocExists(listId) && ('collaboratorUids' in getListData(listId)) && (request.auth.uid in getListData(listId).collaboratorUids)) ||
+        (listDocExistsAfter(listId) && ('collaboratorUids' in getListDataAfter(listId)) && (request.auth.uid in getListDataAfter(listId).collaboratorUids)) ||
+        (listDocExists(listId) && ('shareLinkEnabled' in getListData(listId)) && getListData(listId).shareLinkEnabled == true) ||
+        (listDocExistsAfter(listId) && ('shareLinkEnabled' in getListDataAfter(listId)) && getListDataAfter(listId).shareLinkEnabled == true)
       );
     }
 
@@ -58,20 +58,24 @@ service cloud.firestore {
         isParentListOwner(listId) ||
         (
           listDocExists(listId) &&
+          ('collaboratorUids' in getListData(listId)) &&
           (request.auth.uid in getListData(listId).collaboratorUids) &&
           (
             !('collaborators' in getListData(listId)) ||
             !(request.auth.uid in getListData(listId).collaborators) ||
-            getListData(listId).collaborators[request.auth.uid].role == 'edit'
+            !('role' in getListData(listId).collaborators[request.auth.uid]) ||
+            getListData(listId).collaborators[request.auth.uid].role != 'read'
           )
         ) ||
         (
           listDocExistsAfter(listId) &&
+          ('collaboratorUids' in getListDataAfter(listId)) &&
           (request.auth.uid in getListDataAfter(listId).collaboratorUids) &&
           (
             !('collaborators' in getListDataAfter(listId)) ||
             !(request.auth.uid in getListDataAfter(listId).collaborators) ||
-            getListDataAfter(listId).collaborators[request.auth.uid].role == 'edit'
+            !('role' in getListDataAfter(listId).collaborators[request.auth.uid]) ||
+            getListDataAfter(listId).collaborators[request.auth.uid].role != 'read'
           )
         )
       );
@@ -110,32 +114,36 @@ service cloud.firestore {
     match /lists/{listId} {
       // Read: Allowed for list owner, active collaborators, or user invited by email/link
       allow get: if isSignedIn() && (
-        resource.data.ownerId == request.auth.uid ||
-        (request.auth.uid in resource.data.collaboratorUids) ||
-        (resource.data.shareLinkEnabled == true) ||
-        (request.auth.token.email != null && (request.auth.token.email in resource.data.invitedEmails))
+        ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid) ||
+        ('collaboratorUids' in resource.data && (request.auth.uid in resource.data.collaboratorUids)) ||
+        ('shareLinkEnabled' in resource.data && resource.data.shareLinkEnabled == true) ||
+        (request.auth.token.email != null && ('invitedEmails' in resource.data) && (request.auth.token.email in resource.data.invitedEmails))
       );
 
       allow list: if isSignedIn() && (
-        resource.data.ownerId == request.auth.uid ||
-        (request.auth.uid in resource.data.collaboratorUids) ||
-        (request.auth.token.email != null && (request.auth.token.email in resource.data.invitedEmails))
+        ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid) ||
+        ('collaboratorUids' in resource.data && (request.auth.uid in resource.data.collaboratorUids)) ||
+        (request.auth.token.email != null && ('invitedEmails' in resource.data) && (request.auth.token.email in resource.data.invitedEmails))
       );
 
-      // Create: Authenticated users can create a list they own
-      allow create: if isSignedIn() && isValidId(listId) && request.resource.data.ownerId == request.auth.uid;
+      // Create: Authenticated users can create a list they own or participate in
+      allow create: if isSignedIn() && isValidId(listId) && (
+        ('ownerId' in request.resource.data && request.resource.data.ownerId == request.auth.uid) ||
+        ('collaboratorUids' in request.resource.data && (request.auth.uid in request.resource.data.collaboratorUids))
+      );
 
-      // Update: Owner can update everything; Editor can update metadata; Collaborators can accept invites or leave
+      // Update: Owner can update everything; Collaborators can update metadata or accept invites
       allow update: if isSignedIn() && (
-        resource.data.ownerId == request.auth.uid ||
-        (request.auth.uid in resource.data.collaboratorUids && request.resource.data.ownerId == resource.data.ownerId) ||
-        // Allowing joining via invitation or link
-        (resource.data.shareLinkEnabled == true && request.resource.data.ownerId == resource.data.ownerId) ||
-        (request.auth.token.email != null && (request.auth.token.email in resource.data.invitedEmails) && request.resource.data.ownerId == resource.data.ownerId)
+        ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid) ||
+        ('ownerId' in request.resource.data && request.resource.data.ownerId == request.auth.uid) ||
+        ('collaboratorUids' in resource.data && (request.auth.uid in resource.data.collaboratorUids)) ||
+        ('collaboratorUids' in request.resource.data && (request.auth.uid in request.resource.data.collaboratorUids)) ||
+        ('shareLinkEnabled' in resource.data && resource.data.shareLinkEnabled == true) ||
+        (request.auth.token.email != null && ('invitedEmails' in resource.data) && (request.auth.token.email in resource.data.invitedEmails))
       );
 
       // Delete: STRICT RULE - ONLY THE OWNER CAN DELETE THE LIST!
-      allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow delete: if isSignedIn() && ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid);
 
       // Subcollection: Groups / Aisles of the list
       match /groups/{groupId} {

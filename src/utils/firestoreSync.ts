@@ -217,9 +217,9 @@ export async function syncAllToFirestore(
     // Upsert lists in /lists/{listId} (and /users/{userId}/lists/{listId})
     for (let i = 0; i < lists.length; i++) {
       const list = lists[i];
-      const isOwner = !list.ownerId || list.ownerId === userId;
+      const isOwner = !list.ownerId || list.ownerId === userId || list.ownerId === 'local-user';
       
-      const ownerId = list.ownerId || userId;
+      const ownerId = (list.ownerId && list.ownerId !== 'local-user') ? list.ownerId : userId;
       const ownerEmail = list.ownerEmail || userEmail;
       const ownerName = list.ownerName || userName || 'User';
 

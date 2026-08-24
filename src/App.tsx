@@ -1955,7 +1955,7 @@ export default function App() {
           }}
           onToggleLinkSharing={async (enabled, role) => {
             if (selectedListForShare) {
-              await updateListShareLinkSettings(selectedListForShare.id, enabled, role);
+              await updateListShareLinkSettings(selectedListForShare.id, enabled, role, user);
             }
           }}
           onLeaveList={async () => {
