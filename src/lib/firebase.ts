@@ -5,6 +5,10 @@ import {
   signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
+  sendPasswordResetEmail,
   User,
 } from 'firebase/auth';
 import {
@@ -46,6 +50,34 @@ export async function signInWithGoogle(): Promise<User> {
   return result.user;
 }
 
+// Sign Up with Email and Password (supports any email: Outlook, Yahoo, iCloud, custom domain, Gmail)
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  displayName?: string
+): Promise<User> {
+  const result = await createUserWithEmailAndPassword(auth, email.trim(), password);
+  if (displayName && displayName.trim()) {
+    try {
+      await updateProfile(result.user, { displayName: displayName.trim() });
+    } catch (e) {
+      console.warn('Could not set displayName on signup:', e);
+    }
+  }
+  return result.user;
+}
+
+// Sign In with Email and Password (supports any email provider)
+export async function signInWithEmail(email: string, password: string): Promise<User> {
+  const result = await signInWithEmailAndPassword(auth, email.trim(), password);
+  return result.user;
+}
+
+// Send Password Reset Email
+export async function resetPassword(email: string): Promise<void> {
+  await sendPasswordResetEmail(auth, email.trim());
+}
+
 // Sign Out
 export async function signOut(): Promise<void> {
   await firebaseSignOut(auth);
@@ -55,3 +87,4 @@ export async function signOut(): Promise<void> {
 export function subscribeToAuth(callback: (user: User | null) => void) {
   return onAuthStateChanged(auth, callback);
 }
+

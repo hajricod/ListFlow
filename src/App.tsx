@@ -105,6 +105,9 @@ export default function App() {
     isLoggingIn,
     error: authError,
     signInWithGoogle,
+    signInWithEmail,
+    signUpWithEmail,
+    sendPasswordReset,
     signOut: authSignOut,
     clearError: clearAuthError,
   } = useAuth();
@@ -2233,11 +2236,14 @@ export default function App() {
         language={language}
       />
 
-      {/* Gmail / Google Authentication Modal */}
+      {/* Authentication Modal (Google & Any Email) */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onSignInWithGoogle={signInWithGoogle}
+        onSignInWithEmail={signInWithEmail}
+        onSignUpWithEmail={signUpWithEmail}
+        onSendPasswordReset={sendPasswordReset}
         isLoggingIn={isLoggingIn}
         error={authError}
         onClearError={clearAuthError}

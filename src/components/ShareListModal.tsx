@@ -210,7 +210,7 @@ export const ShareListModal: React.FC<ShareListModalProps> = ({
                 }}
                 className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-sm transition-all cursor-pointer whitespace-nowrap"
               >
-                {t.signInWithGoogle}
+                {t.login} / {t.signup}
               </button>
             </div>
           )}
