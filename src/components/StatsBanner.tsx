@@ -1,7 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import {
   Plus,
-  PlusCircle,
   RotateCcw,
   Trash2,
   ChevronsDownUp,
@@ -102,25 +101,13 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
         >
           {/* Row 1: Action Buttons & Filter Counter Pill */}
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-              {onOpenNewItemModal && !isReadOnly && (
-                <button
-                  type="button"
-                  id="main-add-item-btn"
-                  onClick={onOpenNewItemModal}
-                  className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 h-9 sm:h-9.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all shadow-xs cursor-pointer min-w-0"
-                >
-                  <PlusCircle className="w-4 h-4 stroke-[2.3] shrink-0" />
-                  <span className="truncate">{t.addItem}</span>
-                </button>
-              )}
-
+            <div className="flex items-center gap-2 flex-1 min-w-[140px]">
               {!isReadOnly && (
                 <button
                   type="button"
                   id="main-add-group-btn"
                   onClick={onOpenNewGroupModal}
-                  className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 h-9 sm:h-9.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/90 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 active:scale-[0.98] transition-all cursor-pointer shadow-2xs min-w-0"
+                  className="flex items-center justify-center gap-1.5 h-9 sm:h-9.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all shadow-xs cursor-pointer min-w-0"
                 >
                   <Plus className="w-4 h-4 stroke-[2.5] shrink-0" />
                   <span className="truncate">{t.addGroup}</span>

@@ -605,10 +605,10 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                 if (window.innerWidth < 1024) onClose();
               }}
               title={t.settings}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
                 currentView === 'settings'
-                  ? 'bg-emerald-50/90 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200 border-emerald-300/80 dark:border-emerald-800/70 shadow-2xs ring-1 ring-emerald-500/20'
-                  : 'bg-white dark:bg-neutral-800/90 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-750 border-neutral-200/90 dark:border-neutral-700/80 shadow-2xs'
+                  ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/70 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700/80 shadow-xs ring-1 ring-emerald-500/20'
+                  : 'bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 border-neutral-200/90 dark:border-neutral-700 shadow-2xs'
               }`}
             >
               <div className="flex items-center gap-2">

@@ -176,28 +176,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   ? t.signup
                   : t.login}
               </h2>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                {language === 'ar'
-                  ? 'سجل دخولك بأي بريد (Outlook, Yahoo, iCloud, Gmail) أو حساب جوجل'
-                  : 'Use any email (Outlook, Yahoo, iCloud, Gmail, work) or Google'}
-              </p>
             </div>
-          </div>
-
-          {/* Provider pill highlights */}
-          <div className="mt-3 flex items-center flex-wrap gap-1.5 text-[10px] font-medium text-neutral-600 dark:text-neutral-300">
-            <span className="px-2 py-0.5 rounded-md bg-white/80 dark:bg-neutral-800/80 border border-neutral-200/60 dark:border-neutral-700">
-              ✉️ Outlook / Hotmail
-            </span>
-            <span className="px-2 py-0.5 rounded-md bg-white/80 dark:bg-neutral-800/80 border border-neutral-200/60 dark:border-neutral-700">
-              🟣 Yahoo
-            </span>
-            <span className="px-2 py-0.5 rounded-md bg-white/80 dark:bg-neutral-800/80 border border-neutral-200/60 dark:border-neutral-700">
-              ☁️ iCloud
-            </span>
-            <span className="px-2 py-0.5 rounded-md bg-white/80 dark:bg-neutral-800/80 border border-neutral-200/60 dark:border-neutral-700">
-              🌐 {language === 'ar' ? 'أي بريد مخصص' : 'Any Domain'}
-            </span>
           </div>
 
           {/* Tab Switcher (Sign In vs Create Account) */}
@@ -270,7 +249,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 type="button"
                 disabled={isLoggingIn}
                 onClick={handleGoogleSignIn}
-                className="w-full py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-750 text-neutral-800 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 shadow-2xs hover:shadow-xs transition-all active:scale-[0.99] flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 shadow-2xs hover:shadow-xs transition-all active:scale-[0.99] flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
               >
                 {isLoggingIn ? (
                   <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />

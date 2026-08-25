@@ -210,3 +210,24 @@
   box-shadow: 0 0 8px var(--primary-color, #10b981);
   z-index: 20;
 }
+
+/* Global accessible focus rings that adapt smoothly between light and dark themes */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--primary-color, #10b981);
+  outline-offset: 2px;
+}
+
+.dark button:focus-visible,
+.dark a:focus-visible,
+.dark [role="button"]:focus-visible,
+.dark input:focus-visible,
+.dark textarea:focus-visible,
+.dark select:focus-visible {
+  outline-color: var(--primary-color, #34d399);
+  outline-offset: 2px;
+}

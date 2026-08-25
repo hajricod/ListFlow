@@ -143,20 +143,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {/* Install App Quick Action in Navbar */}
-            {onOpenInstallModal && !isAppInstalled && (
-              <button
-                id="nav-install-app-btn"
-                type="button"
-                onClick={onOpenInstallModal}
-                title={t.installApp}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
-              >
-                <Download className="w-4 h-4 stroke-[2.2] text-emerald-600 dark:text-emerald-400" />
-                <span className="hidden sm:inline">{t.installApp}</span>
-              </button>
-            )}
-
+            {/* Theme Toggle */}
             {onCycleTheme && (
               <button
                 id="nav-theme-toggle-btn"

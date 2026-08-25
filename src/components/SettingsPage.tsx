@@ -131,15 +131,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </p>
           </div>
         </div>
-
-        <button
-          type="button"
-          onClick={onBackToWorkspace}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/80 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors cursor-pointer self-start sm:self-auto"
-        >
-          <FolderKanban className="w-4 h-4" />
-          <span>{t.backToWorkspace}</span>
-        </button>
       </div>
 
       {/* Google Account & Cloud Sync Section */}
@@ -279,17 +270,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 type="button"
                 id="lang-select-en"
                 onClick={() => onLanguageChange('en')}
-                className={`p-3.5 rounded-xl border text-start transition-all cursor-pointer ${
+                className={`p-3.5 rounded-xl border text-start transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 ${
                   language === 'en'
-                    ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100 ring-2 ring-emerald-500/20'
-                    : 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300'
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-100 ring-1 ring-emerald-500/30 shadow-xs'
+                    : 'border-neutral-200 dark:border-neutral-700/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-bold text-sm">English</span>
                   {language === 'en' && <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
                 </div>
-                <span className="text-[11px] text-neutral-500 dark:text-neutral-400 block">
+                <span className="text-[11px] text-neutral-600 dark:text-neutral-400 block">
                   Left-to-Right (LTR)
                 </span>
               </button>
@@ -298,17 +289,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 type="button"
                 id="lang-select-ar"
                 onClick={() => onLanguageChange('ar')}
-                className={`p-3.5 rounded-xl border text-start transition-all cursor-pointer ${
+                className={`p-3.5 rounded-xl border text-start transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 ${
                   language === 'ar'
-                    ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100 ring-2 ring-emerald-500/20'
-                    : 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300'
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-100 ring-1 ring-emerald-500/30 shadow-xs'
+                    : 'border-neutral-200 dark:border-neutral-700/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-bold text-sm">العربية</span>
                   {language === 'ar' && <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
                 </div>
-                <span className="text-[11px] text-neutral-500 dark:text-neutral-400 block">
+                <span className="text-[11px] text-neutral-600 dark:text-neutral-400 block">
                   Right-to-Left (RTL)
                 </span>
               </button>
@@ -354,10 +345,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   if (onThemeChange) onThemeChange('light');
                   else if (theme !== 'light') onThemeToggle();
                 }}
-                className={`p-3 rounded-xl border text-start transition-all cursor-pointer ${
+                className={`p-3 rounded-xl border text-start transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 ${
                   theme === 'light'
-                    ? 'border-amber-500 bg-amber-50/70 dark:bg-amber-950/40 text-neutral-900 dark:text-neutral-100 ring-2 ring-amber-500/20'
-                    : 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300'
+                    ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/60 text-amber-950 dark:text-amber-100 ring-1 ring-amber-500/30 shadow-xs font-semibold'
+                    : 'border-neutral-200 dark:border-neutral-700/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -367,7 +358,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   </div>
                   {theme === 'light' && <CheckCircle2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />}
                 </div>
-                <span className="text-[10px] sm:text-[11px] text-neutral-500 dark:text-neutral-400 block truncate">
+                <span className="text-[10px] sm:text-[11px] text-neutral-600 dark:text-neutral-400 block truncate">
                   {t.lightModeDesc || (language === 'ar' ? 'نهاري ناصع ومريح' : 'Clean & bright canvas')}
                 </span>
               </button>
@@ -380,10 +371,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   if (onThemeChange) onThemeChange('dark');
                   else if (theme !== 'dark') onThemeToggle();
                 }}
-                className={`p-3 rounded-xl border text-start transition-all cursor-pointer ${
+                className={`p-3 rounded-xl border text-start transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 ${
                   theme === 'dark'
-                    ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/40 text-neutral-900 dark:text-neutral-100 ring-2 ring-indigo-500/20'
-                    : 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300'
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-950 dark:text-indigo-100 ring-1 ring-indigo-500/30 shadow-xs font-semibold'
+                    : 'border-neutral-200 dark:border-neutral-700/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -393,7 +384,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   </div>
                   {theme === 'dark' && <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />}
                 </div>
-                <span className="text-[10px] sm:text-[11px] text-neutral-500 dark:text-neutral-400 block truncate">
+                <span className="text-[10px] sm:text-[11px] text-neutral-600 dark:text-neutral-400 block truncate">
                   {t.darkModeDesc || (language === 'ar' ? 'ليلي مريح للأعين' : 'Eye-safe contrast')}
                 </span>
               </button>
@@ -406,10 +397,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   if (onThemeChange) onThemeChange('system');
                   else onThemeToggle();
                 }}
-                className={`p-3 rounded-xl border text-start transition-all cursor-pointer ${
+                className={`p-3 rounded-xl border text-start transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 ${
                   theme === 'system'
-                    ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-neutral-900 dark:text-neutral-100 ring-2 ring-emerald-500/20'
-                    : 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300'
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-100 ring-1 ring-emerald-500/30 shadow-xs font-semibold'
+                    : 'border-neutral-200 dark:border-neutral-700/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -419,7 +410,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   </div>
                   {theme === 'system' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />}
                 </div>
-                <span className="text-[10px] sm:text-[11px] text-neutral-500 dark:text-neutral-400 block truncate">
+                <span className="text-[10px] sm:text-[11px] text-neutral-600 dark:text-neutral-400 block truncate">
                   {t.systemModeDesc || (language === 'ar' ? 'يتطابق مع مظهر الجهاز' : 'Matches device settings')}
                 </span>
               </button>
