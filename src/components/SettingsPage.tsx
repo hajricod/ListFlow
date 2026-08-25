@@ -582,7 +582,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           </div>
 
           <div className="mt-4 pt-3 border-t border-neutral-100 dark:border-neutral-800/60 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400">
-            <span>Status:</span>
+            <span>{t.status}:</span>
             <span className="font-semibold text-neutral-800 dark:text-neutral-200">{soundEnabled ? t.soundOn : t.soundOff}</span>
           </div>
         </section>
