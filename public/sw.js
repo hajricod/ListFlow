@@ -1,4 +1,4 @@
-// TaskFlow Service Worker for Offline PWA Support
+// ListFlow Service Worker for Offline PWA Support
 const CACHE_NAME = 'taskflow-v1';
 const ASSETS_TO_CACHE = [
   '/',

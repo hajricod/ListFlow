@@ -1,5 +1,5 @@
 {
-  "name": "ListFlow: Multi-List & Task Organizer",
+  "name": "List Flow: Multi-List & Task Organizer",
   "description": "A high-performance task and list organizer with Email/Password & Google sign-in supporting all email providers (Outlook, Yahoo, iCloud, Gmail, work email), real-time reactive Firestore cloud synchronization, multi-list switching, group organization, drag-and-drop, quantity steppers, dark mode, PWA install, English and Arabic RTL/LTR support, and offline persistence.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

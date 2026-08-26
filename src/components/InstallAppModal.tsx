@@ -65,7 +65,7 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
         {/* Header with App Visual Badge */}
         <div className="flex items-start gap-4 mb-6">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 p-0.5 shadow-lg shadow-emerald-500/20 shrink-0 flex items-center justify-center">
-            <img src="/icon.svg" alt="TaskFlow Icon" className="w-full h-full rounded-2xl" />
+            <img src="/icon.svg" alt="List Flow Icon" className="w-full h-full rounded-2xl" />
           </div>
           <div className="min-w-0 flex-1 pt-1">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-xs font-semibold border border-emerald-200/60 dark:border-emerald-800/40 mb-1.5">
