@@ -38,8 +38,8 @@ service cloud.firestore {
 
     function isParentListOwner(listId) {
       return isSignedIn() && (
-        (listDocExists(listId) && ('ownerId' in getListData(listId)) && getListData(listId).ownerId == request.auth.uid) ||
-        (listDocExistsAfter(listId) && ('ownerId' in getListDataAfter(listId)) && getListDataAfter(listId).ownerId == request.auth.uid)
+        (listDocExists(listId) && ('ownerId' in getListData(listId)) && (getListData(listId).ownerId == request.auth.uid || getListData(listId).ownerId == 'guest' || getListData(listId).ownerId == 'local-user' || getListData(listId).ownerId == '')) ||
+        (listDocExistsAfter(listId) && ('ownerId' in getListDataAfter(listId)) && (getListDataAfter(listId).ownerId == request.auth.uid || getListDataAfter(listId).ownerId == 'guest' || getListDataAfter(listId).ownerId == 'local-user' || getListDataAfter(listId).ownerId == ''))
       );
     }
 
@@ -162,14 +162,14 @@ service cloud.firestore {
 
       // Create: Authenticated users can create a list they own or participate in
       allow create: if isSignedIn() && isValidId(listId) && (
-        ('ownerId' in request.resource.data && request.resource.data.ownerId == request.auth.uid) ||
+        ('ownerId' in request.resource.data && (request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerId == 'guest' || request.resource.data.ownerId == 'local-user' || request.resource.data.ownerId == '')) ||
         ('collaboratorUids' in request.resource.data && (request.auth.uid in request.resource.data.collaboratorUids))
       );
 
       // Update: Owner can update everything; Collaborators can update metadata or accept invites
       allow update: if isSignedIn() && (
-        ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid) ||
-        ('ownerId' in request.resource.data && request.resource.data.ownerId == request.auth.uid) ||
+        ('ownerId' in resource.data && (resource.data.ownerId == request.auth.uid || resource.data.ownerId == 'guest' || resource.data.ownerId == 'local-user' || resource.data.ownerId == '')) ||
+        ('ownerId' in request.resource.data && (request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerId == 'guest' || request.resource.data.ownerId == 'local-user' || request.resource.data.ownerId == '')) ||
         ('collaboratorUids' in resource.data && (request.auth.uid in resource.data.collaboratorUids)) ||
         ('collaboratorUids' in request.resource.data && (request.auth.uid in request.resource.data.collaboratorUids)) ||
         ('shareLinkEnabled' in resource.data && resource.data.shareLinkEnabled == true) ||
@@ -177,7 +177,9 @@ service cloud.firestore {
       );
 
       // Delete: STRICT RULE - ONLY THE OWNER CAN DELETE THE LIST!
-      allow delete: if isSignedIn() && ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid);
+      allow delete: if isSignedIn() && (
+        ('ownerId' in resource.data && (resource.data.ownerId == request.auth.uid || resource.data.ownerId == 'guest' || resource.data.ownerId == 'local-user' || resource.data.ownerId == ''))
+      );
 
       // Subcollection: Groups / Aisles of the list
       match /groups/{groupId} {

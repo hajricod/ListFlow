@@ -10,6 +10,7 @@ import {
   Users,
   UserPlus,
   Eye,
+  Languages,
 } from 'lucide-react';
 import { Language, Theme, SyncStatus } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -17,6 +18,7 @@ import { User } from 'firebase/auth';
 
 interface NavbarProps {
   language: Language;
+  onToggleLanguage?: () => void;
   theme?: Theme;
   onCycleTheme?: () => void;
   isSidebarOpen?: boolean;
@@ -40,6 +42,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({
   language,
+  onToggleLanguage,
   theme = 'light',
   onCycleTheme,
   isSidebarOpen = false,
@@ -140,6 +143,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                     {memberCount}
                   </span>
                 )}
+              </button>
+            )}
+
+            {/* Quick Language Toggle */}
+            {onToggleLanguage && (
+              <button
+                id="nav-language-toggle-btn"
+                type="button"
+                onClick={onToggleLanguage}
+                title={language === 'ar' ? 'التبديل إلى الإنجليزية (Switch to English)' : 'Switch to Arabic (التبديل إلى العربية)'}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200/60 dark:border-neutral-700/60 transition-all cursor-pointer font-bold text-xs shadow-2xs hover:border-emerald-300 dark:hover:border-emerald-700"
+              >
+                <Languages className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="leading-none">{language === 'ar' ? 'EN' : 'عربي'}</span>
               </button>
             )}
 

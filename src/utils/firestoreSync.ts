@@ -237,26 +237,43 @@ export async function syncAllToFirestore(
     items = maybeItems || [];
   }
 
-  if (!userId) return false;
+  if (!userId || !auth.currentUser || auth.currentUser.uid !== userId) {
+    return false;
+  }
 
   try {
-    const batch = writeBatch(db);
+    let currentBatch = writeBatch(db);
     let opCount = 0;
+
+    const commitCurrentBatch = async () => {
+      if (opCount > 0) {
+        await currentBatch.commit();
+        currentBatch = writeBatch(db);
+        opCount = 0;
+      }
+    };
+
+    const writableListIds = new Set<string>();
 
     // Upsert lists in /lists/{listId} (and /users/{userId}/lists/{listId})
     for (let i = 0; i < lists.length; i++) {
       const list = lists[i];
+      if (!list || !list.id) continue;
+
       const isMyOwnList = !list.ownerId || list.ownerId === 'local-user' || list.ownerId === 'guest' || list.ownerId === userId;
+      const userCollabRole = list.collaborators?.[userId]?.role;
       const isAlreadyCollaborator = Boolean(
         (list.collaboratorUids && list.collaboratorUids.includes(userId)) ||
-        (list.collaborators && list.collaborators[userId])
+        (userCollabRole && userCollabRole !== 'read')
       );
 
       // SECURITY & PRIVACY GUARD:
-      // If this list is owned by another user and current user is NOT an authorized collaborator, NEVER touch or overwrite it!
+      // If this list is owned by another user and current user is NOT an authorized editor/owner, NEVER touch or overwrite it!
       if (!isMyOwnList && !isAlreadyCollaborator) {
         continue;
       }
+
+      writableListIds.add(list.id);
 
       const ownerId = isMyOwnList ? userId : (list.ownerId || userId);
       const ownerEmail = isMyOwnList ? (userEmail || list.ownerEmail || '') : (list.ownerEmail || '');
@@ -301,24 +318,32 @@ export async function syncAllToFirestore(
 
       // Only owner or authorized collaborator writes to /lists/{listId}
       const listRef = doc(db, 'lists', list.id);
-      batch.set(listRef, sanitizeForFirestore(listPayload), { merge: true });
+      currentBatch.set(listRef, sanitizeForFirestore(listPayload), { merge: true });
       opCount++;
 
       // Also mirror to private /users/{userId}/lists for backup
       if (isMyOwnList) {
         const userListRef = doc(db, 'users', userId, 'lists', list.id);
-        batch.set(userListRef, sanitizeForFirestore(listPayload), { merge: true });
+        currentBatch.set(userListRef, sanitizeForFirestore(listPayload), { merge: true });
         opCount++;
+      }
+
+      if (opCount >= 400) {
+        await commitCurrentBatch();
       }
     }
 
-    // Upsert groups
+    // Upsert groups - ONLY for lists where the user is owner or authorized editor
     for (let i = 0; i < groups.length; i++) {
       const group = groups[i];
-      const targetList = lists.find((l) => l.id === group.listId) || lists[0];
-      const listId = group.listId || targetList?.id || 'list-groceries';
+      if (!group || !group.id) continue;
+      const listId = group.listId;
+      if (!listId || !writableListIds.has(listId)) {
+        continue;
+      }
+
       const groupRef = doc(db, 'lists', listId, 'groups', group.id);
-      batch.set(
+      currentBatch.set(
         groupRef,
         sanitizeForFirestore({
           ...group,
@@ -329,17 +354,25 @@ export async function syncAllToFirestore(
         { merge: true }
       );
       opCount++;
+
+      if (opCount >= 400) {
+        await commitCurrentBatch();
+      }
     }
 
-    // Upsert items
+    // Upsert items - ONLY for lists where the user is owner or authorized editor
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
+      if (!item || !item.id) continue;
       const parentGroup = groups.find((g) => g.id === item.groupId);
       const itemExplicitListId = (item as unknown as { listId?: string }).listId;
-      const targetList = lists.find((l) => l.id === itemExplicitListId || l.id === parentGroup?.listId) || lists[0];
-      const listId = itemExplicitListId || parentGroup?.listId || targetList?.id || 'list-groceries';
+      const listId = itemExplicitListId || parentGroup?.listId;
+      if (!listId || !writableListIds.has(listId)) {
+        continue;
+      }
+
       const itemRef = doc(db, 'lists', listId, 'items', item.id);
-      batch.set(
+      currentBatch.set(
         itemRef,
         sanitizeForFirestore({
           ...item,
@@ -350,10 +383,14 @@ export async function syncAllToFirestore(
         { merge: true }
       );
       opCount++;
+
+      if (opCount >= 400) {
+        await commitCurrentBatch();
+      }
     }
 
     if (opCount > 0) {
-      await batch.commit();
+      await currentBatch.commit();
     }
 
     return true;

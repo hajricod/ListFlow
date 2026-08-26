@@ -258,11 +258,90 @@ export default function App() {
   const cycleTheme = useCallback(() => {
     sounds.playPop();
     setTheme((prev) => {
-      if (prev === 'light') return 'dark';
-      if (prev === 'dark') return 'system';
-      return 'light';
+      const next = prev === 'light' ? 'dark' : prev === 'dark' ? 'system' : 'light';
+      saveStoredTheme(next, user?.uid);
+      if (user) {
+        syncUserProfile(user, { theme: next }).catch((err) => {
+          console.warn('Theme profile sync warning:', err);
+        });
+      }
+      return next;
     });
-  }, []);
+  }, [user]);
+
+  // Direct User Preference Actions (Immediate local state + LocalStorage + Cloud DB sync)
+  const handleLanguageChange = useCallback(
+    (newLang: Language) => {
+      sounds.playPop();
+      setLanguage(newLang);
+      saveStoredLanguage(newLang, user?.uid);
+      document.documentElement.lang = newLang;
+      document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
+
+      if (user) {
+        syncUserProfile(user, { language: newLang }).catch((err) => {
+          console.warn('Language profile sync warning:', err);
+        });
+      }
+    },
+    [user]
+  );
+
+  const handleThemeChange = useCallback(
+    (newTheme: Theme) => {
+      sounds.playPop();
+      setTheme(newTheme);
+      saveStoredTheme(newTheme, user?.uid);
+      if (user) {
+        syncUserProfile(user, { theme: newTheme }).catch((err) => {
+          console.warn('Theme profile sync warning:', err);
+        });
+      }
+    },
+    [user]
+  );
+
+  const handleThemeColorChange = useCallback(
+    (newColor: ThemeColor) => {
+      setThemeColor(newColor);
+      saveStoredThemeColor(newColor, user?.uid);
+      applyThemeColorToDOM(newColor);
+      if (user) {
+        syncUserProfile(user, { themeColor: newColor }).catch((err) => {
+          console.warn('Theme color profile sync warning:', err);
+        });
+      }
+    },
+    [user]
+  );
+
+  const handleSoundToggle = useCallback(() => {
+    setSoundEnabled((prev) => {
+      const next = !prev;
+      sounds.setEnabled(next);
+      saveStoredSound(next, user?.uid);
+      if (user) {
+        syncUserProfile(user, { soundEnabled: next }).catch((err) => {
+          console.warn('Sound profile sync warning:', err);
+        });
+      }
+      return next;
+    });
+  }, [user]);
+
+  const handleGridColumnsChange = useCallback(
+    (cols: 1 | 2) => {
+      sounds.playPop();
+      setGridColumns(cols);
+      saveStoredGridColumns(cols, user?.uid);
+      if (user) {
+        syncUserProfile(user, { gridColumns: cols }).catch((err) => {
+          console.warn('Grid columns profile sync warning:', err);
+        });
+      }
+    },
+    [user]
+  );
 
   // Sync Theme with DOM and System Preference
   useEffect(() => {
@@ -515,8 +594,8 @@ export default function App() {
             curr ? cloudData.lists.find((l) => l.id === curr.id) || null : null
           );
 
-          // Apply cloud preferences from Firestore
-          if (cloudData.preferences) {
+          // Apply cloud preferences from Firestore on initial cloud load ONLY
+          if (cloudData.preferences && isInitialCloudLoadRef.current) {
             applyUserPreferences(cloudData.preferences, user.uid);
           }
 
@@ -817,7 +896,7 @@ export default function App() {
         setIsSidebarOpen((prev) => !prev);
       } else if (e.key === 'l' || e.key === 'L') {
         e.preventDefault();
-        setLanguage((prev) => (prev === 'en' ? 'ar' : 'en'));
+        handleLanguageChange(language === 'en' ? 'ar' : 'en');
       } else if (e.key === 'd' || e.key === 'D') {
         e.preventDefault();
         cycleTheme();
@@ -826,7 +905,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeGroups]);
+  }, [activeGroups, language, handleLanguageChange, cycleTheme]);
 
   // Derived Task Calculations for Active List
   const totalItems = activeListItems.length;
@@ -1995,6 +2074,7 @@ export default function App() {
         groups={groups}
         items={items}
         language={language}
+        onToggleLanguage={() => handleLanguageChange(language === 'en' ? 'ar' : 'en')}
         totalTasks={totalItems}
         completedTasks={collectedItems}
         currentView={currentView}
@@ -2011,6 +2091,7 @@ export default function App() {
       {/* 2. Top Navigation Bar */}
       <Navbar
         language={language}
+        onToggleLanguage={() => handleLanguageChange(language === 'en' ? 'ar' : 'en')}
         theme={theme}
         onCycleTheme={cycleTheme}
         isSidebarOpen={isSidebarOpen}
@@ -2040,21 +2121,16 @@ export default function App() {
           {currentView === 'settings' ? (
             <SettingsPage
               language={language}
-              onLanguageChange={(lang) => setLanguage(lang)}
+              onLanguageChange={handleLanguageChange}
               theme={theme}
-              onThemeChange={(newTheme) => {
-                sounds.playPop();
-                setTheme(newTheme);
-              }}
+              onThemeChange={handleThemeChange}
               onThemeToggle={cycleTheme}
               themeColor={themeColor}
-              onThemeColorChange={(newColor) => {
-                setThemeColor(newColor);
-              }}
+              onThemeColorChange={handleThemeColorChange}
               soundEnabled={soundEnabled}
-              onSoundToggle={() => setSoundEnabled((prev) => !prev)}
+              onSoundToggle={handleSoundToggle}
               gridColumns={gridColumns}
-              onGridColumnsChange={(cols) => setGridColumns(cols)}
+              onGridColumnsChange={handleGridColumnsChange}
               onOpenTemplatesModal={() => setIsTemplatesModalOpen(true)}
               onExportData={handleExportJSON}
               onImportData={handleImportJSON}

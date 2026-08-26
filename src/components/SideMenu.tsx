@@ -36,6 +36,7 @@ import {
   UserPlus,
   Eye,
   Crown,
+  Languages,
 } from 'lucide-react';
 import { AppList, AppView, Language, ListGroup, ListItem, SyncStatus, PendingInvitation } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -58,6 +59,7 @@ interface SideMenuProps {
   groups: ListGroup[];
   items: ListItem[];
   language: Language;
+  onToggleLanguage?: () => void;
   totalTasks: number;
   completedTasks: number;
   currentView?: AppView;
@@ -129,6 +131,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
   groups,
   items,
   language,
+  onToggleLanguage,
   totalTasks,
   completedTasks,
   currentView = 'workspace',
@@ -595,8 +598,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({
             )
           )}
 
-          {/* Settings Button at Bottom of Sidenav */}
-          <div>
+          {/* Bottom Actions: Settings & Quick Language Toggle */}
+          <div className="grid grid-cols-5 gap-1.5">
             <button
               type="button"
               id="sidenav-bottom-settings-btn"
@@ -605,7 +608,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                 if (window.innerWidth < 1024) onClose();
               }}
               title={t.settings}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
+              className={`col-span-4 flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
                 currentView === 'settings'
                   ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/70 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700/80 shadow-xs ring-1 ring-emerald-500/20'
                   : 'bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 border-neutral-200/90 dark:border-neutral-700 shadow-2xs'
@@ -621,16 +624,19 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                 />
                 <span>{t.settings}</span>
               </div>
-              <span
-                className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
-                  currentView === 'settings'
-                    ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
-                    : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400'
-                }`}
-              >
-                {language === 'en' ? 'EN' : 'ع'}
-              </span>
             </button>
+
+            {onToggleLanguage && (
+              <button
+                type="button"
+                id="sidenav-bottom-language-btn"
+                onClick={onToggleLanguage}
+                title={language === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}
+                className="col-span-1 flex items-center justify-center p-2.5 rounded-xl text-xs font-bold bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 text-emerald-700 dark:text-emerald-300 border border-neutral-200/90 dark:border-neutral-700 shadow-2xs transition-all cursor-pointer hover:border-emerald-300 dark:hover:border-emerald-700"
+              >
+                <span>{language === 'ar' ? 'EN' : 'ع'}</span>
+              </button>
+            )}
           </div>
         </div>
       </aside>
