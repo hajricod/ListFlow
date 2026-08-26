@@ -114,6 +114,7 @@ export interface UserCloudData {
   soundEnabled?: boolean;
   gridColumns?: 1 | 2;
   activeListId?: string;
+  onboardingSeen?: boolean;
 }
 
 export interface UserPreferencesPayload {
@@ -123,6 +124,7 @@ export interface UserPreferencesPayload {
   soundEnabled?: boolean;
   gridColumns?: 1 | 2;
   activeListId?: string;
+  onboardingSeen?: boolean;
 }
 
 // 1. Sync User Profile / Preferences
@@ -161,6 +163,7 @@ export async function syncUserProfile(
       if (preferences.soundEnabled !== undefined) payload.soundEnabled = preferences.soundEnabled;
       if (preferences.gridColumns !== undefined) payload.gridColumns = preferences.gridColumns;
       if (preferences.activeListId) payload.activeListId = preferences.activeListId;
+      if (preferences.onboardingSeen !== undefined) payload.onboardingSeen = preferences.onboardingSeen;
     }
 
     await setDoc(userDocRef, sanitizeForFirestore(payload), { merge: true });
@@ -169,6 +172,12 @@ export async function syncUserProfile(
     console.error('Error syncing user profile to Firestore:', error);
     return false;
   }
+}
+
+// Helper to save onboarding seen status to cloud
+export async function saveUserOnboardingSeen(userId: string): Promise<boolean> {
+  if (!userId) return false;
+  return syncUserProfile(userId, { onboardingSeen: true });
 }
 
 // Helper to directly fetch saved user preferences from Firestore on login
@@ -186,6 +195,7 @@ export async function fetchUserProfilePreferences(userId: string): Promise<UserP
       soundEnabled: typeof u.soundEnabled === 'boolean' ? u.soundEnabled : undefined,
       gridColumns: (u.gridColumns === 1 || u.gridColumns === 2) ? u.gridColumns : undefined,
       activeListId: u.activeListId as string | undefined,
+      onboardingSeen: typeof u.onboardingSeen === 'boolean' ? u.onboardingSeen : undefined,
     };
   } catch (err) {
     console.warn('Error fetching user preferences from Firestore:', err);
@@ -611,6 +621,7 @@ export function subscribeToUserCloudData(
           soundEnabled: u.soundEnabled,
           gridColumns: u.gridColumns,
           activeListId: u.activeListId,
+          onboardingSeen: typeof u.onboardingSeen === 'boolean' ? u.onboardingSeen : undefined,
         };
         emitCombinedData();
       }

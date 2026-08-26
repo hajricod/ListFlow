@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
   AppList,
@@ -76,6 +76,7 @@ import {
   subscribeToUserCloudData,
   syncAllToFirestore,
   syncUserProfile,
+  saveUserOnboardingSeen,
   shareListWithUser,
   updateMemberRole,
   removeMemberFromList,
@@ -334,20 +335,53 @@ export default function App() {
     });
   }, [user]);
 
-  // First-time user onboarding trigger
+  const checkedOnboardingUserUidsRef = useRef<Set<string>>(new Set());
+
+  // First-time user onboarding trigger: Only appears once for the first time a user logs in on ANY device
   useEffect(() => {
-    const hasSeenOnboarding = loadStoredOnboardingSeen(user?.uid);
-    if (!hasSeenOnboarding) {
-      const timer = setTimeout(() => {
-        setIsOnboardingModalOpen(true);
-      }, 500);
-      return () => clearTimeout(timer);
+    // Only trigger onboarding for authenticated users
+    if (!user?.uid || authLoading) {
+      return;
     }
-  }, [user?.uid]);
+
+    const uid = user.uid;
+    if (checkedOnboardingUserUidsRef.current.has(uid)) {
+      return;
+    }
+    checkedOnboardingUserUidsRef.current.add(uid);
+
+    const hasSeenLocally = loadStoredOnboardingSeen(uid);
+    if (hasSeenLocally) {
+      return;
+    }
+
+    // Check remote Firestore user profile across devices
+    fetchUserProfilePreferences(uid)
+      .then((cloudPrefs) => {
+        if (cloudPrefs?.onboardingSeen === true) {
+          // User already completed onboarding on another device
+          saveStoredOnboardingSeen(true, uid);
+        } else {
+          // Truly the first time this user has logged in across any device
+          const timer = setTimeout(() => {
+            setIsOnboardingModalOpen(true);
+          }, 600);
+          return () => clearTimeout(timer);
+        }
+      })
+      .catch((err) => {
+        console.warn('Onboarding check error:', err);
+      });
+  }, [user?.uid, authLoading]);
 
   const handleCloseOnboarding = useCallback(() => {
     setIsOnboardingModalOpen(false);
     saveStoredOnboardingSeen(true, user?.uid);
+    if (user?.uid) {
+      saveUserOnboardingSeen(user.uid).catch((err) => {
+        console.warn('Could not sync onboarding status to Firestore:', err);
+      });
+    }
   }, [user?.uid]);
 
   const handleGridColumnsChange = useCallback(
@@ -475,6 +509,7 @@ export default function App() {
         soundEnabled?: boolean;
         gridColumns?: 1 | 2;
         activeListId?: string;
+        onboardingSeen?: boolean;
       },
       uid?: string | null
     ) => {
@@ -508,6 +543,9 @@ export default function App() {
       if (prefs.activeListId) {
         setActiveListId(prefs.activeListId);
         saveActiveListId(prefs.activeListId, uid);
+      }
+      if (prefs.onboardingSeen === true) {
+        saveStoredOnboardingSeen(true, uid);
       }
     },
     []
