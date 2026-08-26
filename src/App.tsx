@@ -113,13 +113,14 @@ export default function App() {
   } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
-  const prevUserRef = React.useRef<string | null>(null);
+  const prevUserRef = React.useRef<string | null | undefined>(undefined);
+  const currentActiveUserIdRef = React.useRef<string | null | undefined>(undefined);
   const isInitialCloudLoadRef = React.useRef<boolean>(false);
   const isRemoteSyncRef = React.useRef<boolean>(false);
   const syncTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const prefSyncTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  const [lists, setLists] = useState<AppList[]>(() => loadStoredLists(language));
+  const [lists, setLists] = useState<AppList[]>(() => loadStoredLists());
   const [activeListId, setActiveListId] = useState<string>(() => loadActiveListId(lists));
   const [currentView, setCurrentView] = useState<AppView>('workspace');
 
@@ -130,8 +131,8 @@ export default function App() {
     return true;
   });
 
-  const [groups, setGroups] = useState<ListGroup[]>(() => loadStoredGroups(language));
-  const [items, setItems] = useState<ListItem[]>(() => loadStoredItems(language));
+  const [groups, setGroups] = useState<ListGroup[]>(() => loadStoredGroups());
+  const [items, setItems] = useState<ListItem[]>(() => loadStoredItems());
 
   // 2. Filters & Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -146,8 +147,8 @@ export default function App() {
   });
 
   useEffect(() => {
-    saveStoredGridColumns(gridColumns);
-  }, [gridColumns]);
+    saveStoredGridColumns(gridColumns, user?.uid);
+  }, [gridColumns, user?.uid]);
 
   // 3. Modals & Dialog State
   const [isListModalOpen, setIsListModalOpen] = useState(false);
@@ -199,7 +200,7 @@ export default function App() {
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
-    saveStoredLanguage(language);
+    saveStoredLanguage(language, user?.uid);
 
     // Synchronize default lists and template titles when language toggles
     setLists((prevLists) =>
@@ -250,7 +251,7 @@ export default function App() {
         return l;
       })
     );
-  }, [language]);
+  }, [language, user?.uid]);
 
   // Theme Cycling helper
   const cycleTheme = useCallback(() => {
@@ -287,7 +288,7 @@ export default function App() {
     };
 
     applyTheme();
-    saveStoredTheme(theme);
+    saveStoredTheme(theme, user?.uid);
 
     // If theme is set to 'system', dynamically listen for OS-level dark mode switches
     if (theme === 'system' && typeof window !== 'undefined' && window.matchMedia) {
@@ -303,37 +304,37 @@ export default function App() {
         return () => mediaQuery.removeListener(handleMediaChange);
       }
     }
-  }, [theme]);
+  }, [theme, user?.uid]);
 
   // Sync Theme Color with DOM and LocalStorage
   useEffect(() => {
-    saveStoredThemeColor(themeColor);
+    saveStoredThemeColor(themeColor, user?.uid);
     applyThemeColorToDOM(themeColor);
-  }, [themeColor]);
+  }, [themeColor, user?.uid]);
 
   // Sync Sound
   useEffect(() => {
     sounds.setEnabled(soundEnabled);
-    saveStoredSound(soundEnabled);
-  }, [soundEnabled]);
+    saveStoredSound(soundEnabled, user?.uid);
+  }, [soundEnabled, user?.uid]);
 
   // Sync Lists to LocalStorage
   useEffect(() => {
-    saveStoredLists(lists);
-  }, [lists]);
+    saveStoredLists(lists, user?.uid);
+  }, [lists, user?.uid]);
 
   useEffect(() => {
-    saveActiveListId(activeListId);
-  }, [activeListId]);
+    saveActiveListId(activeListId, user?.uid);
+  }, [activeListId, user?.uid]);
 
   // Sync Groups & Items to LocalStorage
   useEffect(() => {
-    saveStoredGroups(groups);
-  }, [groups]);
+    saveStoredGroups(groups, user?.uid);
+  }, [groups, user?.uid]);
 
   useEffect(() => {
-    saveStoredItems(items);
-  }, [items]);
+    saveStoredItems(items, user?.uid);
+  }, [items, user?.uid]);
 
   // Toast Helper
   const showToast = useCallback(
@@ -353,21 +354,73 @@ export default function App() {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   };
 
-  // Auth User Cloud Sync & Real-Time Multi-Device / Multi-Browser Subscription
+  // Switch local state whenever the authenticated user changes
   useEffect(() => {
-    if (!user?.uid) {
-      if (prevUserRef.current !== null) {
-        prevUserRef.current = null;
-        isInitialCloudLoadRef.current = false;
+    if (authLoading) return;
+
+    const currentUid = user?.uid || null;
+
+    if (prevUserRef.current === undefined) {
+      prevUserRef.current = currentUid;
+      currentActiveUserIdRef.current = currentUid;
+      const initialLists = loadStoredLists(currentUid);
+      const initialGroups = loadStoredGroups(currentUid);
+      const initialItems = loadStoredItems(currentUid);
+      const initialActiveListId = loadActiveListId(initialLists, currentUid);
+      const initialLang = loadStoredLanguage(currentUid);
+      const initialTheme = loadStoredTheme(currentUid);
+      const initialThemeColor = loadStoredThemeColor(currentUid);
+      const initialSound = loadStoredSound(currentUid);
+      const initialGrid = loadStoredGridColumns(currentUid);
+
+      setLists(initialLists);
+      setGroups(initialGroups);
+      setItems(initialItems);
+      setActiveListId(initialActiveListId);
+      setLanguage(initialLang);
+      setTheme(initialTheme);
+      setThemeColor(initialThemeColor);
+      setSoundEnabled(initialSound);
+      setGridColumns(initialGrid);
+    } else if (prevUserRef.current !== currentUid) {
+      const isLogout = currentUid === null;
+      prevUserRef.current = currentUid;
+      currentActiveUserIdRef.current = currentUid;
+
+      const userLists = loadStoredLists(currentUid);
+      const userGroups = loadStoredGroups(currentUid);
+      const userItems = loadStoredItems(currentUid);
+      const userActiveListId = loadActiveListId(userLists, currentUid);
+      const userLang = loadStoredLanguage(currentUid);
+      const userTheme = loadStoredTheme(currentUid);
+      const userThemeColor = loadStoredThemeColor(currentUid);
+      const userSound = loadStoredSound(currentUid);
+      const userGrid = loadStoredGridColumns(currentUid);
+
+      setLists(userLists);
+      setGroups(userGroups);
+      setItems(userItems);
+      setActiveListId(userActiveListId);
+      setLanguage(userLang);
+      setTheme(userTheme);
+      setThemeColor(userThemeColor);
+      setSoundEnabled(userSound);
+      setGridColumns(userGrid);
+
+      if (isLogout) {
         setSyncStatus('idle');
         showToast(t.logoutSuccess, undefined, 'info');
       }
+    }
+  }, [authLoading, user?.uid, showToast, t.logoutSuccess]);
+
+  // Auth User Cloud Sync & Real-Time Multi-Device / Multi-Browser Subscription
+  useEffect(() => {
+    if (!user?.uid || authLoading) {
       return;
     }
 
-    const isNewLogin = prevUserRef.current !== user.uid;
-    prevUserRef.current = user.uid;
-    isInitialCloudLoadRef.current = isNewLogin;
+    isInitialCloudLoadRef.current = true;
     setSyncStatus('syncing');
 
     const unsubscribe = subscribeToUserCloudData(
@@ -376,8 +429,15 @@ export default function App() {
         if (cloudData.lists && cloudData.lists.length > 0) {
           isRemoteSyncRef.current = true;
           setLists(cloudData.lists);
-          if (cloudData.groups) setGroups(cloudData.groups);
-          if (cloudData.items) setItems(cloudData.items);
+          saveStoredLists(cloudData.lists, user.uid);
+          if (cloudData.groups) {
+            setGroups(cloudData.groups);
+            saveStoredGroups(cloudData.groups, user.uid);
+          }
+          if (cloudData.items) {
+            setItems(cloudData.items);
+            saveStoredItems(cloudData.items, user.uid);
+          }
 
           // Keep selectedListForShare synchronized with incoming cloud updates
           setSelectedListForShare((curr) =>
@@ -386,14 +446,25 @@ export default function App() {
 
           // Apply cloud preferences on initial load
           if (isInitialCloudLoadRef.current) {
-            if (cloudData.preferences?.language) setLanguage(cloudData.preferences.language);
-            if (cloudData.preferences?.theme) setTheme(cloudData.preferences.theme);
-            if (cloudData.preferences?.themeColor) setThemeColor(cloudData.preferences.themeColor);
+            if (cloudData.preferences?.language) {
+              setLanguage(cloudData.preferences.language);
+              saveStoredLanguage(cloudData.preferences.language, user.uid);
+            }
+            if (cloudData.preferences?.theme) {
+              setTheme(cloudData.preferences.theme);
+              saveStoredTheme(cloudData.preferences.theme, user.uid);
+            }
+            if (cloudData.preferences?.themeColor) {
+              setThemeColor(cloudData.preferences.themeColor);
+              saveStoredThemeColor(cloudData.preferences.themeColor, user.uid);
+            }
             if (cloudData.preferences?.soundEnabled !== undefined) {
               setSoundEnabled(cloudData.preferences.soundEnabled);
+              saveStoredSound(cloudData.preferences.soundEnabled, user.uid);
             }
             if (cloudData.preferences?.activeListId) {
               setActiveListId(cloudData.preferences.activeListId);
+              saveActiveListId(cloudData.preferences.activeListId, user.uid);
             }
             showToast(t.loginSuccess, undefined, 'success');
             isInitialCloudLoadRef.current = false;
@@ -402,13 +473,19 @@ export default function App() {
           // Ensure activeListId points to a valid list
           setActiveListId((curr) => {
             const listExists = cloudData.lists.some((l) => l.id === curr);
-            return listExists ? curr : cloudData.lists[0]?.id || curr;
+            const validId = listExists ? curr : cloudData.lists[0]?.id || curr;
+            saveActiveListId(validId, user.uid);
+            return validId;
           });
 
           setSyncStatus('synced');
         } else if (isInitialCloudLoadRef.current) {
-          // New user initial database seed
-          syncAllToFirestore(user.uid, lists, groups, items);
+          // New user initial database seed with user's local items
+          const currentLocalLists = loadStoredLists(user.uid);
+          const currentLocalGroups = loadStoredGroups(user.uid);
+          const currentLocalItems = loadStoredItems(user.uid);
+
+          syncAllToFirestore(user.uid, currentLocalLists, currentLocalGroups, currentLocalItems);
           syncUserProfile(user, {
             language,
             theme,
@@ -430,11 +507,14 @@ export default function App() {
     return () => {
       unsubscribe();
     };
-  }, [user?.uid, showToast, t.loginSuccess, t.logoutSuccess]);
+  }, [user?.uid, authLoading, showToast, t.loginSuccess]);
 
   // Reactive Data Sync whenever Lists, Groups, or Items change locally
   useEffect(() => {
     if (!user || isInitialCloudLoadRef.current) return;
+
+    // Safety: ensure current loaded state is for this authenticated user
+    if (currentActiveUserIdRef.current !== user.uid) return;
 
     // If change was initiated by a remote Firestore snapshot, skip pushing back to Firestore
     if (isRemoteSyncRef.current) {
@@ -453,9 +533,20 @@ export default function App() {
       clearTimeout(syncTimeoutRef.current);
     }
 
+    // Filter only lists owned by this user or where they are an active collaborator
+    const validLists = lists.filter(
+      (l) =>
+        !l.ownerId ||
+        l.ownerId === 'guest' ||
+        l.ownerId === 'local-user' ||
+        l.ownerId === user.uid ||
+        l.collaboratorUids?.includes(user.uid) ||
+        Boolean(l.collaborators?.[user.uid])
+    );
+
     syncTimeoutRef.current = setTimeout(async () => {
       try {
-        const ok = await syncAllToFirestore(user.uid, lists, groups, items);
+        const ok = await syncAllToFirestore(user.uid, validLists, groups, items);
         setSyncStatus(ok ? 'synced' : 'error');
       } catch (err) {
         console.error('Auto sync to Firestore failed:', err);
@@ -813,36 +904,42 @@ export default function App() {
       showToast(t.listUpdated);
     } else {
       const newListId = `list-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+      const currentUid = user?.uid || 'guest';
+      const currentUserEmail = user?.email || undefined;
+      const currentUserName = user?.displayName || (user ? 'User' : undefined);
       const newList: AppList = {
         id: newListId,
         ...listData,
+        ownerId: currentUid,
+        ownerEmail: currentUserEmail,
+        ownerName: currentUserName,
+        collaboratorUids: user ? [user.uid] : [],
+        collaborators: user
+          ? {
+              [user.uid]: {
+                uid: user.uid,
+                email: user.email || '',
+                displayName: user.displayName || 'User',
+                photoURL: user.photoURL || '',
+                role: 'owner',
+                status: 'active',
+                invitedAt: new Date().toISOString(),
+                joinedAt: new Date().toISOString(),
+              },
+            }
+          : {},
+        isShared: false,
+        myRole: 'owner',
         createdAt: new Date().toISOString(),
       };
       setLists((prev) => [...prev, newList]);
       setActiveListId(newListId);
-
-      // Create a default initial group inside this new list
-      const initialGroup: ListGroup = {
-        id: `aisle-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        listId: newListId,
-        title: language === 'ar' ? 'المهام الرئيسية' : 'Main Tasks',
-        color: listData.color,
-        icon: listData.icon,
-        isCollapsed: false,
-        createdAt: new Date().toISOString(),
-      };
-      setGroups((prev) => [...prev, initialGroup]);
       showToast(t.listCreated);
     }
     setSelectedListForEdit(null);
   };
 
   const handleDeleteList = (listToDelete: AppList) => {
-    if (lists.length <= 1) {
-      showToast(t.cannotDeleteOnlyList, undefined, 'warning');
-      return;
-    }
-
     // Restriction: Only the owner can delete a shared list
     const isOwnerOfList = !listToDelete.ownerId || (user && listToDelete.ownerId === user.uid);
     if (!isOwnerOfList) {
@@ -1104,10 +1201,30 @@ export default function App() {
   const handleDuplicateList = (listToDup: AppList) => {
     sounds.playPop();
     const newListId = `list-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const currentUid = user?.uid || 'guest';
     const duplicatedList: AppList = {
       ...listToDup,
       id: newListId,
       title: `${listToDup.title} (${language === 'ar' ? 'نسخة' : 'Copy'})`,
+      ownerId: currentUid,
+      ownerEmail: user?.email || undefined,
+      ownerName: user?.displayName || (user ? 'User' : undefined),
+      collaboratorUids: user ? [user.uid] : [],
+      collaborators: user
+        ? {
+            [user.uid]: {
+              uid: user.uid,
+              email: user.email || '',
+              displayName: user.displayName || 'User',
+              role: 'owner',
+              status: 'active',
+              invitedAt: new Date().toISOString(),
+              joinedAt: new Date().toISOString(),
+            },
+          }
+        : {},
+      isShared: false,
+      myRole: 'owner',
       createdAt: new Date().toISOString(),
     };
 
@@ -1962,10 +2079,25 @@ export default function App() {
                 onUncheckAll={handleUncheckAll}
                 onClearCart={handleClearAllCompleted}
                 onOpenNewGroupModal={() => {
+                  if (lists.length === 0) {
+                    setSelectedListForEdit(null);
+                    setIsListModalOpen(true);
+                    return;
+                  }
                   setSelectedGroupForEdit(null);
                   setIsGroupModalOpen(true);
                 }}
                 onOpenNewItemModal={() => {
+                  if (lists.length === 0) {
+                    setSelectedListForEdit(null);
+                    setIsListModalOpen(true);
+                    return;
+                  }
+                  if (activeGroups.length === 0) {
+                    setSelectedGroupForEdit(null);
+                    setIsGroupModalOpen(true);
+                    return;
+                  }
                   setSelectedItemForEdit(null);
                   setDefaultGroupIdForItem(activeGroups[0]?.id);
                   setIsItemModalOpen(true);
@@ -1979,8 +2111,41 @@ export default function App() {
                 onOpenShareModal={() => handleOpenShareModal(activeList)}
               />
 
-              {/* Empty State when no groups exist in active list */}
-              {activeGroups.length === 0 ? (
+              {/* Empty State when no lists exist, or no groups exist in active list */}
+              {lists.length === 0 ? (
+                <div className="text-center py-16 px-4 border-2 border-dashed border-emerald-200/80 dark:border-neutral-800 rounded-3xl bg-white/60 dark:bg-neutral-900/30">
+                  <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/70 dark:border-emerald-800/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <ListTodo className="w-7 h-7 stroke-[1.8]" />
+                  </div>
+                  <h3 className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
+                    {t.noListsYetTitle}
+                  </h3>
+                  <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400 max-w-md mx-auto">
+                    {t.noListsYetDesc}
+                  </p>
+                  <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      id="empty-create-first-list-btn"
+                      onClick={() => {
+                        setSelectedListForEdit(null);
+                        setIsListModalOpen(true);
+                      }}
+                      className="px-4 py-2 text-sm font-semibold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4 stroke-[2.5]" />
+                      <span>{t.createFirstList || t.newList}</span>
+                    </button>
+                    <button
+                      id="empty-load-templates-btn"
+                      onClick={() => setIsTemplatesModalOpen(true)}
+                      className="px-4 py-2 text-sm font-semibold rounded-xl text-neutral-700 dark:text-neutral-200 bg-neutral-100 hover:bg-neutral-200/80 dark:bg-neutral-800 dark:hover:bg-neutral-700/80 border border-neutral-200/60 dark:border-neutral-700/60 transition-colors flex items-center gap-2 cursor-pointer shadow-2xs"
+                    >
+                      <Layers className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>{t.loadTemplates}</span>
+                    </button>
+                  </div>
+                </div>
+              ) : activeGroups.length === 0 ? (
                 <div className="text-center py-16 px-4 border-2 border-dashed border-emerald-200/80 dark:border-neutral-800 rounded-3xl bg-white/60 dark:bg-neutral-900/30">
                   <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/70 dark:border-emerald-800/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                     <ListTodo className="w-7 h-7 stroke-[1.8]" />

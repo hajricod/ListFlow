@@ -219,18 +219,32 @@ export async function syncAllToFirestore(
     // Upsert lists in /lists/{listId} (and /users/{userId}/lists/{listId})
     for (let i = 0; i < lists.length; i++) {
       const list = lists[i];
-      const isOwner = !list.ownerId || list.ownerId === userId || list.ownerId === 'local-user';
-      
-      const ownerId = (list.ownerId && list.ownerId !== 'local-user') ? list.ownerId : userId;
-      const ownerEmail = list.ownerEmail || userEmail;
-      const ownerName = list.ownerName || userName || 'User';
-
-      const collaboratorUids = Array.from(
-        new Set([...(list.collaboratorUids || []), ownerId, userId])
+      const isMyOwnList = !list.ownerId || list.ownerId === 'local-user' || list.ownerId === 'guest' || list.ownerId === userId;
+      const isAlreadyCollaborator = Boolean(
+        (list.collaboratorUids && list.collaboratorUids.includes(userId)) ||
+        (list.collaborators && list.collaborators[userId])
       );
 
-      const existingCollaborators = list.collaborators || {};
-      if (!existingCollaborators[ownerId]) {
+      // SECURITY & PRIVACY GUARD:
+      // If this list is owned by another user and current user is NOT an authorized collaborator, NEVER touch or overwrite it!
+      if (!isMyOwnList && !isAlreadyCollaborator) {
+        continue;
+      }
+
+      const ownerId = isMyOwnList ? userId : (list.ownerId || userId);
+      const ownerEmail = isMyOwnList ? (userEmail || list.ownerEmail || '') : (list.ownerEmail || '');
+      const ownerName = isMyOwnList ? (userName || list.ownerName || 'User') : (list.ownerName || 'User');
+
+      let collaboratorUids = list.collaboratorUids ? [...list.collaboratorUids] : [];
+      if (isMyOwnList) {
+        // For my own lists, ensure my UID is in collaboratorUids and remove invalid guest/local markers
+        collaboratorUids = Array.from(
+          new Set([ownerId, ...collaboratorUids.filter((id) => id && id !== 'guest' && id !== 'local-user')])
+        );
+      }
+
+      const existingCollaborators = { ...(list.collaborators || {}) };
+      if (isMyOwnList && !existingCollaborators[ownerId]) {
         existingCollaborators[ownerId] = {
           uid: ownerId,
           email: ownerEmail,
@@ -264,7 +278,7 @@ export async function syncAllToFirestore(
       opCount++;
 
       // Also mirror to private /users/{userId}/lists for backup
-      if (isOwner) {
+      if (isMyOwnList) {
         const userListRef = doc(db, 'users', userId, 'lists', list.id);
         batch.set(userListRef, sanitizeForFirestore(listPayload), { merge: true });
         opCount++;
@@ -364,28 +378,42 @@ export function subscribeToUserCloudData(
     memberLists.forEach((l) => {
       // Look up current user's role in this list
       let roleFound: ShareRole | undefined = l.collaborators?.[userId]?.role;
+      let memberStatus = l.collaborators?.[userId]?.status;
       if (!roleFound && userEmail) {
         const emailKey = userEmail.replace(/[\.\#\$\[\]]/g, '_');
         if (l.collaborators?.[emailKey]?.role) {
           roleFound = l.collaborators[emailKey].role;
+          memberStatus = l.collaborators[emailKey].status;
         } else {
           const match = Object.values(l.collaborators || {}).find(
             (m) =>
               (m.uid && m.uid === userId) ||
               (m.email && m.email.toLowerCase() === userEmail)
           );
-          if (match?.role) roleFound = match.role;
+          if (match?.role) {
+            roleFound = match.role;
+            memberStatus = match.status;
+          }
         }
       }
 
-      const myRole: ShareRole =
-        l.ownerId === userId
-          ? 'owner'
-          : (roleFound || l.shareLinkRole || (l.collaboratorUids?.includes(userId) ? 'edit' : 'read'));
+      const isOwner = l.ownerId === userId || !l.ownerId || l.ownerId === 'guest' || l.ownerId === 'local-user';
+      const isExplicitCollaborator = Boolean(roleFound && memberStatus === 'active');
+      const isInvitedByEmail = Boolean(userEmail && l.invitedEmails?.some((e) => e.toLowerCase() === userEmail));
+      const isPublicShare = Boolean(l.shareLinkEnabled);
+
+      // SECURITY & FILTER: If the user is neither owner, explicit collaborator, nor accessing via public link, skip this list
+      if (!isOwner && !isExplicitCollaborator && !isPublicShare && !isInvitedByEmail) {
+        return;
+      }
+
+      const myRole: ShareRole = isOwner
+        ? 'owner'
+        : (roleFound || l.shareLinkRole || (l.collaboratorUids?.includes(userId) ? 'edit' : 'read'));
       const isShared =
         (l.collaboratorUids && l.collaboratorUids.length > 1) ||
         (l.invitedEmails && l.invitedEmails.length > 0) ||
-        l.ownerId !== userId;
+        !isOwner;
 
       combinedListsMap.set(l.id, {
         ...l,

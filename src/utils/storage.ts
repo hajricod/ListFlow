@@ -1263,74 +1263,79 @@ export const SEED_ARABIC_PERSONAL_ITEMS: ListItem[] = [
   },
 ];
 
-export const loadStoredLists = (lang: Language): AppList[] => {
+export const getUserStorageKey = (baseKey: string, userId?: string | null): string => {
+  const cleanId = userId ? `user_${userId}` : 'guest';
+  return `${baseKey}_${cleanId}`;
+};
+
+export const loadStoredLists = (userId?: string | null): AppList[] => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.LISTS);
-    if (raw) {
+    const key = getUserStorageKey(STORAGE_KEYS.LISTS, userId);
+    const raw = localStorage.getItem(key);
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (err) {
     console.warn('Failed to load lists from localStorage', err);
   }
-  return SEED_LISTS[lang] || SEED_LISTS.en;
+  return [];
 };
 
-export const saveStoredLists = (lists: AppList[]) => {
+export const saveStoredLists = (lists: AppList[], userId?: string | null) => {
   try {
-    localStorage.setItem(STORAGE_KEYS.LISTS, JSON.stringify(lists));
+    const key = getUserStorageKey(STORAGE_KEYS.LISTS, userId);
+    localStorage.setItem(key, JSON.stringify(lists));
   } catch (err) {
     console.error('Failed to save lists', err);
   }
 };
 
-export const loadActiveListId = (lists: AppList[]): string => {
+export const loadActiveListId = (lists: AppList[], userId?: string | null): string => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_LIST_ID);
+    const key = getUserStorageKey(STORAGE_KEYS.ACTIVE_LIST_ID, userId);
+    const raw = localStorage.getItem(key);
     if (raw && lists.some((l) => l.id === raw)) return raw;
   } catch {}
-  return lists[0]?.id || 'list-groceries';
+  return lists[0]?.id || '';
 };
 
-export const saveActiveListId = (id: string) => {
+export const saveActiveListId = (id: string, userId?: string | null) => {
   try {
-    localStorage.setItem(STORAGE_KEYS.ACTIVE_LIST_ID, id);
+    const key = getUserStorageKey(STORAGE_KEYS.ACTIVE_LIST_ID, userId);
+    localStorage.setItem(key, id);
   } catch {}
 };
 
-export const loadStoredGroups = (lang: Language): ListGroup[] => {
+export const loadStoredGroups = (userId?: string | null): ListGroup[] => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.GROUPS);
-    if (raw) {
+    const key = getUserStorageKey(STORAGE_KEYS.GROUPS, userId);
+    const raw = localStorage.getItem(key);
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed.map((g) => ({
           ...g,
-          listId: g.listId || 'list-groceries',
+          listId: g.listId || '',
         }));
       }
     }
   } catch (err) {
     console.warn('Failed to load groups from localStorage', err);
   }
-
-  if (lang === 'ar') {
-    const primaryGroups = TEMPLATES_DATA.weekly.groups.ar.map((g) => ({ ...g, listId: 'list-groceries' }));
-    return [...primaryGroups, ...SEED_ARABIC_WORK_GROUPS, ...SEED_ARABIC_PERSONAL_GROUPS];
-  }
-  const primaryGroups = TEMPLATES_DATA.weekly.groups.en.map((g) => ({ ...g, listId: 'list-groceries' }));
-  return [...primaryGroups, ...SEED_WORK_GROUPS, ...SEED_PERSONAL_GROUPS];
+  return [];
 };
 
-export const saveStoredGroups = (groups: ListGroup[]) => {
+export const saveStoredGroups = (groups: ListGroup[], userId?: string | null) => {
   try {
-    localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(groups));
+    const key = getUserStorageKey(STORAGE_KEYS.GROUPS, userId);
+    localStorage.setItem(key, JSON.stringify(groups));
   } catch (err) {
     console.error('Failed to save groups', err);
   }
 };
 
-export const loadStoredItems = (lang: Language): ListItem[] => {
+export const loadStoredItems = (userId?: string | null): ListItem[] => {
   const normalizeItems = (rawItems: any[]): ListItem[] => {
     return rawItems.map((item) => ({
       ...item,
@@ -1343,60 +1348,63 @@ export const loadStoredItems = (lang: Language): ListItem[] => {
   };
 
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.ITEMS);
-    if (raw) {
+    const key = getUserStorageKey(STORAGE_KEYS.ITEMS, userId);
+    const raw = localStorage.getItem(key);
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return normalizeItems(parsed);
+      if (Array.isArray(parsed)) return normalizeItems(parsed);
     }
   } catch (err) {
     console.warn('Failed to load items from localStorage', err);
   }
-
-  if (lang === 'ar') {
-    return normalizeItems([...TEMPLATES_DATA.weekly.items.ar, ...SEED_ARABIC_WORK_ITEMS, ...SEED_ARABIC_PERSONAL_ITEMS]);
-  }
-  return normalizeItems([...TEMPLATES_DATA.weekly.items.en, ...SEED_WORK_ITEMS, ...SEED_PERSONAL_ITEMS]);
+  return [];
 };
 
-export const saveStoredItems = (items: ListItem[]) => {
+export const saveStoredItems = (items: ListItem[], userId?: string | null) => {
   try {
-    localStorage.setItem(STORAGE_KEYS.ITEMS, JSON.stringify(items));
+    const key = getUserStorageKey(STORAGE_KEYS.ITEMS, userId);
+    localStorage.setItem(key, JSON.stringify(items));
   } catch (err) {
     console.error('Failed to save items', err);
   }
 };
 
-export const loadStoredLanguage = (): Language => {
+export const loadStoredLanguage = (userId?: string | null): Language => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.LANGUAGE);
+    const key = getUserStorageKey(STORAGE_KEYS.LANGUAGE, userId);
+    const raw = localStorage.getItem(key);
     if (raw === 'ar' || raw === 'en') return raw;
   } catch {}
   return 'en';
 };
 
-export const saveStoredLanguage = (lang: Language) => {
+export const saveStoredLanguage = (lang: Language, userId?: string | null) => {
   try {
-    localStorage.setItem(STORAGE_KEYS.LANGUAGE, lang);
+    const key = getUserStorageKey(STORAGE_KEYS.LANGUAGE, userId);
+    localStorage.setItem(key, lang);
   } catch {}
 };
 
-export const loadStoredTheme = (): Theme => {
+export const loadStoredTheme = (userId?: string | null): Theme => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.THEME);
+    const key = getUserStorageKey(STORAGE_KEYS.THEME, userId);
+    const raw = localStorage.getItem(key);
     if (raw === 'dark' || raw === 'light' || raw === 'system') return raw;
   } catch {}
   return 'light';
 };
 
-export const saveStoredTheme = (theme: Theme) => {
+export const saveStoredTheme = (theme: Theme, userId?: string | null) => {
   try {
-    localStorage.setItem(STORAGE_KEYS.THEME, theme);
+    const key = getUserStorageKey(STORAGE_KEYS.THEME, userId);
+    localStorage.setItem(key, theme);
   } catch {}
 };
 
-export const loadStoredThemeColor = (): ThemeColor => {
+export const loadStoredThemeColor = (userId?: string | null): ThemeColor => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.THEME_COLOR) as ThemeColor;
+    const key = getUserStorageKey(STORAGE_KEYS.THEME_COLOR, userId);
+    const raw = localStorage.getItem(key) as ThemeColor;
     const validColors: ThemeColor[] = [
       'emerald',
       'indigo',
@@ -1413,37 +1421,42 @@ export const loadStoredThemeColor = (): ThemeColor => {
   return 'emerald';
 };
 
-export const saveStoredThemeColor = (color: ThemeColor) => {
+export const saveStoredThemeColor = (color: ThemeColor, userId?: string | null) => {
   try {
-    localStorage.setItem(STORAGE_KEYS.THEME_COLOR, color);
+    const key = getUserStorageKey(STORAGE_KEYS.THEME_COLOR, userId);
+    localStorage.setItem(key, color);
   } catch {}
 };
 
-export const loadStoredSound = (): boolean => {
+export const loadStoredSound = (userId?: string | null): boolean => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.SOUND);
+    const key = getUserStorageKey(STORAGE_KEYS.SOUND, userId);
+    const raw = localStorage.getItem(key);
     if (raw !== null) return raw === 'true';
   } catch {}
   return true;
 };
 
-export const saveStoredSound = (sound: boolean) => {
+export const saveStoredSound = (sound: boolean, userId?: string | null) => {
   try {
-    localStorage.setItem(STORAGE_KEYS.SOUND, String(sound));
+    const key = getUserStorageKey(STORAGE_KEYS.SOUND, userId);
+    localStorage.setItem(key, String(sound));
   } catch {}
 };
 
-export const loadStoredGridColumns = (): 1 | 2 => {
+export const loadStoredGridColumns = (userId?: string | null): 1 | 2 => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.GRID_COLUMNS);
+    const key = getUserStorageKey(STORAGE_KEYS.GRID_COLUMNS, userId);
+    const raw = localStorage.getItem(key);
     if (raw === '1') return 1;
     if (raw === '2') return 2;
   } catch {}
   return 2; // Default is 2 columns
 };
 
-export const saveStoredGridColumns = (cols: 1 | 2) => {
+export const saveStoredGridColumns = (cols: 1 | 2, userId?: string | null) => {
   try {
-    localStorage.setItem(STORAGE_KEYS.GRID_COLUMNS, String(cols));
+    const key = getUserStorageKey(STORAGE_KEYS.GRID_COLUMNS, userId);
+    localStorage.setItem(key, String(cols));
   } catch {}
 };
