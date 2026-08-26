@@ -19,6 +19,8 @@ import {
   FolderKanban,
   CheckSquare,
   Palette,
+  Columns2,
+  Square,
 } from 'lucide-react';
 import { Language, SyncStatus, Theme, ThemeColor } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -37,6 +39,8 @@ interface SettingsPageProps {
   onThemeColorChange?: (color: ThemeColor) => void;
   soundEnabled: boolean;
   onSoundToggle: () => void;
+  gridColumns?: 1 | 2;
+  onGridColumnsChange?: (cols: 1 | 2) => void;
   onOpenTemplatesModal: () => void;
   onExportData: () => void;
   onImportData: (file: File) => void;
@@ -63,6 +67,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onThemeColorChange,
   soundEnabled,
   onSoundToggle,
+  gridColumns = 2,
+  onGridColumnsChange,
   onOpenTemplatesModal,
   onExportData,
   onImportData,
@@ -587,7 +593,81 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           </div>
         </section>
 
-        {/* 4. Backup & Starter Templates */}
+        {/* 5. Workspace Layout & Columns */}
+        <section className="bg-white dark:bg-neutral-900 border border-neutral-200/80 dark:border-neutral-800 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300 flex items-center justify-center">
+                <Columns2 className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
+                  {language === 'ar' ? 'تخطيط المجموعات' : 'Group Grid Layout'}
+                </h2>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                  {language === 'ar'
+                    ? 'اختر بين عرض المجموعات في عمودين متجاورين أو عمود واحد واسع'
+                    : 'Choose between 2 responsive columns or a single wide column'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <button
+                type="button"
+                id="settings-layout-2cols"
+                onClick={() => onGridColumnsChange && onGridColumnsChange(2)}
+                className={`p-3.5 rounded-xl border text-start transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60 ${
+                  gridColumns === 2
+                    ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-950/60 text-cyan-950 dark:text-cyan-100 ring-1 ring-cyan-500/30 shadow-xs font-semibold'
+                    : 'border-neutral-200 dark:border-neutral-700/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5 font-bold text-sm">
+                    <Columns2 className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
+                    <span>{t.twoColumns}</span>
+                  </div>
+                  {gridColumns === 2 && <CheckCircle2 className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />}
+                </div>
+                <span className="text-[11px] text-neutral-600 dark:text-neutral-400 block">
+                  {language === 'ar' ? 'شبكة متوازية سريعة' : '2-column responsive grid'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                id="settings-layout-1col"
+                onClick={() => onGridColumnsChange && onGridColumnsChange(1)}
+                className={`p-3.5 rounded-xl border text-start transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60 ${
+                  gridColumns === 1
+                    ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-950/60 text-cyan-950 dark:text-cyan-100 ring-1 ring-cyan-500/30 shadow-xs font-semibold'
+                    : 'border-neutral-200 dark:border-neutral-700/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5 font-bold text-sm">
+                    <Square className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
+                    <span>{t.oneColumn}</span>
+                  </div>
+                  {gridColumns === 1 && <CheckCircle2 className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />}
+                </div>
+                <span className="text-[11px] text-neutral-600 dark:text-neutral-400 block">
+                  {language === 'ar' ? 'عرض عمودي ممتد' : 'Single wide stream layout'}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-neutral-100 dark:border-neutral-800/60 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400">
+            <span>{language === 'ar' ? 'الشبكة النشطة:' : 'Active Layout:'}</span>
+            <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+              {gridColumns === 2 ? t.twoColumns : t.oneColumn}
+            </span>
+          </div>
+        </section>
+
+        {/* 6. Backup & Starter Templates */}
         <section className="bg-white dark:bg-neutral-900 border border-neutral-200/80 dark:border-neutral-800 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2.5 mb-2">

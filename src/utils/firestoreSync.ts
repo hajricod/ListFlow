@@ -112,19 +112,23 @@ export interface UserCloudData {
   theme?: Theme;
   themeColor?: ThemeColor;
   soundEnabled?: boolean;
+  gridColumns?: 1 | 2;
+  activeListId?: string;
+}
+
+export interface UserPreferencesPayload {
+  language?: Language;
+  theme?: Theme;
+  themeColor?: ThemeColor;
+  soundEnabled?: boolean;
+  gridColumns?: 1 | 2;
   activeListId?: string;
 }
 
 // 1. Sync User Profile / Preferences
 export async function syncUserProfile(
   userOrUid: User | string,
-  preferences?: {
-    language?: Language;
-    theme?: Theme;
-    themeColor?: ThemeColor;
-    soundEnabled?: boolean;
-    activeListId?: string;
-  }
+  preferences?: UserPreferencesPayload
 ): Promise<boolean> {
   const uid = typeof userOrUid === 'string' ? userOrUid : userOrUid?.uid || auth.currentUser?.uid;
   if (!uid) return false;
@@ -155,6 +159,7 @@ export async function syncUserProfile(
       if (preferences.theme) payload.theme = preferences.theme;
       if (preferences.themeColor) payload.themeColor = preferences.themeColor;
       if (preferences.soundEnabled !== undefined) payload.soundEnabled = preferences.soundEnabled;
+      if (preferences.gridColumns !== undefined) payload.gridColumns = preferences.gridColumns;
       if (preferences.activeListId) payload.activeListId = preferences.activeListId;
     }
 
@@ -163,6 +168,28 @@ export async function syncUserProfile(
   } catch (error) {
     console.error('Error syncing user profile to Firestore:', error);
     return false;
+  }
+}
+
+// Helper to directly fetch saved user preferences from Firestore on login
+export async function fetchUserProfilePreferences(userId: string): Promise<UserPreferencesPayload | null> {
+  if (!userId) return null;
+  try {
+    const userDocRef = doc(db, 'users', userId);
+    const snap = await getDoc(userDocRef);
+    if (!snap.exists()) return null;
+    const u = snap.data();
+    return {
+      language: (u.language === 'en' || u.language === 'ar') ? u.language : undefined,
+      theme: (u.theme === 'light' || u.theme === 'dark' || u.theme === 'system') ? u.theme : undefined,
+      themeColor: u.themeColor as ThemeColor | undefined,
+      soundEnabled: typeof u.soundEnabled === 'boolean' ? u.soundEnabled : undefined,
+      gridColumns: (u.gridColumns === 1 || u.gridColumns === 2) ? u.gridColumns : undefined,
+      activeListId: u.activeListId as string | undefined,
+    };
+  } catch (err) {
+    console.warn('Error fetching user preferences from Firestore:', err);
+    return null;
   }
 }
 
@@ -545,6 +572,7 @@ export function subscribeToUserCloudData(
           theme: u.theme,
           themeColor: u.themeColor,
           soundEnabled: u.soundEnabled,
+          gridColumns: u.gridColumns,
           activeListId: u.activeListId,
         };
         emitCombinedData();
@@ -1343,6 +1371,7 @@ export async function fetchUserCloudData(userId: string): Promise<UserCloudData 
       theme: userPref.theme,
       themeColor: userPref.themeColor,
       soundEnabled: userPref.soundEnabled,
+      gridColumns: userPref.gridColumns,
       activeListId: userPref.activeListId,
     };
   } catch (error) {

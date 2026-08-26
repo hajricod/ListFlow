@@ -69,6 +69,7 @@ import { usePWAInstall } from './hooks/usePWAInstall';
 import { useAuth } from './hooks/useAuth';
 import {
   fetchUserCloudData,
+  fetchUserProfilePreferences,
   subscribeToUserCloudData,
   syncAllToFirestore,
   syncUserProfile,
@@ -354,7 +355,55 @@ export default function App() {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   };
 
-  // Switch local state whenever the authenticated user changes
+  // Centralized Helper to Apply and Cache User Preferences
+  const applyUserPreferences = useCallback(
+    (
+      prefs: {
+        language?: Language;
+        theme?: Theme;
+        themeColor?: ThemeColor;
+        soundEnabled?: boolean;
+        gridColumns?: 1 | 2;
+        activeListId?: string;
+      },
+      uid?: string | null
+    ) => {
+      if (prefs.language && (prefs.language === 'en' || prefs.language === 'ar')) {
+        setLanguage(prefs.language);
+        saveStoredLanguage(prefs.language, uid);
+        document.documentElement.lang = prefs.language;
+        document.documentElement.dir = prefs.language === 'ar' ? 'rtl' : 'ltr';
+      }
+      if (
+        prefs.theme &&
+        (prefs.theme === 'light' || prefs.theme === 'dark' || prefs.theme === 'system')
+      ) {
+        setTheme(prefs.theme);
+        saveStoredTheme(prefs.theme, uid);
+      }
+      if (prefs.themeColor) {
+        setThemeColor(prefs.themeColor);
+        saveStoredThemeColor(prefs.themeColor, uid);
+        applyThemeColorToDOM(prefs.themeColor);
+      }
+      if (typeof prefs.soundEnabled === 'boolean') {
+        setSoundEnabled(prefs.soundEnabled);
+        sounds.setEnabled(prefs.soundEnabled);
+        saveStoredSound(prefs.soundEnabled, uid);
+      }
+      if (prefs.gridColumns === 1 || prefs.gridColumns === 2) {
+        setGridColumns(prefs.gridColumns);
+        saveStoredGridColumns(prefs.gridColumns, uid);
+      }
+      if (prefs.activeListId) {
+        setActiveListId(prefs.activeListId);
+        saveActiveListId(prefs.activeListId, uid);
+      }
+    },
+    []
+  );
+
+  // Switch Data & Preferences Context based on Auth User Login / Logout
   useEffect(() => {
     if (authLoading) return;
 
@@ -382,6 +431,17 @@ export default function App() {
       setThemeColor(initialThemeColor);
       setSoundEnabled(initialSound);
       setGridColumns(initialGrid);
+
+      // If already logged in on initial load, fetch remote cloud preferences from Firestore
+      if (currentUid) {
+        fetchUserProfilePreferences(currentUid).then((cloudPrefs) => {
+          if (cloudPrefs && currentActiveUserIdRef.current === currentUid) {
+            applyUserPreferences(cloudPrefs, currentUid);
+          }
+        }).catch((err) => {
+          console.warn('Initial fetchUserProfilePreferences warning:', err);
+        });
+      }
     } else if (prevUserRef.current !== currentUid) {
       const isLogout = currentUid === null;
       prevUserRef.current = currentUid;
@@ -407,12 +467,23 @@ export default function App() {
       setSoundEnabled(userSound);
       setGridColumns(userGrid);
 
+      if (currentUid) {
+        // Fetch and apply cloud preferences from database upon login
+        fetchUserProfilePreferences(currentUid).then((cloudPrefs) => {
+          if (cloudPrefs && currentActiveUserIdRef.current === currentUid) {
+            applyUserPreferences(cloudPrefs, currentUid);
+          }
+        }).catch((err) => {
+          console.warn('Login fetchUserProfilePreferences warning:', err);
+        });
+      }
+
       if (isLogout) {
         setSyncStatus('idle');
         showToast(t.logoutSuccess, undefined, 'info');
       }
     }
-  }, [authLoading, user?.uid, showToast, t.logoutSuccess]);
+  }, [authLoading, user?.uid, showToast, t.logoutSuccess, applyUserPreferences]);
 
   // Auth User Cloud Sync & Real-Time Multi-Device / Multi-Browser Subscription
   useEffect(() => {
@@ -444,28 +515,12 @@ export default function App() {
             curr ? cloudData.lists.find((l) => l.id === curr.id) || null : null
           );
 
-          // Apply cloud preferences on initial load
+          // Apply cloud preferences from Firestore
+          if (cloudData.preferences) {
+            applyUserPreferences(cloudData.preferences, user.uid);
+          }
+
           if (isInitialCloudLoadRef.current) {
-            if (cloudData.preferences?.language) {
-              setLanguage(cloudData.preferences.language);
-              saveStoredLanguage(cloudData.preferences.language, user.uid);
-            }
-            if (cloudData.preferences?.theme) {
-              setTheme(cloudData.preferences.theme);
-              saveStoredTheme(cloudData.preferences.theme, user.uid);
-            }
-            if (cloudData.preferences?.themeColor) {
-              setThemeColor(cloudData.preferences.themeColor);
-              saveStoredThemeColor(cloudData.preferences.themeColor, user.uid);
-            }
-            if (cloudData.preferences?.soundEnabled !== undefined) {
-              setSoundEnabled(cloudData.preferences.soundEnabled);
-              saveStoredSound(cloudData.preferences.soundEnabled, user.uid);
-            }
-            if (cloudData.preferences?.activeListId) {
-              setActiveListId(cloudData.preferences.activeListId);
-              saveActiveListId(cloudData.preferences.activeListId, user.uid);
-            }
             showToast(t.loginSuccess, undefined, 'success');
             isInitialCloudLoadRef.current = false;
           }
@@ -491,6 +546,7 @@ export default function App() {
             theme,
             themeColor,
             soundEnabled,
+            gridColumns,
             activeListId,
           });
           isInitialCloudLoadRef.current = false;
@@ -507,7 +563,7 @@ export default function App() {
     return () => {
       unsubscribe();
     };
-  }, [user?.uid, authLoading, showToast, t.loginSuccess]);
+  }, [user?.uid, authLoading, showToast, t.loginSuccess, applyUserPreferences]);
 
   // Reactive Data Sync whenever Lists, Groups, or Items change locally
   useEffect(() => {
@@ -561,9 +617,10 @@ export default function App() {
     };
   }, [user, lists, groups, items]);
 
-  // Reactive User Preferences Sync (Theme, Accent Color, Language, Sound, Active List)
+  // Reactive User Preferences Sync to Database (Theme, Accent Color, Language, Sound, Grid Columns, Active List)
   useEffect(() => {
     if (!user || isInitialCloudLoadRef.current) return;
+    if (currentActiveUserIdRef.current !== user.uid) return;
 
     if (prefSyncTimeoutRef.current) {
       clearTimeout(prefSyncTimeoutRef.current);
@@ -576,19 +633,20 @@ export default function App() {
           theme,
           themeColor,
           soundEnabled,
+          gridColumns,
           activeListId,
         });
       } catch (err) {
         console.error('Preferences sync to Firestore failed:', err);
       }
-    }, 600);
+    }, 500);
 
     return () => {
       if (prefSyncTimeoutRef.current) {
         clearTimeout(prefSyncTimeoutRef.current);
       }
     };
-  }, [user, language, theme, themeColor, soundEnabled, activeListId]);
+  }, [user, language, theme, themeColor, soundEnabled, gridColumns, activeListId]);
 
   // Handle Online / Offline Connectivity Resumption
   useEffect(() => {
@@ -1995,6 +2053,8 @@ export default function App() {
               }}
               soundEnabled={soundEnabled}
               onSoundToggle={() => setSoundEnabled((prev) => !prev)}
+              gridColumns={gridColumns}
+              onGridColumnsChange={(cols) => setGridColumns(cols)}
               onOpenTemplatesModal={() => setIsTemplatesModalOpen(true)}
               onExportData={handleExportJSON}
               onImportData={handleImportJSON}
