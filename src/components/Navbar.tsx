@@ -147,7 +147,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
 
             {/* Quick Language Toggle */}
-            {onToggleLanguage && (
+            {/* {{onToggleLanguage && (
               <button
                 id="nav-language-toggle-btn"
                 type="button"
@@ -158,7 +158,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Languages className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span className="leading-none">{language === 'ar' ? 'EN' : 'عربي'}</span>
               </button>
-            )}
+            )}} */}
 
             {/* Theme Toggle */}
             {onCycleTheme && (

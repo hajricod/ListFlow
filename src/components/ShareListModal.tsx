@@ -162,16 +162,16 @@ export const ShareListModal: React.FC<ShareListModalProps> = ({
                 <h2 className="text-base sm:text-lg font-bold text-neutral-900 dark:text-neutral-50 truncate">
                   {t.shareList}
                 </h2>
-                <span
+                {/* {<span
                   className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white uppercase tracking-wider"
                   style={{ backgroundColor: list.color || '#10b981' }}
                 >
                   {list.title}
-                </span>
+                </span>} */}
               </div>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
+              {/* {<p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
                 {t.shareListSubtitle}
-              </p>
+              </p>} */}
             </div>
           </div>
 
@@ -226,6 +226,7 @@ export const ShareListModal: React.FC<ShareListModalProps> = ({
               <form onSubmit={handleInviteSubmit} className="space-y-3">
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
+                    dir="ltr"
                     type="email"
                     id="invite-email-input"
                     value={emailInput}
