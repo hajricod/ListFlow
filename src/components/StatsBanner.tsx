@@ -11,6 +11,8 @@ import {
   X,
   Columns2,
   Square,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { FilterState, Language, ListGroup, SortOption } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -127,21 +129,6 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                 </button>
               )}
             </div>
-
-            {/* Task Status Filter / Counter Pill */}
-            <button
-              type="button"
-              id="filter-all-tasks-btn"
-              onClick={() => onFilterChange({ status: 'all', groupId: 'all' })}
-              className={`h-9 px-3 rounded-xl text-xs transition-all cursor-pointer shadow-2xs border shrink-0 ${
-                filterState.status === 'all' && (!filterState.groupId || filterState.groupId === 'all')
-                  ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300/90 dark:border-emerald-800/70 font-semibold ring-1 ring-emerald-500/20'
-                  : 'bg-neutral-50 dark:bg-neutral-800/80 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 border-neutral-200/70 dark:border-neutral-700/60 font-medium'
-              }`}
-            >
-              <span>{t.allTasks}</span>
-              <span className="ms-1.5 opacity-85 font-semibold font-mono">({totalTasks})</span>
-            </button>
           </div>
 
           {/* Row 2: Search Input inside Main Content */}
@@ -217,6 +204,40 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
             >
               <RotateCcw className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
               <span className="text-[11px] sm:text-xs">{t.uncheckAll}</span>
+            </button>
+
+            {/* Hide / Show Completed Items Filter Toggle */}
+            <button
+              type="button"
+              id="filter-toggle-completed-btn"
+              onClick={() =>
+                onFilterChange({
+                  hideCompleted: !filterState.hideCompleted,
+                })
+              }
+              className={`inline-flex items-center gap-1.5 h-9 px-2.5 sm:px-3 rounded-xl text-xs font-medium border transition-all active:scale-95 cursor-pointer shadow-2xs ${
+                filterState.hideCompleted
+                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-400/60 dark:border-amber-700/60 font-semibold ring-1 ring-amber-500/20'
+                  : 'text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200/80 dark:hover:bg-neutral-700 border-neutral-200/70 dark:border-neutral-700/60'
+              }`}
+              title={filterState.hideCompleted ? t.showCompleted : t.hideCompleted}
+            >
+              {filterState.hideCompleted ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="text-[11px] sm:text-xs">{t.showCompleted}</span>
+                  {completedTasks > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-amber-200/80 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 text-[10px] font-bold font-mono">
+                      {completedTasks}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400 shrink-0" />
+                  <span className="text-[11px] sm:text-xs">{t.hideCompleted}</span>
+                </>
+              )}
             </button>
 
             {/* Clear Completed Cart */}

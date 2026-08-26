@@ -18,11 +18,11 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 end-4 z-50 flex flex-col gap-2 max-w-sm w-full px-4 pointer-events-none">
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:left-auto sm:right-auto sm:end-4 z-50 flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm pointer-events-none items-center sm:items-stretch">
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className="pointer-events-auto flex items-center justify-between gap-3 p-3.5 rounded-xl bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-xl border border-neutral-800 dark:border-neutral-200 animate-in fade-in slide-in-from-bottom-2 duration-200"
+          className="w-full pointer-events-auto flex items-center justify-between gap-3 p-3.5 rounded-xl bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-xl border border-neutral-800 dark:border-neutral-200 animate-in fade-in slide-in-from-bottom-2 duration-200"
         >
           <div className="flex items-center gap-2.5 min-w-0">
             {toast.type === 'error' ? (

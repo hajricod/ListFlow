@@ -122,6 +122,7 @@ export type StatusFilter = 'all' | 'active' | 'completed';
 export interface FilterState {
   search: string;
   status: StatusFilter;
+  hideCompleted?: boolean;
   priority?: 'all' | Priority;
   tag?: string | null;
   groupId?: string | 'all';

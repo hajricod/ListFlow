@@ -803,7 +803,8 @@ export default function App() {
         }
       }
 
-      // 2. Status
+      // 2. Status & Hide Completed Filter
+      if (filterState.hideCompleted && item.completed) return false;
       if (filterState.status === 'active' && item.completed) return false;
       if (filterState.status === 'completed' && !item.completed) return false;
 
