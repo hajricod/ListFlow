@@ -66,7 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const t = getTranslation(language);
 
   return (
-    <header className="sticky top-0 z-30 w-full border-b border-neutral-200/80 dark:border-neutral-800/80 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md transition-colors duration-200">
+    <header className="sticky top-0 z-30 w-full border-b border-neutral-200/80 dark:border-neutral-800/80 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md transition-colors duration-200 pt-[env(safe-area-inset-top,0px)]">
       <div className="w-full px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-15 sm:h-16 gap-3">
           {/* Left: Side Menu Toggle & Brand Logo & Title */}

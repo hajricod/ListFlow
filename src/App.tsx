@@ -382,9 +382,19 @@ export default function App() {
       if (isDark) {
         document.documentElement.classList.add('dark');
         document.documentElement.style.colorScheme = 'dark';
+        // Dynamically update PWA status bar / header color for dark theme
+        const metaTags = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
+        metaTags.forEach((meta) => {
+          meta.content = '#171717'; // matches dark navbar bg-neutral-900
+        });
       } else {
         document.documentElement.classList.remove('dark');
         document.documentElement.style.colorScheme = 'light';
+        // Dynamically update PWA status bar / header color for light theme
+        const metaTags = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
+        metaTags.forEach((meta) => {
+          meta.content = '#ffffff'; // matches light navbar bg-white
+        });
       }
     };
 
