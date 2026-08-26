@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   THEME_COLOR: 'taskflow_theme_color_v1',
   SOUND: 'taskflow_sound_v1',
   GRID_COLUMNS: 'taskflow_grid_columns_v1',
+  ONBOARDING_SEEN: 'listflow_onboarding_seen_v1',
 };
 
 export const SEED_LISTS: Record<Language, AppList[]> = {
@@ -1460,3 +1461,20 @@ export const saveStoredGridColumns = (cols: 1 | 2, userId?: string | null) => {
     localStorage.setItem(key, String(cols));
   } catch {}
 };
+
+export const loadStoredOnboardingSeen = (userId?: string | null): boolean => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.ONBOARDING_SEEN, userId);
+    const raw = localStorage.getItem(key);
+    if (raw !== null) return raw === 'true';
+  } catch {}
+  return false;
+};
+
+export const saveStoredOnboardingSeen = (seen: boolean, userId?: string | null) => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.ONBOARDING_SEEN, userId);
+    localStorage.setItem(key, String(seen));
+  } catch {}
+};
+

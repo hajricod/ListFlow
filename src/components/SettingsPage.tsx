@@ -42,6 +42,7 @@ interface SettingsPageProps {
   gridColumns?: 1 | 2;
   onGridColumnsChange?: (cols: 1 | 2) => void;
   onOpenTemplatesModal: () => void;
+  onOpenOnboarding?: () => void;
   onExportData: () => void;
   onImportData: (file: File) => void;
   onOpenInstallModal?: () => void;
@@ -70,6 +71,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   gridColumns = 2,
   onGridColumnsChange,
   onOpenTemplatesModal,
+  onOpenOnboarding,
   onExportData,
   onImportData,
   onOpenInstallModal,
@@ -684,7 +686,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mt-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
               {/* Export Button */}
               <button
                 type="button"
@@ -720,6 +722,20 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <span className="text-xs font-bold text-neutral-800 dark:text-neutral-200">{t.loadTemplates}</span>
                 <span className="text-[10px] text-neutral-500">Starter packs</span>
               </button>
+
+              {/* Feature Tour Button */}
+              {onOpenOnboarding && (
+                <button
+                  type="button"
+                  id="settings-feature-tour-btn"
+                  onClick={onOpenOnboarding}
+                  className="p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/80 bg-emerald-50/50 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/40 flex flex-col items-center justify-center gap-1 text-center transition-all cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200">{t.onboardingRestartTour}</span>
+                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400">Interactive</span>
+                </button>
+              )}
             </div>
           </div>
 

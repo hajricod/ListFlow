@@ -41,6 +41,8 @@ import {
   saveStoredSound,
   loadStoredGridColumns,
   saveStoredGridColumns,
+  loadStoredOnboardingSeen,
+  saveStoredOnboardingSeen,
   getLocalizedTemplate,
   TemplateKey,
   SEED_TEMPLATES,
@@ -64,6 +66,7 @@ import { InstallAppModal } from './components/InstallAppModal';
 import { AuthModal } from './components/AuthModal';
 import { ShareListModal } from './components/ShareListModal';
 import { JoinListModal } from './components/JoinListModal';
+import { OnboardingModal } from './components/OnboardingModal';
 import { ToastContainer } from './components/Toast';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import { useAuth } from './hooks/useAuth';
@@ -171,6 +174,8 @@ export default function App() {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinModalInvitation, setJoinModalInvitation] = useState<PendingInvitation | null>(null);
   const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
+
+  const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
 
   const [confirmModalState, setConfirmModalState] = useState<{
     isOpen: boolean;
@@ -328,6 +333,22 @@ export default function App() {
       return next;
     });
   }, [user]);
+
+  // First-time user onboarding trigger
+  useEffect(() => {
+    const hasSeenOnboarding = loadStoredOnboardingSeen(user?.uid);
+    if (!hasSeenOnboarding) {
+      const timer = setTimeout(() => {
+        setIsOnboardingModalOpen(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [user?.uid]);
+
+  const handleCloseOnboarding = useCallback(() => {
+    setIsOnboardingModalOpen(false);
+    saveStoredOnboardingSeen(true, user?.uid);
+  }, [user?.uid]);
 
   const handleGridColumnsChange = useCallback(
     (cols: 1 | 2) => {
@@ -2082,6 +2103,7 @@ export default function App() {
           sounds.playPop();
           setCurrentView('settings');
         }}
+        onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
         user={user}
         syncStatus={syncStatus}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
@@ -2132,6 +2154,7 @@ export default function App() {
               gridColumns={gridColumns}
               onGridColumnsChange={handleGridColumnsChange}
               onOpenTemplatesModal={() => setIsTemplatesModalOpen(true)}
+              onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
               onExportData={handleExportJSON}
               onImportData={handleImportJSON}
               onOpenInstallModal={() => pwa.setIsModalOpen(true)}
@@ -2550,6 +2573,15 @@ export default function App() {
         error={authError}
         onClearError={clearAuthError}
         language={language}
+      />
+
+      {/* First-Time User Onboarding Modal */}
+      <OnboardingModal
+        isOpen={isOnboardingModalOpen}
+        onClose={handleCloseOnboarding}
+        language={language}
+        onLanguageChange={handleLanguageChange}
+        theme={theme}
       />
 
       {/* Toast Notifications */}

@@ -64,6 +64,7 @@ interface SideMenuProps {
   completedTasks: number;
   currentView?: AppView;
   onOpenSettings: () => void;
+  onOpenOnboarding?: () => void;
   user?: User | null;
   syncStatus?: SyncStatus;
   onOpenAuthModal?: () => void;
@@ -136,6 +137,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
   completedTasks,
   currentView = 'workspace',
   onOpenSettings,
+  onOpenOnboarding,
   user,
   syncStatus = 'idle',
   onOpenAuthModal,
