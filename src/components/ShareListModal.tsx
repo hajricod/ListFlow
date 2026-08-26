@@ -397,27 +397,27 @@ export const ShareListModal: React.FC<ShareListModalProps> = ({
 
             <div className="divide-y divide-neutral-100 dark:divide-neutral-800 rounded-2xl border border-neutral-200 dark:border-neutral-700/80 overflow-hidden bg-white dark:bg-neutral-800/70 shadow-2xs">
               {/* Owner Row */}
-              <div className="p-3.5 flex items-center justify-between gap-3 bg-white dark:bg-neutral-800/90 hover:bg-neutral-50/80 dark:hover:bg-neutral-800 transition-colors">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-amber-500/30">
+              <div className="p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between items-start gap-2.5 sm:gap-3 bg-white dark:bg-neutral-800/90 hover:bg-neutral-50/80 dark:hover:bg-neutral-800 transition-colors">
+                <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
+                  <div className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-amber-500/30">
                     <Crown className="w-4 h-4" />
                   </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center flex-wrap gap-1.5">
+                      <span className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-neutral-100 break-words">
                         {list.ownerName || list.ownerEmail?.split('@')[0] || (currentUser?.displayName || 'Owner')}
                       </span>
-                      <span className="px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 text-[10px] font-bold">
+                      <span className="px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 text-[10px] font-bold shrink-0">
                         {t.ownerBadge}
                       </span>
                     </div>
-                    <span className="text-[11px] text-neutral-500 dark:text-neutral-400 block truncate">
+                    <span className="text-xs text-neutral-600 dark:text-neutral-300 font-medium block break-all sm:break-normal sm:truncate mt-0.5">
                       {list.ownerEmail || currentUser?.email || 'list-owner'}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0 text-xs font-semibold text-neutral-600 dark:text-neutral-400">
+                <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto text-xs font-semibold text-neutral-700 dark:text-neutral-300 bg-amber-50 dark:bg-amber-950/50 sm:bg-transparent sm:dark:bg-transparent px-2.5 py-1 sm:p-0 rounded-lg sm:rounded-none border border-amber-200/50 dark:border-amber-800/40 sm:border-0">
                   <Shield className="w-3.5 h-3.5 text-amber-500" />
                   <span>{t.roleOwner}</span>
                 </div>
@@ -429,34 +429,34 @@ export const ShareListModal: React.FC<ShareListModalProps> = ({
                 .map((member) => (
                   <div
                     key={member.key}
-                    className="p-3.5 flex items-center justify-between gap-3 bg-white dark:bg-neutral-800/90 hover:bg-neutral-50/80 dark:hover:bg-neutral-800 transition-colors"
+                    className="p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between items-start gap-2.5 sm:gap-3 bg-white dark:bg-neutral-800/90 hover:bg-neutral-50/80 dark:hover:bg-neutral-800 transition-colors"
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto flex-1">
                       {member.photoURL ? (
                         <img
                           src={member.photoURL}
                           alt={member.displayName || member.email}
                           referrerPolicy="no-referrer"
-                          className="w-8 h-8 rounded-xl object-cover ring-1 ring-neutral-200 dark:ring-neutral-700 shrink-0"
+                          className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl object-cover ring-1 ring-neutral-200 dark:ring-neutral-700 shrink-0"
                         />
                       ) : (
-                        <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-emerald-500/30">
+                        <div className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-emerald-500/30">
                           {(member.displayName || member.email || 'U')
                             .charAt(0)
                             .toUpperCase()}
                         </div>
                       )}
-                      <div className="min-w-0">
-                        <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100 block truncate">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-neutral-100 block break-words">
                           {member.displayName || member.email.split('@')[0]}
                         </span>
-                        <span className="text-[11px] text-neutral-500 dark:text-neutral-400 block truncate">
+                        <span className="text-xs text-neutral-600 dark:text-neutral-300 font-medium block break-all sm:break-normal sm:truncate mt-0.5">
                           {member.email}
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto w-full sm:w-auto justify-end pt-1 sm:pt-0 border-t border-neutral-100 dark:border-neutral-800 sm:border-0">
                       {isOwner ? (
                         <>
                           <select
@@ -481,7 +481,7 @@ export const ShareListModal: React.FC<ShareListModalProps> = ({
                             title={t.delete}
                             className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                           </button>
                         </>
                       ) : (
@@ -507,35 +507,35 @@ export const ShareListModal: React.FC<ShareListModalProps> = ({
               {pendingMembers.map((member) => (
                 <div
                   key={member.key}
-                  className="p-3.5 flex items-center justify-between gap-3 bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-50/60 dark:hover:bg-amber-950/30 transition-colors"
+                  className="p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between items-start gap-2.5 sm:gap-3 bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-50/60 dark:hover:bg-amber-950/30 transition-colors"
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-amber-100/70 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-amber-500/20">
+                  <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto flex-1">
+                    <div className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl bg-amber-100/70 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-amber-500/20">
                       <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 animate-pulse" />
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center flex-wrap gap-1.5">
+                        <span className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-neutral-100 break-all">
                           {member.email}
                         </span>
-                        <span className="px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 text-[9px] font-bold">
+                        <span className="px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 text-[9px] font-bold shrink-0">
                           {t.pendingBadge}
                         </span>
                       </div>
-                      <span className="text-[10px] text-neutral-500 dark:text-neutral-400 block truncate">
+                      <span className="text-xs text-neutral-600 dark:text-neutral-300 font-medium block mt-0.5">
                         {member.role === 'edit' ? t.roleCanEdit : t.roleCanView}
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto w-full sm:w-auto justify-end pt-1 sm:pt-0 border-t border-amber-100 dark:border-amber-900/40 sm:border-0">
                     <button
                       type="button"
                       onClick={() => handleSendEmailInvite(member.email)}
                       title={t.sendEmailInvite}
                       className="p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer"
                     >
-                      <Mail className="w-3.5 h-3.5" />
+                      <Mail className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                     </button>
 
                     {isOwner && (
@@ -547,7 +547,7 @@ export const ShareListModal: React.FC<ShareListModalProps> = ({
                         title={t.delete}
                         className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                       </button>
                     )}
                   </div>

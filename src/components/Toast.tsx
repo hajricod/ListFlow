@@ -18,45 +18,59 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:left-auto sm:right-auto sm:end-4 z-50 flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm pointer-events-none items-center sm:items-stretch">
+    <aside
+      id="toast-notification-container"
+      aria-live="polite"
+      aria-label="Notifications"
+      className="fixed bottom-4 sm:bottom-6 inset-x-4 sm:inset-x-auto sm:end-6 z-[9999] flex flex-col items-center sm:items-end gap-2.5 max-w-sm sm:max-w-md w-auto pointer-events-none transition-all"
+    >
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className="w-full pointer-events-auto flex items-center justify-between gap-3 p-3.5 rounded-xl bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-xl border border-neutral-800 dark:border-neutral-200 animate-in fade-in slide-in-from-bottom-2 duration-200"
+          id={`toast-${toast.id}`}
+          role="status"
+          className="w-full pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-neutral-900/95 text-white dark:bg-white/95 dark:text-neutral-900 shadow-2xl backdrop-blur-md border border-neutral-800/80 dark:border-neutral-200/80 animate-in fade-in slide-in-from-bottom-3 duration-200"
         >
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             {toast.type === 'error' ? (
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400 dark:text-rose-600 shrink-0" />
             ) : toast.type === 'info' ? (
-              <Info className="w-4 h-4 text-blue-400 shrink-0" />
+              <Info className="w-4 h-4 sm:w-5 sm:h-5 text-sky-400 dark:text-sky-600 shrink-0" />
             ) : (
-              <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+              <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 dark:text-emerald-600 shrink-0" />
             )}
-            <span className="text-xs font-medium truncate">{toast.message}</span>
+            <span className="text-xs sm:text-sm font-medium leading-snug break-words">
+              {toast.message}
+            </span>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 ms-2">
             {toast.undoAction && (
               <button
+                type="button"
+                id={`toast-undo-${toast.id}`}
                 onClick={() => {
                   toast.undoAction?.();
                   onDismiss(toast.id);
                 }}
-                className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-indigo-300 dark:text-indigo-600 hover:bg-neutral-800 dark:hover:bg-neutral-200 rounded transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-emerald-300 dark:text-emerald-700 bg-neutral-800/90 dark:bg-neutral-100 hover:bg-neutral-700 dark:hover:bg-neutral-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
               >
-                <RotateCcw className="w-3 h-3" />
+                <RotateCcw className="w-3.5 h-3.5" />
                 <span>{t.undo}</span>
               </button>
             )}
             <button
+              type="button"
+              id={`toast-dismiss-${toast.id}`}
               onClick={() => onDismiss(toast.id)}
-              className="p-1 text-neutral-400 hover:text-white dark:hover:text-neutral-900 rounded"
+              aria-label="Close notification"
+              className="p-1 text-neutral-400 hover:text-white dark:text-neutral-500 dark:hover:text-neutral-900 rounded-lg hover:bg-neutral-800/60 dark:hover:bg-neutral-100 transition-colors cursor-pointer"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
       ))}
-    </div>
+    </aside>
   );
 };
