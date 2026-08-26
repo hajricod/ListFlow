@@ -262,13 +262,13 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                 <h2 className="text-sm font-bold text-neutral-900 dark:text-neutral-100 truncate">
                   {t.myLists}
                 </h2>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300">
+                {/* {<span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300">
                   {lists.length}
-                </span>
+                </span>} */}
               </div>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
+              {/* {<p className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
                 {language === 'ar' ? 'تصفح وإدارة مساحات العمل' : 'Workspaces & categories'}
-              </p>
+              </p>} */}
             </div>
           </div>
 
