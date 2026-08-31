@@ -80,6 +80,24 @@ export function handleFirestoreError(
 }
 
 /**
+ * Checks if a Firestore error is related to quota exhaustion / resource-exhausted limit.
+ */
+export function isQuotaExceededError(error: unknown): boolean {
+  if (!error) return false;
+  const msg = error instanceof Error ? error.message : String(error);
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: unknown }).code)
+      : '';
+  return (
+    msg.toLowerCase().includes('quota exceeded') ||
+    msg.toLowerCase().includes('resource-exhausted') ||
+    msg.toLowerCase().includes('daily read units') ||
+    code === 'resource-exhausted'
+  );
+}
+
+/**
  * Recursively removes all undefined values from objects/arrays so Firestore WriteBatch / setDoc doesn't reject them.
  */
 export function sanitizeForFirestore<T>(data: T): T {
@@ -169,7 +187,11 @@ export async function syncUserProfile(
     await setDoc(userDocRef, sanitizeForFirestore(payload), { merge: true });
     return true;
   } catch (error) {
-    console.error('Error syncing user profile to Firestore:', error);
+    if (isQuotaExceededError(error)) {
+      console.warn('Firestore daily quota exceeded while syncing user profile. Falling back to local device storage.');
+    } else {
+      console.error('Error syncing user profile to Firestore:', error);
+    }
     return false;
   }
 }
@@ -408,7 +430,11 @@ export async function syncAllToFirestore(
 
     return true;
   } catch (error) {
-    console.error('Error syncing all collections to Firestore:', error);
+    if (isQuotaExceededError(error)) {
+      console.warn('Firestore daily quota exceeded during syncAllToFirestore. Changes saved to local storage.');
+    } else {
+      console.error('Error syncing all collections to Firestore:', error);
+    }
     return false;
   }
 }
@@ -650,7 +676,11 @@ export function subscribeToUserCloudData(
       emitCombinedData();
     },
     (err) => {
-      console.error('Member lists query onSnapshot error:', err);
+      if (isQuotaExceededError(err)) {
+        console.warn('Firestore daily quota reached for real-time list subscriptions. Falling back to local data.');
+      } else {
+        console.error('Member lists query onSnapshot error:', err);
+      }
       if (onError) onError(err);
     }
   );

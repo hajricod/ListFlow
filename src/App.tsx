@@ -82,6 +82,7 @@ import {
   subscribeToUserCloudData,
   syncAllToFirestore,
   syncUserProfile,
+  isQuotaExceededError,
   saveUserOnboardingSeen,
   shareListWithUser,
   updateMemberRole,
@@ -717,8 +718,13 @@ export default function App() {
         }
       },
       (err) => {
-        console.error('Real-time subscription error:', err);
-        setSyncStatus('error');
+        if (isQuotaExceededError(err)) {
+          console.warn('Real-time subscription quota exceeded. Seamlessly operating in offline local mode.');
+          setSyncStatus('quota-exceeded');
+        } else {
+          console.error('Real-time subscription error:', err);
+          setSyncStatus('error');
+        }
       }
     );
 
@@ -767,8 +773,13 @@ export default function App() {
         const ok = await syncAllToFirestore(user.uid, validLists, groups, items);
         setSyncStatus(ok ? 'synced' : 'error');
       } catch (err) {
-        console.error('Auto sync to Firestore failed:', err);
-        setSyncStatus('error');
+        if (isQuotaExceededError(err)) {
+          console.warn('Auto sync quota exceeded. Changes safely preserved locally.');
+          setSyncStatus('quota-exceeded');
+        } else {
+          console.error('Auto sync to Firestore failed:', err);
+          setSyncStatus('error');
+        }
       }
     }, 400);
 
@@ -799,7 +810,11 @@ export default function App() {
           activeListId,
         });
       } catch (err) {
-        console.error('Preferences sync to Firestore failed:', err);
+        if (isQuotaExceededError(err)) {
+          console.warn('Preferences sync quota exceeded. Preferences preserved in local storage.');
+        } else {
+          console.error('Preferences sync to Firestore failed:', err);
+        }
       }
     }, 500);
 
@@ -2316,6 +2331,49 @@ export default function App() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Daily Quota Notice Banner (when Firestore free tier limit is reached) */}
+              {syncStatus === 'quota-exceeded' && (
+                <div
+                  id="quota-exceeded-banner"
+                  className="p-4 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-700/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-neutral-800 dark:text-neutral-200 animate-in fade-in slide-in-from-top-2 duration-300"
+                >
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+                      <Layers className="w-4.5 h-4.5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                        {language === 'ar'
+                          ? 'تم بلوغ الحد اليومي للمزامنة السحابية المجانية (Spark Quota)'
+                          : 'Firestore daily free tier quota reached'}
+                      </p>
+                      <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
+                        {language === 'ar'
+                          ? 'التطبيق يعمل بكامل ميزاته محلياً على هذا الجهاز بدون انقطاع. ستتم إعادة ضبط الحد المجاني غداً.'
+                          : 'The app continues operating seamlessly offline in local storage. The free quota will reset tomorrow.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                    <a
+                      href="https://console.firebase.google.com/project/gen-lang-client-0284690034/firestore/databases/ai-studio-listflow-e569587e-1a30-48a3-a524-76f9129b74cc/data?openUpgradeDialog=true"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 text-xs font-semibold rounded-xl text-amber-900 dark:text-amber-200 bg-amber-200/80 dark:bg-amber-900/70 hover:bg-amber-300 dark:hover:bg-amber-800 transition-colors"
+                    >
+                      {language === 'ar' ? 'ترقية في Firebase' : 'Upgrade Quota'}
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setSyncStatus('offline')}
+                      className="px-2.5 py-1.5 text-xs text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 cursor-pointer"
+                    >
+                      {language === 'ar' ? 'إغلاق' : 'Dismiss'}
+                    </button>
+                  </div>
                 </div>
               )}
 
