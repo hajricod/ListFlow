@@ -3,14 +3,6 @@ import {
   ListTodo,
   Menu,
   Settings,
-  Sun,
-  Moon,
-  Monitor,
-  Download,
-  Users,
-  UserPlus,
-  Eye,
-  Languages,
 } from 'lucide-react';
 import { Language, Theme, SyncStatus } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -101,90 +93,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Right: Active List Tag, Share Button, Install Button, Theme Quick Switch & Settings Action */}
+          {/* Right: Settings Action */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            {activeListName && currentView === 'workspace' && (
-              <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-100 dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                <div
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: activeListColor }}
-                />
-                <span className="max-w-[140px] truncate">{activeListName}</span>
-                {isReadOnly && (
-                  <span className="px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 text-[10px] font-bold flex items-center gap-0.5">
-                    <Eye className="w-2.5 h-2.5" />
-                    <span>{t.viewOnlyBadge}</span>
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Share List Quick Action in Navbar */}
-            {onOpenShareModal && currentView === 'workspace' && (
-              <button
-                id="nav-share-list-btn"
-                type="button"
-                onClick={onOpenShareModal}
-                title={t.shareList}
-                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold shadow-2xs transition-all cursor-pointer border ${
-                  isShared
-                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border-emerald-200/90 dark:border-emerald-800/70'
-                    : 'bg-white dark:bg-neutral-800/90 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-750 border-neutral-200/90 dark:border-neutral-700/80'
-                }`}
-              >
-                {isShared ? (
-                  <Users className="w-4 h-4 text-emerald-600 dark:text-emerald-400 stroke-[2.2]" />
-                ) : (
-                  <UserPlus className="w-4 h-4 text-neutral-600 dark:text-neutral-300 stroke-[2.2]" />
-                )}
-                <span className="hidden sm:inline font-bold">{t.share}</span>
-                {isShared && memberCount > 1 && (
-                  <span className="px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300 text-[10px] font-mono font-bold">
-                    {memberCount}
-                  </span>
-                )}
-              </button>
-            )}
-
-            {/* Quick Language Toggle */}
-            {/* {{onToggleLanguage && (
-              <button
-                id="nav-language-toggle-btn"
-                type="button"
-                onClick={onToggleLanguage}
-                title={language === 'ar' ? 'التبديل إلى الإنجليزية (Switch to English)' : 'Switch to Arabic (التبديل إلى العربية)'}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200/60 dark:border-neutral-700/60 transition-all cursor-pointer font-bold text-xs shadow-2xs hover:border-emerald-300 dark:hover:border-emerald-700"
-              >
-                <Languages className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span className="leading-none">{language === 'ar' ? 'EN' : 'عربي'}</span>
-              </button>
-            )}} */}
-
-            {/* Theme Toggle */}
-            {onCycleTheme && (
-              <button
-                id="nav-theme-toggle-btn"
-                type="button"
-                onClick={onCycleTheme}
-                title={
-                  theme === 'dark'
-                    ? `${t.darkMode} (${t.shortcutToggleTheme})`
-                    : theme === 'system'
-                    ? `${t.systemMode} (${t.shortcutToggleTheme})`
-                    : `${t.lightMode} (${t.shortcutToggleTheme})`
-                }
-                className="p-2 rounded-xl text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100 border border-transparent hover:border-neutral-200/80 dark:hover:border-neutral-700/80 transition-all cursor-pointer"
-              >
-                {theme === 'dark' ? (
-                  <Moon className="w-5 h-5 text-indigo-400" />
-                ) : theme === 'system' ? (
-                  <Monitor className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                ) : (
-                  <Sun className="w-5 h-5 text-amber-500" />
-                )}
-              </button>
-            )}
-
             {onOpenSettings && (
               <button
                 id="nav-settings-btn"

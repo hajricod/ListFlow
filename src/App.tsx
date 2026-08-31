@@ -91,7 +91,8 @@ import {
   deleteGroupFromFirestore,
   deleteListFromFirestore,
 } from './utils/firestoreSync';
-import { Plus, ListTodo, Layers, Users, Check } from 'lucide-react';
+import { Plus, ListTodo, Layers, Users, Check, Pencil } from 'lucide-react';
+import { IconRenderer } from './components/IconRenderer';
 
 export default function App() {
   // 1. Core State
@@ -2219,6 +2220,31 @@ export default function App() {
             />
           ) : (
             <div className="w-full max-w-7xl 2xl:max-w-[1600px] mx-auto space-y-6">
+              {/* Active List Title & Info Header */}
+              {activeList && (
+                <div
+                  id="main-list-header"
+                  className="flex items-center justify-between gap-3 pt-1 pb-0.5"
+                >
+                  <div className="min-w-0">
+                    <h1
+                      id="main-list-title"
+                      className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100 truncate"
+                    >
+                      {activeList.title}
+                    </h1>
+                    {activeList.description && (
+                      <p
+                        id="main-list-description"
+                        className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 truncate mt-0.5"
+                      >
+                        {activeList.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Pending Invitations Banner */}
               {pendingInvitations.length > 0 && (
                 <div className="space-y-3">

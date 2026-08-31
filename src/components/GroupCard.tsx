@@ -189,19 +189,17 @@ export const GroupCard: React.FC<GroupCardProps> = ({
         <div className="flex items-center justify-between gap-2">
           {/* Left Controls & Status Badge */}
           <div className="flex items-center gap-1.5 min-w-0">
-            {/* Group Icon & Color Indicator Badge */}
+            {/* Group Icon */}
             <div
-              className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 shadow-2xs transition-all"
+              className="w-6 h-6 flex items-center justify-center shrink-0 transition-all"
               style={{
-                backgroundColor: `${group.color || '#10b981'}1f`,
                 color: group.color || '#10b981',
-                border: `1px solid ${group.color || '#10b981'}40`,
               }}
               title={group.title}
             >
               <IconRenderer
                 name={group.icon || 'shopping-bag'}
-                className="w-3.5 h-3.5 stroke-[2.2]"
+                className="w-4 h-4 stroke-[2.2]"
               />
             </div>
 

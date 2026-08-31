@@ -211,8 +211,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({
     l.title.toLowerCase().includes(listSearch.trim().toLowerCase())
   );
 
-  const overallProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
   // Safe floating menu position calculations
   const getFloatingMenuStyle = () => {
     if (!menuAnchor) return {};
@@ -259,9 +257,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({
         {/* Top Header of Sidebar */}
         <div className="h-16 px-4 border-b border-neutral-200/80 dark:border-neutral-800/80 flex items-center justify-between gap-2 shrink-0 bg-white/95 dark:bg-neutral-900/95">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-sm shadow-emerald-500/20 shrink-0">
-              <ListTodo className="w-5 h-5 stroke-[2.5]" />
-            </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <h2 className="text-sm font-bold text-neutral-900 dark:text-neutral-100 truncate">
@@ -311,9 +306,9 @@ export const SideMenu: React.FC<SideMenuProps> = ({
               onOpenNewListModal();
               if (window.innerWidth < 1024) onClose();
             }}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 active:scale-[0.98] transition-all cursor-pointer shadow-xs"
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30 active:scale-[0.98] transition-colors cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>{t.newList}</span>
           </button>
         </div>
@@ -369,20 +364,12 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                     onSelectList(list.id);
                     if (window.innerWidth < 1024) onClose();
                   }}
-                  className={`group/item relative flex flex-col p-2.5 rounded-xl transition-all cursor-pointer border ${
+                  className={`group/item relative flex flex-col p-2.5 rounded-xl transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300/90 dark:border-emerald-700/80 shadow-xs'
-                      : 'bg-transparent hover:bg-neutral-50 dark:hover:bg-neutral-800/60 border-transparent hover:border-neutral-200/80 dark:hover:border-neutral-800'
+                      ? 'bg-neutral-100/90 dark:bg-neutral-800/90'
+                      : 'hover:bg-neutral-50/80 dark:hover:bg-neutral-800/50'
                   }`}
                 >
-                  {/* Active side indicator */}
-                  {isActive && (
-                    <div
-                      className="absolute inset-y-2 start-0 w-1 rounded-e-full bg-emerald-600 dark:bg-emerald-400"
-                      style={{ backgroundColor: accentColor }}
-                    />
-                  )}
-
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div
@@ -426,17 +413,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1 shrink-0">
-                      {/* Item count badge */}
-                      <span
-                        className={`text-[11px] font-mono px-1.5 py-0.5 rounded-md ${
-                          isActive
-                            ? 'bg-emerald-100/90 dark:bg-emerald-900/70 text-emerald-900 dark:text-emerald-200 font-bold'
-                            : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400'
-                        }`}
-                      >
-                        {stats.completed}/{stats.total}
-                      </span>
-
                       {/* 3-dots action menu */}
                       <button
                         type="button"
@@ -457,59 +433,19 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                       </button>
                     </div>
                   </div>
-
-                  {/* Progress bar */}
-                  {stats.total > 0 && (
-                    <div className="mt-2 w-full h-1 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-300"
-                        style={{
-                          width: `${stats.progress}%`,
-                          backgroundColor: accentColor,
-                        }}
-                      />
-                    </div>
-                  )}
                 </div>
               );
             })
           )}
         </div>
 
-        {/* Bottom Section of Sidenav: Progress summary + Dedicated Settings Button at the bottom */}
+        {/* Bottom Section of Sidenav: User profile & Settings */}
         <div className="p-3 border-t border-neutral-200/80 dark:border-neutral-800/80 bg-neutral-50/70 dark:bg-neutral-900/70 shrink-0 space-y-2.5">
-          {/* Progress Summary Card */}
-          <div className="rounded-xl p-2.5 bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/70 text-xs shadow-2xs">
-            <div className="flex items-center justify-between text-neutral-600 dark:text-neutral-400 mb-1.5 font-medium">
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                <span>{t.shoppingProgress}</span>
-              </span>
-              <span className="font-bold text-neutral-900 dark:text-neutral-100">
-                {overallProgress}%
-              </span>
-            </div>
-            <div className="w-full h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-700 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-emerald-500 transition-all duration-500"
-                style={{ width: `${overallProgress}%` }}
-              />
-            </div>
-            <div className="mt-2 flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400">
-              <span>
-                {lists.length} {t.lists}
-              </span>
-              <span>
-                {completedTasks}/{totalTasks} {t.items}
-              </span>
-            </div>
-          </div>
-
           {/* User Account / Sign In card in Sidenav */}
           {user ? (
             <div
               id="sidenav-user-profile-card"
-              className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white dark:bg-neutral-800/90 border border-neutral-200/90 dark:border-neutral-700/80 shadow-2xs"
+              className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white dark:bg-neutral-800/90 shadow-2xs"
             >
               <button
                 type="button"
@@ -600,46 +536,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({
             )
           )}
 
-          {/* Bottom Actions: Settings & Quick Language Toggle */}
-          <div className="grid grid-cols-5 gap-1.5">
-            <button
-              type="button"
-              id="sidenav-bottom-settings-btn"
-              onClick={() => {
-                onOpenSettings();
-                if (window.innerWidth < 1024) onClose();
-              }}
-              title={t.settings}
-              className={`col-span-4 flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
-                currentView === 'settings'
-                  ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/70 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700/80 shadow-xs ring-1 ring-emerald-500/20'
-                  : 'bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 border-neutral-200/90 dark:border-neutral-700 shadow-2xs'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Settings
-                  className={`w-4 h-4 ${
-                    currentView === 'settings'
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-neutral-500 dark:text-neutral-400'
-                  }`}
-                />
-                <span>{t.settings}</span>
-              </div>
-            </button>
-
-            {onToggleLanguage && (
-              <button
-                type="button"
-                id="sidenav-bottom-language-btn"
-                onClick={onToggleLanguage}
-                title={language === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}
-                className="col-span-1 flex items-center justify-center p-2.5 rounded-xl text-xs font-bold bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 text-emerald-700 dark:text-emerald-300 border border-neutral-200/90 dark:border-neutral-700 shadow-2xs transition-all cursor-pointer hover:border-emerald-300 dark:hover:border-emerald-700"
-              >
-                <span>{language === 'ar' ? 'EN' : 'ع'}</span>
-              </button>
-            )}
-          </div>
         </div>
       </aside>
 
