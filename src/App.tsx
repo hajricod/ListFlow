@@ -41,8 +41,14 @@ import {
   saveStoredSound,
   loadStoredGridColumns,
   saveStoredGridColumns,
+  loadStoredCollapsedGroups,
+  saveStoredCollapsedGroups,
   loadStoredOnboardingSeen,
   saveStoredOnboardingSeen,
+  clearGuestStorage,
+  removeOtherUsersStorage,
+  getLastActiveUserId,
+  setLastActiveUserId,
   getLocalizedTemplate,
   TemplateKey,
   SEED_TEMPLATES,
@@ -137,7 +143,14 @@ export default function App() {
     return true;
   });
 
-  const [groups, setGroups] = useState<ListGroup[]>(() => loadStoredGroups());
+  const [groups, setGroups] = useState<ListGroup[]>(() => {
+    const rawGroups = loadStoredGroups();
+    const collapsedSet = new Set(loadStoredCollapsedGroups());
+    return rawGroups.map((g) => ({
+      ...g,
+      isCollapsed: collapsedSet.has(g.id),
+    }));
+  });
   const [items, setItems] = useState<ListItem[]>(() => loadStoredItems());
 
   // 2. Filters & Search State
@@ -151,6 +164,12 @@ export default function App() {
     sortBy: 'manual',
     sortDirection: 'asc',
   });
+
+  // Persist locally collapsed groups whenever groups change
+  useEffect(() => {
+    const collapsedIds = groups.filter((g) => g.isCollapsed).map((g) => g.id);
+    saveStoredCollapsedGroups(collapsedIds, user?.uid);
+  }, [groups, user?.uid]);
 
   useEffect(() => {
     saveStoredGridColumns(gridColumns, user?.uid);
@@ -204,61 +223,11 @@ export default function App() {
 
   const t = getTranslation(language);
 
-  // Sync Language and Direction with DOM and update standard list names
+  // Sync Language and Direction with DOM and persist language preference
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
     saveStoredLanguage(language, user?.uid);
-
-    // Synchronize default lists and template titles when language toggles
-    setLists((prevLists) =>
-      prevLists.map((l) => {
-        if (l.id === 'list-groceries') {
-          return {
-            ...l,
-            title: language === 'ar' ? 'مقاضي الأسرة الأسبوعية' : 'Weekly Groceries',
-            description:
-              language === 'ar'
-                ? 'المستلزمات الأسبوعية والخضار والمؤونة'
-                : 'Weekly food essentials, fresh produce, and pantry staples',
-          };
-        }
-        if (l.id === 'list-work') {
-          return {
-            ...l,
-            title: language === 'ar' ? 'مهام العمل والمشاريع' : 'Work Sprint',
-            description:
-              language === 'ar'
-                ? 'مراحل المشروع ومهام البرمجة والتصميم'
-                : 'Sprint milestones, client deliverables, and design tasks',
-          };
-        }
-        if (l.id === 'list-personal') {
-          return {
-            ...l,
-            title: language === 'ar' ? 'الأهداف والعادات الشخصية' : 'Personal Goals',
-            description:
-              language === 'ar'
-                ? 'العادات اليومية والرياضة وتطوير الذات'
-                : 'Daily routines, reading list, and wellness tracking',
-          };
-        }
-
-        const templateKeys: TemplateKey[] = ['weekly', 'freshMarket', 'bbq', 'pantry'];
-        for (const key of templateKeys) {
-          const enTpl = getLocalizedTemplate(key, 'en');
-          const arTpl = getLocalizedTemplate(key, 'ar');
-          if (l.title === enTpl.name || l.title === arTpl.name) {
-            return {
-              ...l,
-              title: language === 'ar' ? arTpl.name : enTpl.name,
-              description: language === 'ar' ? arTpl.desc : enTpl.desc,
-            };
-          }
-        }
-        return l;
-      })
-    );
   }, [language, user?.uid]);
 
   // Theme Cycling helper
@@ -561,8 +530,22 @@ export default function App() {
     if (prevUserRef.current === undefined) {
       prevUserRef.current = currentUid;
       currentActiveUserIdRef.current = currentUid;
+      const lastKnownUid = getLastActiveUserId();
+
+      if (currentUid) {
+        if (lastKnownUid && lastKnownUid !== currentUid) {
+          removeOtherUsersStorage(currentUid);
+        }
+        setLastActiveUserId(currentUid);
+      }
+
       const initialLists = loadStoredLists(currentUid);
-      const initialGroups = loadStoredGroups(currentUid);
+      const rawInitialGroups = loadStoredGroups(currentUid);
+      const collapsedSet = new Set(loadStoredCollapsedGroups(currentUid));
+      const initialGroups = rawInitialGroups.map((g) => ({
+        ...g,
+        isCollapsed: collapsedSet.has(g.id),
+      }));
       const initialItems = loadStoredItems(currentUid);
       const initialActiveListId = loadActiveListId(initialLists, currentUid);
       const initialLang = loadStoredLanguage(currentUid);
@@ -581,7 +564,7 @@ export default function App() {
       setSoundEnabled(initialSound);
       setGridColumns(initialGrid);
 
-      // If already logged in on initial load, fetch remote cloud preferences from Firestore
+      // If already logged in on initial load, fetch remote preferences
       if (currentUid) {
         fetchUserProfilePreferences(currentUid).then((cloudPrefs) => {
           if (cloudPrefs && currentActiveUserIdRef.current === currentUid) {
@@ -596,27 +579,48 @@ export default function App() {
       prevUserRef.current = currentUid;
       currentActiveUserIdRef.current = currentUid;
 
-      const userLists = loadStoredLists(currentUid);
-      const userGroups = loadStoredGroups(currentUid);
-      const userItems = loadStoredItems(currentUid);
-      const userActiveListId = loadActiveListId(userLists, currentUid);
-      const userLang = loadStoredLanguage(currentUid);
-      const userTheme = loadStoredTheme(currentUid);
-      const userThemeColor = loadStoredThemeColor(currentUid);
-      const userSound = loadStoredSound(currentUid);
-      const userGrid = loadStoredGridColumns(currentUid);
+      if (isLogout) {
+        // When logging out, DO NOT remove data or settings state.
+        // Retain the current data and preferences in state and local storage.
+        setSyncStatus('idle');
+        showToast(t.logoutSuccess, undefined, 'info');
+      } else if (currentUid) {
+        // When a user logs in, check if it is a DIFFERENT user than previously active
+        const lastKnownUid = getLastActiveUserId();
+        const isDifferentUser = Boolean(lastKnownUid && lastKnownUid !== currentUid);
 
-      setLists(userLists);
-      setGroups(userGroups);
-      setItems(userItems);
-      setActiveListId(userActiveListId);
-      setLanguage(userLang);
-      setTheme(userTheme);
-      setThemeColor(userThemeColor);
-      setSoundEnabled(userSound);
-      setGridColumns(userGrid);
+        if (isDifferentUser) {
+          // A different user logged in -> remove previous user's local storage and load this user's data
+          removeOtherUsersStorage(currentUid);
 
-      if (currentUid) {
+          const userLists = loadStoredLists(currentUid);
+          const rawUserGroups = loadStoredGroups(currentUid);
+          const userCollapsedSet = new Set(loadStoredCollapsedGroups(currentUid));
+          const userGroups = rawUserGroups.map((g) => ({
+            ...g,
+            isCollapsed: userCollapsedSet.has(g.id),
+          }));
+          const userItems = loadStoredItems(currentUid);
+          const userActiveListId = loadActiveListId(userLists, currentUid);
+          const userLang = loadStoredLanguage(currentUid);
+          const userTheme = loadStoredTheme(currentUid);
+          const userThemeColor = loadStoredThemeColor(currentUid);
+          const userSound = loadStoredSound(currentUid);
+          const userGrid = loadStoredGridColumns(currentUid);
+
+          setLists(userLists);
+          setGroups(userGroups);
+          setItems(userItems);
+          setActiveListId(userActiveListId);
+          setLanguage(userLang);
+          setTheme(userTheme);
+          setThemeColor(userThemeColor);
+          setSoundEnabled(userSound);
+          setGridColumns(userGrid);
+        }
+
+        setLastActiveUserId(currentUid);
+
         // Fetch and apply cloud preferences from database upon login
         fetchUserProfilePreferences(currentUid).then((cloudPrefs) => {
           if (cloudPrefs && currentActiveUserIdRef.current === currentUid) {
@@ -625,11 +629,6 @@ export default function App() {
         }).catch((err) => {
           console.warn('Login fetchUserProfilePreferences warning:', err);
         });
-      }
-
-      if (isLogout) {
-        setSyncStatus('idle');
-        showToast(t.logoutSuccess, undefined, 'info');
       }
     }
   }, [authLoading, user?.uid, showToast, t.logoutSuccess, applyUserPreferences]);
@@ -651,7 +650,21 @@ export default function App() {
           setLists(cloudData.lists);
           saveStoredLists(cloudData.lists, user.uid);
           if (cloudData.groups) {
-            setGroups(cloudData.groups);
+            // Retain the current user's local collapsed state so remote member expand/collapse changes don't overwrite it
+            setGroups((prevGroups) => {
+              const currentCollapsedMap = new Map(prevGroups.map((g) => [g.id, Boolean(g.isCollapsed)]));
+              const localStoredCollapsed = new Set(loadStoredCollapsedGroups(user.uid));
+
+              return cloudData.groups.map((cg) => {
+                const isLocallyCollapsed = currentCollapsedMap.has(cg.id)
+                  ? currentCollapsedMap.get(cg.id)
+                  : localStoredCollapsed.has(cg.id);
+                return {
+                  ...cg,
+                  isCollapsed: isLocallyCollapsed,
+                };
+              });
+            });
             saveStoredGroups(cloudData.groups, user.uid);
           }
           if (cloudData.items) {

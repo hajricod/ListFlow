@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   SOUND: 'taskflow_sound_v1',
   GRID_COLUMNS: 'taskflow_grid_columns_v1',
   ONBOARDING_SEEN: 'listflow_onboarding_seen_v1',
+  COLLAPSED_GROUPS: 'listflow_collapsed_groups_v1',
 };
 
 export const SEED_LISTS: Record<Language, AppList[]> = {
@@ -1264,6 +1265,25 @@ export const SEED_ARABIC_PERSONAL_ITEMS: ListItem[] = [
   },
 ];
 
+export const LAST_ACTIVE_USER_KEY = 'listflow_last_active_user_id';
+
+export const getLastActiveUserId = (): string | null => {
+  try {
+    return localStorage.getItem(LAST_ACTIVE_USER_KEY);
+  } catch {}
+  return null;
+};
+
+export const setLastActiveUserId = (uid: string | null) => {
+  try {
+    if (uid) {
+      localStorage.setItem(LAST_ACTIVE_USER_KEY, uid);
+    } else {
+      // Don't remove on logout so we know who was the last logged in user
+    }
+  } catch {}
+};
+
 export const getUserStorageKey = (baseKey: string, userId?: string | null): string => {
   const cleanId = userId ? `user_${userId}` : 'guest';
   return `${baseKey}_${cleanId}`;
@@ -1275,7 +1295,20 @@ export const loadStoredLists = (userId?: string | null): AppList[] => {
     const raw = localStorage.getItem(key);
     if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+
+    // If guest key was empty, check if we have data from the last active user session
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.LISTS, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey);
+        if (lastRaw !== null) {
+          const lastParsed = JSON.parse(lastRaw);
+          if (Array.isArray(lastParsed) && lastParsed.length > 0) return lastParsed;
+        }
+      }
     }
   } catch (err) {
     console.warn('Failed to load lists from localStorage', err);
@@ -1287,6 +1320,11 @@ export const saveStoredLists = (lists: AppList[], userId?: string | null) => {
   try {
     const key = getUserStorageKey(STORAGE_KEYS.LISTS, userId);
     localStorage.setItem(key, JSON.stringify(lists));
+    // Always mirror to guest storage as well so unauthenticated state stays in sync
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.LISTS, null), JSON.stringify(lists));
+      setLastActiveUserId(userId);
+    }
   } catch (err) {
     console.error('Failed to save lists', err);
   }
@@ -1297,6 +1335,15 @@ export const loadActiveListId = (lists: AppList[], userId?: string | null): stri
     const key = getUserStorageKey(STORAGE_KEYS.ACTIVE_LIST_ID, userId);
     const raw = localStorage.getItem(key);
     if (raw && lists.some((l) => l.id === raw)) return raw;
+
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.ACTIVE_LIST_ID, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey);
+        if (lastRaw && lists.some((l) => l.id === lastRaw)) return lastRaw;
+      }
+    }
   } catch {}
   return lists[0]?.id || '';
 };
@@ -1305,6 +1352,10 @@ export const saveActiveListId = (id: string, userId?: string | null) => {
   try {
     const key = getUserStorageKey(STORAGE_KEYS.ACTIVE_LIST_ID, userId);
     localStorage.setItem(key, id);
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.ACTIVE_LIST_ID, null), id);
+      setLastActiveUserId(userId);
+    }
   } catch {}
 };
 
@@ -1321,6 +1372,23 @@ export const loadStoredGroups = (userId?: string | null): ListGroup[] => {
         }));
       }
     }
+
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.GROUPS, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey);
+        if (lastRaw !== null) {
+          const lastParsed = JSON.parse(lastRaw);
+          if (Array.isArray(lastParsed)) {
+            return lastParsed.map((g) => ({
+              ...g,
+              listId: g.listId || '',
+            }));
+          }
+        }
+      }
+    }
   } catch (err) {
     console.warn('Failed to load groups from localStorage', err);
   }
@@ -1331,6 +1399,10 @@ export const saveStoredGroups = (groups: ListGroup[], userId?: string | null) =>
   try {
     const key = getUserStorageKey(STORAGE_KEYS.GROUPS, userId);
     localStorage.setItem(key, JSON.stringify(groups));
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.GROUPS, null), JSON.stringify(groups));
+      setLastActiveUserId(userId);
+    }
   } catch (err) {
     console.error('Failed to save groups', err);
   }
@@ -1355,6 +1427,18 @@ export const loadStoredItems = (userId?: string | null): ListItem[] => {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return normalizeItems(parsed);
     }
+
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.ITEMS, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey);
+        if (lastRaw !== null) {
+          const lastParsed = JSON.parse(lastRaw);
+          if (Array.isArray(lastParsed)) return normalizeItems(lastParsed);
+        }
+      }
+    }
   } catch (err) {
     console.warn('Failed to load items from localStorage', err);
   }
@@ -1365,6 +1449,10 @@ export const saveStoredItems = (items: ListItem[], userId?: string | null) => {
   try {
     const key = getUserStorageKey(STORAGE_KEYS.ITEMS, userId);
     localStorage.setItem(key, JSON.stringify(items));
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.ITEMS, null), JSON.stringify(items));
+      setLastActiveUserId(userId);
+    }
   } catch (err) {
     console.error('Failed to save items', err);
   }
@@ -1375,6 +1463,15 @@ export const loadStoredLanguage = (userId?: string | null): Language => {
     const key = getUserStorageKey(STORAGE_KEYS.LANGUAGE, userId);
     const raw = localStorage.getItem(key);
     if (raw === 'ar' || raw === 'en') return raw;
+
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.LANGUAGE, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey);
+        if (lastRaw === 'ar' || lastRaw === 'en') return lastRaw;
+      }
+    }
   } catch {}
   return 'en';
 };
@@ -1383,6 +1480,10 @@ export const saveStoredLanguage = (lang: Language, userId?: string | null) => {
   try {
     const key = getUserStorageKey(STORAGE_KEYS.LANGUAGE, userId);
     localStorage.setItem(key, lang);
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.LANGUAGE, null), lang);
+      setLastActiveUserId(userId);
+    }
   } catch {}
 };
 
@@ -1391,6 +1492,15 @@ export const loadStoredTheme = (userId?: string | null): Theme => {
     const key = getUserStorageKey(STORAGE_KEYS.THEME, userId);
     const raw = localStorage.getItem(key);
     if (raw === 'dark' || raw === 'light' || raw === 'system') return raw;
+
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.THEME, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey);
+        if (lastRaw === 'dark' || lastRaw === 'light' || lastRaw === 'system') return lastRaw;
+      }
+    }
   } catch {}
   return 'light';
 };
@@ -1399,6 +1509,10 @@ export const saveStoredTheme = (theme: Theme, userId?: string | null) => {
   try {
     const key = getUserStorageKey(STORAGE_KEYS.THEME, userId);
     localStorage.setItem(key, theme);
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.THEME, null), theme);
+      setLastActiveUserId(userId);
+    }
   } catch {}
 };
 
@@ -1418,6 +1532,15 @@ export const loadStoredThemeColor = (userId?: string | null): ThemeColor => {
       'orange',
     ];
     if (raw && validColors.includes(raw)) return raw;
+
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.THEME_COLOR, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey) as ThemeColor;
+        if (lastRaw && validColors.includes(lastRaw)) return lastRaw;
+      }
+    }
   } catch {}
   return 'emerald';
 };
@@ -1426,6 +1549,10 @@ export const saveStoredThemeColor = (color: ThemeColor, userId?: string | null) 
   try {
     const key = getUserStorageKey(STORAGE_KEYS.THEME_COLOR, userId);
     localStorage.setItem(key, color);
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.THEME_COLOR, null), color);
+      setLastActiveUserId(userId);
+    }
   } catch {}
 };
 
@@ -1434,6 +1561,15 @@ export const loadStoredSound = (userId?: string | null): boolean => {
     const key = getUserStorageKey(STORAGE_KEYS.SOUND, userId);
     const raw = localStorage.getItem(key);
     if (raw !== null) return raw === 'true';
+
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.SOUND, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey);
+        if (lastRaw !== null) return lastRaw === 'true';
+      }
+    }
   } catch {}
   return true;
 };
@@ -1442,6 +1578,10 @@ export const saveStoredSound = (sound: boolean, userId?: string | null) => {
   try {
     const key = getUserStorageKey(STORAGE_KEYS.SOUND, userId);
     localStorage.setItem(key, String(sound));
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.SOUND, null), String(sound));
+      setLastActiveUserId(userId);
+    }
   } catch {}
 };
 
@@ -1451,6 +1591,16 @@ export const loadStoredGridColumns = (userId?: string | null): 1 | 2 => {
     const raw = localStorage.getItem(key);
     if (raw === '1') return 1;
     if (raw === '2') return 2;
+
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.GRID_COLUMNS, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey);
+        if (lastRaw === '1') return 1;
+        if (lastRaw === '2') return 2;
+      }
+    }
   } catch {}
   return 2; // Default is 2 columns
 };
@@ -1459,6 +1609,32 @@ export const saveStoredGridColumns = (cols: 1 | 2, userId?: string | null) => {
   try {
     const key = getUserStorageKey(STORAGE_KEYS.GRID_COLUMNS, userId);
     localStorage.setItem(key, String(cols));
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.GRID_COLUMNS, null), String(cols));
+      setLastActiveUserId(userId);
+    }
+  } catch {}
+};
+
+export const loadStoredCollapsedGroups = (userId?: string | null): string[] => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.COLLAPSED_GROUPS, userId);
+    const raw = localStorage.getItem(key);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter((id) => typeof id === 'string');
+    }
+  } catch {}
+  return [];
+};
+
+export const saveStoredCollapsedGroups = (collapsedIds: string[], userId?: string | null) => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.COLLAPSED_GROUPS, userId);
+    localStorage.setItem(key, JSON.stringify(collapsedIds));
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.COLLAPSED_GROUPS, null), JSON.stringify(collapsedIds));
+    }
   } catch {}
 };
 
@@ -1476,5 +1652,47 @@ export const saveStoredOnboardingSeen = (seen: boolean, userId?: string | null) 
     const key = getUserStorageKey(STORAGE_KEYS.ONBOARDING_SEEN, userId);
     localStorage.setItem(key, String(seen));
   } catch {}
+};
+
+export const clearGuestStorage = () => {
+  try {
+    Object.values(STORAGE_KEYS).forEach((baseKey) => {
+      const guestKey = `${baseKey}_guest`;
+      localStorage.removeItem(guestKey);
+    });
+  } catch (err) {
+    console.warn('Failed to clear guest storage', err);
+  }
+};
+
+/**
+ * Removes local storage data belonging to any OTHER logged-in user.
+ * Keeps the current user's local cached data intact across sessions,
+ * but purges previous user data if a different user logs in on this device.
+ */
+export const removeOtherUsersStorage = (currentUid: string) => {
+  try {
+    if (!currentUid) return;
+    const targetSuffix = `_user_${currentUid}`;
+    const keysToRemove: string[] = [];
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+
+      // Identify user-scoped cache keys that do NOT belong to the active user
+      if (
+        (key.startsWith('taskflow_') || key.startsWith('listflow_')) &&
+        key.includes('_user_') &&
+        !key.endsWith(targetSuffix)
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch (err) {
+    console.warn('Failed to remove other users storage', err);
+  }
 };
 

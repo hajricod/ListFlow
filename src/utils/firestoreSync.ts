@@ -352,11 +352,14 @@ export async function syncAllToFirestore(
         continue;
       }
 
+      // Group expansion/collapse is purely a per-user local UI preference and should NOT be shared with other members
+      const { isCollapsed: _ignoredCollapsed, ...sharedGroupFields } = group;
+
       const groupRef = doc(db, 'lists', listId, 'groups', group.id);
       currentBatch.set(
         groupRef,
         sanitizeForFirestore({
-          ...group,
+          ...sharedGroupFields,
           listId,
           order: group.order !== undefined ? group.order : i,
           updatedAt: new Date().toISOString(),

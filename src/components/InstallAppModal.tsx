@@ -3,11 +3,9 @@ import {
   Download,
   X,
   Smartphone,
-  Laptop,
-  CheckCircle2,
   Share,
   PlusSquare,
-  Sparkles,
+  CheckCircle2,
   WifiOff,
   Zap,
 } from 'lucide-react';
@@ -40,176 +38,107 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150"
       onClick={onClose}
       dir={isRTL ? 'rtl' : 'ltr'}
     >
       <div
-        className="relative w-full max-w-lg bg-white dark:bg-neutral-900 border border-neutral-200/80 dark:border-neutral-800 rounded-3xl shadow-2xl p-6 sm:p-8 overflow-hidden transition-all"
+        className="w-full max-w-sm bg-white dark:bg-neutral-900 border border-neutral-200/80 dark:border-neutral-800 rounded-2xl shadow-xl p-5 space-y-4 animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
       >
-        {/* Decorative Top Accent Light */}
-        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600" />
-
-        {/* Close Button */}
-        <button
-          id="close-install-modal-btn"
-          type="button"
-          onClick={onClose}
-          className="absolute top-5 end-5 p-2 rounded-xl text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
-          aria-label={t.close}
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        {/* Header with App Visual Badge */}
-        <div className="flex items-start gap-4 mb-6">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 p-0.5 shadow-lg shadow-emerald-500/20 shrink-0 flex items-center justify-center">
-            <img src="/icon.svg" alt="List Flow Icon" className="w-full h-full rounded-2xl" />
-          </div>
-          <div className="min-w-0 flex-1 pt-1">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-xs font-semibold border border-emerald-200/60 dark:border-emerald-800/40 mb-1.5">
-              <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-              <span>Progressive Web App</span>
+        {/* Header */}
+        <div className="flex items-center justify-between pb-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Smartphone className="w-5 h-5" />
             </div>
-            <h2 className="text-xl font-bold text-neutral-900 dark:text-neutral-100">
-              {t.installAppTitle}
-            </h2>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 leading-relaxed">
-              {t.installAppSubtitle}
-            </p>
+            <div>
+              <h2 className="text-base font-bold text-neutral-900 dark:text-neutral-100">
+                {t.installAppTitle}
+              </h2>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                {isRTL ? 'تطبيق الويب التفاعلي (PWA)' : 'Progressive Web App'}
+              </p>
+            </div>
+          </div>
+          <button
+            id="close-install-modal-btn"
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+            aria-label={t.close}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Benefits Badges */}
+        <div className="flex items-center gap-2">
+          <div className="flex-1 flex items-center gap-1.5 p-2 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-100 dark:border-neutral-800 text-[11px] text-neutral-600 dark:text-neutral-300">
+            <WifiOff className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="truncate">{isRTL ? 'يعمل بدون إنترنت' : 'Offline ready'}</span>
+          </div>
+          <div className="flex-1 flex items-center gap-1.5 p-2 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-100 dark:border-neutral-800 text-[11px] text-neutral-600 dark:text-neutral-300">
+            <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <span className="truncate">{isRTL ? 'وصول فوري وسريع' : 'Instant launch'}</span>
           </div>
         </div>
 
-        {/* Value Highlights */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-6">
-          <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200/60 dark:border-neutral-700/40 flex items-start gap-2.5">
-            <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 shrink-0">
-              <WifiOff className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
-                {isRTL ? 'بدون إنترنت' : 'Offline Ready'}
-              </p>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-tight mt-0.5">
-                {t.installFeatureOffline}
-              </p>
-            </div>
-          </div>
-
-          <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200/60 dark:border-neutral-700/40 flex items-start gap-2.5">
-            <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 shrink-0">
-              <Zap className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
-                {isRTL ? 'تشغيل فوري' : 'Instant Launch'}
-              </p>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-tight mt-0.5">
-                {t.installFeatureInstant}
-              </p>
-            </div>
-          </div>
-
-          <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200/60 dark:border-neutral-700/40 flex items-start gap-2.5">
-            <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 shrink-0">
-              <Smartphone className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
-                {isRTL ? 'شاشة كاملة' : 'Fullscreen'}
-              </p>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-tight mt-0.5">
-                {t.installFeatureFullscreen}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Main Action Section: Native Button OR Step-by-Step Instructions */}
+        {/* Body Content: Install Action or Simple Steps */}
         {canNativePrompt ? (
-          <div className="space-y-4">
+          <div className="pt-1">
             <button
               id="pwa-native-install-btn"
               type="button"
-              onClick={onNativeInstall}
-              className="w-full py-3.5 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-sm flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-600/25 transition-all cursor-pointer"
+              onClick={() => {
+                onNativeInstall();
+                onClose();
+              }}
+              className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
             >
-              <Download className="w-4 h-4 stroke-[2.5]" />
+              <Download className="w-4 h-4" />
               <span>{t.installNow}</span>
             </button>
-            <p className="text-center text-xs text-neutral-400 dark:text-neutral-500">
-              {isRTL
-                ? 'سيتم إضافة أيقونة التطبيق مباشرة إلى جهازك.'
-                : 'Installs securely through your browser with 1-click.'}
-            </p>
           </div>
         ) : isIOS ? (
-          <div className="space-y-3 bg-neutral-50 dark:bg-neutral-800/50 p-4 rounded-2xl border border-neutral-200/70 dark:border-neutral-700/50">
-            <p className="text-xs font-bold text-neutral-800 dark:text-neutral-200 flex items-center gap-2">
-              <Smartphone className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span>{isRTL ? 'خطوات التثبيت على iOS (Safari)' : 'How to install on iOS Safari:'}</span>
-            </p>
-            <ol className="space-y-2.5 text-xs text-neutral-600 dark:text-neutral-300">
-              <li className="flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-bold flex items-center justify-center shrink-0 text-[11px]">
-                  1
-                </span>
-                <span className="flex items-center gap-1.5 flex-wrap">
-                  {isRTL ? 'اضغط على زر المشاركة' : 'Tap the Share icon'}
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 font-semibold text-neutral-800 dark:text-neutral-100">
-                    <Share className="w-3 h-3 text-blue-500" /> {isRTL ? 'مشاركة' : 'Share'}
-                  </span>
-                  {isRTL ? 'في شريط المتصفح السفلي.' : 'in Safari toolbar.'}
-                </span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-bold flex items-center justify-center shrink-0 text-[11px]">
-                  2
-                </span>
-                <span className="flex items-center gap-1.5 flex-wrap">
-                  {isRTL ? 'مرر للأسفل واختر' : 'Scroll and select'}
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 font-semibold text-neutral-800 dark:text-neutral-100">
-                    <PlusSquare className="w-3 h-3 text-emerald-600" /> {isRTL ? 'إضافة إلى الصفحة الرئيسية' : 'Add to Home Screen'}
-                  </span>
-                </span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-bold flex items-center justify-center shrink-0 text-[11px]">
-                  3
-                </span>
-                <span>
-                  {isRTL ? 'اضغط على "إضافة" (Add) في الزاوية العلوية.' : 'Tap "Add" in top-right corner to finish.'}
-                </span>
-              </li>
-            </ol>
+          <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-850 border border-neutral-200/60 dark:border-neutral-800 space-y-2 text-xs text-neutral-600 dark:text-neutral-300">
+            <div className="flex items-center gap-2">
+              <span className="w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold flex items-center justify-center shrink-0 text-[10px]">
+                1
+              </span>
+              <span className="flex items-center gap-1">
+                {isRTL ? 'اضغط زر المشاركة' : 'Tap Share'}
+                <Share className="w-3 h-3 text-blue-500 inline" />
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold flex items-center justify-center shrink-0 text-[10px]">
+                2
+              </span>
+              <span className="flex items-center gap-1">
+                {isRTL ? 'اختر "إضافة إلى الشاشة الرئيسية"' : 'Select "Add to Home Screen"'}
+                <PlusSquare className="w-3 h-3 text-emerald-600 inline" />
+              </span>
+            </div>
           </div>
         ) : (
-          <div className="space-y-3 bg-neutral-50 dark:bg-neutral-800/50 p-4 rounded-2xl border border-neutral-200/70 dark:border-neutral-700/50">
-            <p className="text-xs font-bold text-neutral-800 dark:text-neutral-200 flex items-center gap-2">
-              <Laptop className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span>{isRTL ? 'خطوات التثبيت من المتصفح' : 'How to install from Browser:'}</span>
+          <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-850 border border-neutral-200/60 dark:border-neutral-800 flex items-start gap-2 text-xs text-neutral-600 dark:text-neutral-300">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <p className="leading-relaxed">
+              {isAndroid ? t.installAndroidInstructions : t.installDesktopInstructions}
             </p>
-            <div className="space-y-2 text-xs text-neutral-600 dark:text-neutral-300">
-              <p className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span>
-                  {isAndroid
-                    ? t.installAndroidInstructions
-                    : t.installDesktopInstructions}
-                </span>
-              </p>
-            </div>
           </div>
         )}
 
-        {/* Footer Actions */}
-        <div className="mt-6 flex items-center justify-end">
+        {/* Footer */}
+        <div className="pt-2 flex justify-end">
           <button
             id="close-install-modal-action-btn"
             type="button"
             onClick={onClose}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
           >
             {t.close}
           </button>

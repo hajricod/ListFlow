@@ -440,7 +440,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
         </div>
 
         {/* Bottom Section of Sidenav: User profile & Settings */}
-        <div className="p-3 border-t border-neutral-200/80 dark:border-neutral-800/80 bg-neutral-50/70 dark:bg-neutral-900/70 shrink-0 space-y-2.5">
+        <div className="p-3 bg-neutral-50/70 dark:bg-neutral-900/70 shrink-0 space-y-2.5">
           {/* User Account / Sign In card in Sidenav */}
           {user ? (
             <div
