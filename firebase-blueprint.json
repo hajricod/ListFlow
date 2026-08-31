@@ -77,6 +77,7 @@
         "notes": { "type": "string", "description": "Optional notes or details", "maxLength": 2000 },
         "priority": { "type": "string", "enum": ["low", "medium", "high", "urgent"], "description": "Priority flag" },
         "isPinned": { "type": "boolean", "description": "Whether pinned to top of group" },
+        "isHighlighted": { "type": "boolean", "description": "Whether highlighted visually by a list member" },
         "order": { "type": "number", "description": "Sort order index" },
         "createdAt": { "type": "string", "description": "Creation ISO date" },
         "updatedAt": { "type": "string", "description": "Last updated ISO date" }

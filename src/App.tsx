@@ -1710,6 +1710,7 @@ export default function App() {
         tags: itemData.tags || [],
         subtasks: itemData.subtasks || [],
         isPinned: Boolean(itemData.isPinned),
+        isHighlighted: Boolean(itemData.isHighlighted),
       };
       setItems((prev) => [newItem, ...prev]);
     }
@@ -1775,6 +1776,19 @@ export default function App() {
         if (i.id === itemId) {
           const nextPinned = !i.isPinned;
           return { ...i, isPinned: nextPinned };
+        }
+        return i;
+      })
+    );
+  };
+
+  const handleToggleHighlightItem = (itemId: string) => {
+    sounds.playPop();
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.id === itemId) {
+          const nextHighlighted = !i.isHighlighted;
+          return { ...i, isHighlighted: nextHighlighted };
         }
         return i;
       })
@@ -2466,6 +2480,7 @@ export default function App() {
                         onDeleteItem={handleDeleteItem}
                         onDuplicateItem={handleDuplicateItem}
                         onTogglePin={handleTogglePinItem}
+                        onToggleHighlight={handleToggleHighlightItem}
                         onMoveToGroup={handleMoveToGroup}
                         onInlineUpdateTitle={handleInlineUpdateTitle}
                         onUpdateQuantity={handleUpdateQuantity}

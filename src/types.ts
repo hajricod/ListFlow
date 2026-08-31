@@ -38,6 +38,7 @@ export interface ListItem {
   tags?: string[];
   subtasks?: SubTask[];
   isPinned?: boolean;
+  isHighlighted?: boolean;
   priceEstimate?: number;
 }
 

@@ -7,6 +7,7 @@ import {
   FolderKanban,
   FileText,
   Hash,
+  Highlighter,
 } from 'lucide-react';
 import { ListItem, ListGroup, Language, GroceryUnit } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -37,6 +38,7 @@ export const ItemModal: React.FC<ItemModalProps> = ({
   const [unit, setUnit] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [isPinned, setIsPinned] = useState(false);
+  const [isHighlighted, setIsHighlighted] = useState(false);
 
   useEffect(() => {
     if (item) {
@@ -46,6 +48,7 @@ export const ItemModal: React.FC<ItemModalProps> = ({
       setUnit(item.unit || '');
       setNotes(item.notes || item.description || '');
       setIsPinned(Boolean(item.isPinned));
+      setIsHighlighted(Boolean(item.isHighlighted));
     } else {
       setTitle('');
       setGroupId(defaultGroupId || groups[0]?.id || '');
@@ -53,6 +56,7 @@ export const ItemModal: React.FC<ItemModalProps> = ({
       setUnit('');
       setNotes('');
       setIsPinned(false);
+      setIsHighlighted(false);
     }
   }, [item, defaultGroupId, groups, isOpen, language]);
 
@@ -76,6 +80,7 @@ export const ItemModal: React.FC<ItemModalProps> = ({
       unit: parsedUnit,
       notes: notes.trim() || undefined,
       isPinned,
+      isHighlighted,
     });
 
     onClose();
@@ -293,6 +298,35 @@ export const ItemModal: React.FC<ItemModalProps> = ({
               <div
                 className={`w-4 h-4 rounded-full bg-white transition-transform absolute top-1 ${
                   isPinned ? (language === 'ar' ? 'right-5' : 'left-5') : language === 'ar' ? 'right-1' : 'left-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Highlight Item Toggle */}
+          <div className="flex items-center justify-between p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200/80 dark:border-neutral-700/80">
+            <div className="flex items-center gap-2">
+              <Highlighter className={`w-4 h-4 ${isHighlighted ? 'text-emerald-500 fill-emerald-500/40' : 'text-neutral-400'}`} />
+              <div>
+                <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200 block">
+                  {t.highlightItem}
+                </span>
+                <span className="text-[11px] text-neutral-400 dark:text-neutral-500">
+                  {language === 'ar' ? 'تمييز الصنف ومشاركته مع جميع الأعضاء' : 'Highlight item and sync with all list members'}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              id="highlight-toggle-btn"
+              onClick={() => setIsHighlighted(!isHighlighted)}
+              className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${
+                isHighlighted ? 'bg-emerald-500' : 'bg-neutral-300 dark:bg-neutral-700'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 rounded-full bg-white transition-transform absolute top-1 ${
+                  isHighlighted ? (language === 'ar' ? 'right-5' : 'left-5') : language === 'ar' ? 'right-1' : 'left-1'
                 }`}
               />
             </button>

@@ -38,6 +38,7 @@ interface GroupCardProps {
   onDeleteItem: (itemId: string) => void;
   onDuplicateItem: (item: ListItem) => void;
   onTogglePin: (itemId: string) => void;
+  onToggleHighlight?: (itemId: string) => void;
   onMoveToGroup: (itemId: string, targetGroupId: string) => void;
   onInlineUpdateTitle: (itemId: string, newTitle: string) => void;
   onUpdateQuantity?: (itemId: string, delta: number) => void;
@@ -79,6 +80,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
   onDeleteItem,
   onDuplicateItem,
   onTogglePin,
+  onToggleHighlight,
   onMoveToGroup,
   onInlineUpdateTitle,
   onUpdateQuantity,
@@ -422,6 +424,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
                   onDeleteItem={onDeleteItem}
                   onDuplicateItem={onDuplicateItem}
                   onTogglePin={onTogglePin}
+                  onToggleHighlight={onToggleHighlight}
                   onMoveToGroup={onMoveToGroup}
                   onInlineUpdateTitle={onInlineUpdateTitle}
                   onUpdateQuantity={onUpdateQuantity}

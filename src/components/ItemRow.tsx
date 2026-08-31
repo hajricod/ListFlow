@@ -10,6 +10,7 @@ import {
   Pin,
   Plus,
   Minus,
+  Highlighter,
 } from 'lucide-react';
 import { ListItem, ListGroup, Language } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -26,6 +27,7 @@ interface ItemRowProps {
   onDeleteItem: (id: string) => void;
   onDuplicateItem: (item: ListItem) => void;
   onTogglePin: (id: string) => void;
+  onToggleHighlight?: (id: string) => void;
   onMoveToGroup: (itemId: string, targetGroupId: string) => void;
   onInlineUpdateTitle: (id: string, newTitle: string) => void;
   onUpdateQuantity?: (id: string, delta: number) => void;
@@ -73,6 +75,7 @@ export const ItemRow: React.FC<ItemRowProps> = ({
   onDeleteItem,
   onDuplicateItem,
   onTogglePin,
+  onToggleHighlight,
   onMoveToGroup,
   onInlineUpdateTitle,
   onUpdateQuantity,
@@ -165,6 +168,8 @@ export const ItemRow: React.FC<ItemRowProps> = ({
       } ${
         item.completed
           ? 'bg-neutral-50/70 dark:bg-neutral-900/40 border-neutral-200/60 dark:border-neutral-800/40 opacity-75'
+          : item.isHighlighted
+          ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700/80 shadow-xs ring-1 ring-emerald-400/40 dark:ring-emerald-500/30'
           : item.isPinned
           ? 'bg-amber-50/30 dark:bg-amber-950/15 border-amber-200/70 dark:border-amber-900/40 shadow-2xs'
           : 'bg-white dark:bg-neutral-900 border-neutral-200/90 dark:border-neutral-800/90 shadow-2xs hover:border-neutral-300 dark:hover:border-neutral-700 hover:shadow-xs'
@@ -310,6 +315,20 @@ export const ItemRow: React.FC<ItemRowProps> = ({
                     <span>{item.isPinned ? t.unpinItem : t.pinItem}</span>
                   </button>
 
+                  {/* Highlight / Remove Highlight */}
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      if (onToggleHighlight) {
+                        onToggleHighlight(item.id);
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-start flex items-center gap-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
+                  >
+                    <Highlighter className={`w-3.5 h-3.5 ${item.isHighlighted ? 'text-emerald-500 fill-emerald-500/30' : ''}`} />
+                    <span>{item.isHighlighted ? t.unhighlightItem : t.highlightItem}</span>
+                  </button>
+
                   {/* Duplicate */}
                   <button
                     onClick={() => {
@@ -419,6 +438,40 @@ export const ItemRow: React.FC<ItemRowProps> = ({
             )}
           </div>
         )}
+      </div>
+
+      {/* Bottom Corner Actions / Highlight Toggle */}
+      <div className="flex items-center justify-between pt-0.5 -mb-0.5">
+        {/* Left Bottom Corner: Highlight Button */}
+        <button
+          id={`highlight-item-btn-${item.id}`}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!isReadOnly && onToggleHighlight) {
+              sounds.playPop();
+              onToggleHighlight(item.id);
+            }
+          }}
+          disabled={isReadOnly}
+          className={`inline-flex items-center justify-center w-6 h-6 rounded-md transition-all ${
+            isReadOnly ? 'cursor-default opacity-80' : 'cursor-pointer active:scale-95'
+          } ${
+            item.isHighlighted
+              ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300/90 dark:border-emerald-700/80 shadow-2xs'
+              : 'text-neutral-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 border border-transparent'
+          }`}
+          title={item.isHighlighted ? t.unhighlightItem : t.highlightItem}
+          aria-label={item.isHighlighted ? t.unhighlightItem : t.highlightItem}
+        >
+          <Highlighter
+            className={`w-3.5 h-3.5 transition-transform ${
+              item.isHighlighted
+                ? 'text-emerald-600 dark:text-emerald-400 fill-emerald-500/40'
+                : 'text-neutral-400 group-hover/item:text-neutral-500'
+            }`}
+          />
+        </button>
       </div>
     </div>
   );
