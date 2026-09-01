@@ -12,9 +12,13 @@ import {
   User,
 } from 'firebase/auth';
 import {
+  initializeFirestore,
   getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   doc,
   getDocFromServer,
+  Firestore,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -26,10 +30,33 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-// Firestore Instance (supporting custom databaseId if configured)
-export const db = firebaseConfig.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+// Firestore Instance with offline persistence & multi-tab caching to minimize billable reads
+function initDb(): Firestore {
+  try {
+    if (firebaseConfig.firestoreDatabaseId) {
+      return initializeFirestore(
+        app,
+        {
+          localCache: persistentLocalCache({
+            tabManager: persistentMultipleTabManager(),
+          }),
+        },
+        firebaseConfig.firestoreDatabaseId
+      );
+    }
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    });
+  } catch {
+    return firebaseConfig.firestoreDatabaseId
+      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+      : getFirestore(app);
+  }
+}
+
+export const db = initDb();
 
 // Connection test as mandated by Firebase Skill
 async function validateFirestoreConnection() {

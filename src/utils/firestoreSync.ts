@@ -1308,7 +1308,253 @@ export async function joinListViaShareLink(
   }
 }
 
-// 12. Deletion Functions (Items, Groups, and Lists)
+// 12. Targeted Granular Cloud Operations (Low-Cost Single Document Writes & Targeted Batches)
+
+export async function saveItemToFirestore(
+  listId: string,
+  item: ListItem
+): Promise<boolean> {
+  if (!listId || !item || !item.id) return false;
+  try {
+    const itemRef = doc(db, 'lists', listId, 'items', item.id);
+    await setDoc(
+      itemRef,
+      sanitizeForFirestore({
+        ...item,
+        listId,
+        updatedAt: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
+    return true;
+  } catch (error) {
+    if (isQuotaExceededError(error)) {
+      console.warn(`Firestore quota reached saving item ${item.id}. Saved locally.`);
+    } else {
+      console.error(`Error saving item ${item.id} to list ${listId}:`, error);
+    }
+    return false;
+  }
+}
+
+export async function updateItemFieldsInFirestore(
+  listId: string,
+  itemId: string,
+  fields: Partial<ListItem>
+): Promise<boolean> {
+  if (!listId || !itemId || !fields) return false;
+  try {
+    const itemRef = doc(db, 'lists', listId, 'items', itemId);
+    await setDoc(
+      itemRef,
+      sanitizeForFirestore({
+        ...fields,
+        updatedAt: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
+    return true;
+  } catch (error) {
+    if (isQuotaExceededError(error)) {
+      console.warn(`Firestore quota reached updating item ${itemId}. Saved locally.`);
+    } else {
+      console.error(`Error updating item ${itemId} in list ${listId}:`, error);
+    }
+    return false;
+  }
+}
+
+export async function saveItemsBatchToFirestore(
+  listId: string,
+  items: ListItem[]
+): Promise<boolean> {
+  if (!listId || !items.length) return true;
+  try {
+    const batch = writeBatch(db);
+    const now = new Date().toISOString();
+    items.forEach((item) => {
+      if (item && item.id) {
+        const itemRef = doc(db, 'lists', listId, 'items', item.id);
+        batch.set(
+          itemRef,
+          sanitizeForFirestore({
+            ...item,
+            listId,
+            updatedAt: now,
+          }),
+          { merge: true }
+        );
+      }
+    });
+    await batch.commit();
+    return true;
+  } catch (error) {
+    if (isQuotaExceededError(error)) {
+      console.warn(`Firestore quota reached saving items batch for list ${listId}. Saved locally.`);
+    } else {
+      console.error(`Error saving items batch for list ${listId}:`, error);
+    }
+    return false;
+  }
+}
+
+export async function saveGroupToFirestore(
+  listId: string,
+  group: ListGroup
+): Promise<boolean> {
+  if (!listId || !group || !group.id) return false;
+  try {
+    const groupRef = doc(db, 'lists', listId, 'groups', group.id);
+    const { isCollapsed: _ignoredCollapsed, ...sharedGroupFields } = group;
+    await setDoc(
+      groupRef,
+      sanitizeForFirestore({
+        ...sharedGroupFields,
+        listId,
+        updatedAt: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
+    return true;
+  } catch (error) {
+    if (isQuotaExceededError(error)) {
+      console.warn(`Firestore quota reached saving group ${group.id}. Saved locally.`);
+    } else {
+      console.error(`Error saving group ${group.id} in list ${listId}:`, error);
+    }
+    return false;
+  }
+}
+
+export async function updateGroupFieldsInFirestore(
+  listId: string,
+  groupId: string,
+  fields: Partial<ListGroup>
+): Promise<boolean> {
+  if (!listId || !groupId || !fields) return false;
+  try {
+    const groupRef = doc(db, 'lists', listId, 'groups', groupId);
+    const { isCollapsed: _ignoredCollapsed, ...sharedFields } = fields;
+    await setDoc(
+      groupRef,
+      sanitizeForFirestore({
+        ...sharedFields,
+        updatedAt: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
+    return true;
+  } catch (error) {
+    if (isQuotaExceededError(error)) {
+      console.warn(`Firestore quota reached updating group ${groupId}. Saved locally.`);
+    } else {
+      console.error(`Error updating group ${groupId} in list ${listId}:`, error);
+    }
+    return false;
+  }
+}
+
+export async function saveGroupsBatchToFirestore(
+  listId: string,
+  groups: ListGroup[]
+): Promise<boolean> {
+  if (!listId || !groups.length) return true;
+  try {
+    const batch = writeBatch(db);
+    const now = new Date().toISOString();
+    groups.forEach((group) => {
+      if (group && group.id) {
+        const groupRef = doc(db, 'lists', listId, 'groups', group.id);
+        const { isCollapsed: _ignoredCollapsed, ...sharedGroupFields } = group;
+        batch.set(
+          groupRef,
+          sanitizeForFirestore({
+            ...sharedGroupFields,
+            listId,
+            updatedAt: now,
+          }),
+          { merge: true }
+        );
+      }
+    });
+    await batch.commit();
+    return true;
+  } catch (error) {
+    if (isQuotaExceededError(error)) {
+      console.warn(`Firestore quota reached saving groups batch for list ${listId}. Saved locally.`);
+    } else {
+      console.error(`Error saving groups batch for list ${listId}:`, error);
+    }
+    return false;
+  }
+}
+
+export async function saveListToFirestore(
+  list: AppList,
+  currentUserId?: string
+): Promise<boolean> {
+  if (!list || !list.id) return false;
+  const uid = currentUserId || auth.currentUser?.uid;
+  try {
+    const isMyOwnList = !list.ownerId || list.ownerId === 'local-user' || list.ownerId === 'guest' || (uid && list.ownerId === uid);
+    const ownerId = isMyOwnList && uid ? uid : (list.ownerId || uid || 'owner');
+    const ownerEmail = isMyOwnList ? (auth.currentUser?.email || list.ownerEmail || '') : (list.ownerEmail || '');
+    const ownerName = isMyOwnList ? (auth.currentUser?.displayName || list.ownerName || 'User') : (list.ownerName || 'User');
+
+    let collaboratorUids = list.collaboratorUids ? [...list.collaboratorUids] : [];
+    if (isMyOwnList && uid) {
+      collaboratorUids = Array.from(
+        new Set([ownerId, ...collaboratorUids.filter((id) => id && id !== 'guest' && id !== 'local-user')])
+      );
+    }
+
+    const existingCollaborators = { ...(list.collaborators || {}) };
+    if (isMyOwnList && uid && !existingCollaborators[ownerId]) {
+      existingCollaborators[ownerId] = {
+        uid: ownerId,
+        email: ownerEmail,
+        displayName: ownerName,
+        photoURL: auth.currentUser?.photoURL || '',
+        role: 'owner',
+        status: 'active',
+        invitedAt: list.createdAt || new Date().toISOString(),
+        joinedAt: list.createdAt || new Date().toISOString(),
+      };
+    }
+
+    const listPayload: AppList = {
+      ...list,
+      ownerId,
+      ownerEmail,
+      ownerName,
+      collaboratorUids,
+      collaborators: existingCollaborators,
+      invitedEmails: list.invitedEmails || [],
+      shareLinkEnabled: list.shareLinkEnabled ?? false,
+      shareLinkRole: list.shareLinkRole ?? 'edit',
+      shareLinkToken: list.shareLinkToken || `tok_${Math.random().toString(36).substring(2, 10)}`,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const listRef = doc(db, 'lists', list.id);
+    await setDoc(listRef, sanitizeForFirestore(listPayload), { merge: true });
+
+    if (isMyOwnList && uid) {
+      const userListRef = doc(db, 'users', uid, 'lists', list.id);
+      await setDoc(userListRef, sanitizeForFirestore(listPayload), { merge: true });
+    }
+    return true;
+  } catch (error) {
+    if (isQuotaExceededError(error)) {
+      console.warn(`Firestore quota reached saving list ${list.id}. Saved locally.`);
+    } else {
+      console.error(`Error saving list ${list.id} to Firestore:`, error);
+    }
+    return false;
+  }
+}
+
+// 13. Deletion Functions (Items, Groups, and Lists)
 
 export async function deleteItemFromFirestore(
   listId: string,

@@ -93,6 +93,13 @@ import {
   fetchListShareDetails,
   listenToPendingInvitations,
   updateListShareLinkSettings,
+  saveItemToFirestore,
+  updateItemFieldsInFirestore,
+  saveItemsBatchToFirestore,
+  saveGroupToFirestore,
+  updateGroupFieldsInFirestore,
+  saveGroupsBatchToFirestore,
+  saveListToFirestore,
   deleteItemFromFirestore,
   deleteItemsFromFirestore,
   deleteGroupFromFirestore,
@@ -132,6 +139,34 @@ export default function App() {
   const isRemoteSyncRef = React.useRef<boolean>(false);
   const syncTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const prefSyncTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const debouncedItemUpdatesRef = React.useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  const queueDebouncedItemFieldUpdate = (
+    listId: string,
+    itemId: string,
+    fields: Partial<ListItem>,
+    delayMs = 500
+  ) => {
+    if (!user) return;
+    const existingTimer = debouncedItemUpdatesRef.current.get(itemId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    const timer = setTimeout(async () => {
+      debouncedItemUpdatesRef.current.delete(itemId);
+      try {
+        await updateItemFieldsInFirestore(listId, itemId, fields);
+        setSyncStatus('synced');
+      } catch (err) {
+        if (isQuotaExceededError(err)) {
+          setSyncStatus('quota-exceeded');
+        } else {
+          setSyncStatus('error');
+        }
+      }
+    }, delayMs);
+    debouncedItemUpdatesRef.current.set(itemId, timer);
+  };
 
   const [lists, setLists] = useState<AppList[]>(() => loadStoredLists());
   const [activeListId, setActiveListId] = useState<string>(() => loadActiveListId(lists));
@@ -733,62 +768,13 @@ export default function App() {
     };
   }, [user?.uid, authLoading, showToast, t.loginSuccess, applyUserPreferences]);
 
-  // Reactive Data Sync whenever Lists, Groups, or Items change locally
+  // Local persistence whenever Lists, Groups, or Items change locally
   useEffect(() => {
-    if (!user || isInitialCloudLoadRef.current) return;
-
-    // Safety: ensure current loaded state is for this authenticated user
-    if (currentActiveUserIdRef.current !== user.uid) return;
-
-    // If change was initiated by a remote Firestore snapshot, skip pushing back to Firestore
-    if (isRemoteSyncRef.current) {
-      isRemoteSyncRef.current = false;
-      return;
-    }
-
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      setSyncStatus('offline');
-      return;
-    }
-
-    setSyncStatus('syncing');
-
-    if (syncTimeoutRef.current) {
-      clearTimeout(syncTimeoutRef.current);
-    }
-
-    // Filter only lists owned by this user or where they are an active collaborator
-    const validLists = lists.filter(
-      (l) =>
-        !l.ownerId ||
-        l.ownerId === 'guest' ||
-        l.ownerId === 'local-user' ||
-        l.ownerId === user.uid ||
-        l.collaboratorUids?.includes(user.uid) ||
-        Boolean(l.collaborators?.[user.uid])
-    );
-
-    syncTimeoutRef.current = setTimeout(async () => {
-      try {
-        const ok = await syncAllToFirestore(user.uid, validLists, groups, items);
-        setSyncStatus(ok ? 'synced' : 'error');
-      } catch (err) {
-        if (isQuotaExceededError(err)) {
-          console.warn('Auto sync quota exceeded. Changes safely preserved locally.');
-          setSyncStatus('quota-exceeded');
-        } else {
-          console.error('Auto sync to Firestore failed:', err);
-          setSyncStatus('error');
-        }
-      }
-    }, 400);
-
-    return () => {
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-      }
-    };
-  }, [user, lists, groups, items]);
+    const currentUid = user?.uid;
+    saveStoredLists(lists, currentUid);
+    saveStoredGroups(groups, currentUid);
+    saveStoredItems(items, currentUid);
+  }, [lists, groups, items, user?.uid]);
 
   // Reactive User Preferences Sync to Database (Theme, Accent Color, Language, Sound, Grid Columns, Active List)
   useEffect(() => {
@@ -1134,9 +1120,13 @@ export default function App() {
   const handleCreateOrUpdateList = (listData: { title: string; color: string; icon: string; description?: string }) => {
     sounds.playPop();
     if (selectedListForEdit) {
+      const updatedList: AppList = { ...selectedListForEdit, ...listData };
       setLists((prev) =>
-        prev.map((l) => (l.id === selectedListForEdit.id ? { ...l, ...listData } : l))
+        prev.map((l) => (l.id === selectedListForEdit.id ? updatedList : l))
       );
+      if (user) {
+        saveListToFirestore(updatedList, user.uid);
+      }
       showToast(t.listUpdated);
     } else {
       const newListId = `list-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
@@ -1170,6 +1160,9 @@ export default function App() {
       };
       setLists((prev) => [...prev, newList]);
       setActiveListId(newListId);
+      if (user) {
+        saveListToFirestore(newList, user.uid);
+      }
       showToast(t.listCreated);
     }
     setSelectedListForEdit(null);
@@ -1492,6 +1485,12 @@ export default function App() {
     setItems((prev) => [...prev, ...newItems]);
     setActiveListId(newListId);
 
+    if (user) {
+      saveListToFirestore(duplicatedList, user.uid);
+      saveGroupsBatchToFirestore(newListId, newGroups);
+      saveItemsBatchToFirestore(newListId, newItems);
+    }
+
     showToast(language === 'ar' ? 'تم تكرار القائمة بنجاح' : 'List duplicated successfully');
   };
 
@@ -1500,11 +1499,19 @@ export default function App() {
     sounds.playPop();
     if (groupData.id) {
       // Edit
+      const existingGroup = groups.find((g) => g.id === groupData.id);
+      const updatedGroup: ListGroup = {
+        ...(existingGroup || { id: groupData.id, listId: activeListId, createdAt: new Date().toISOString() }),
+        ...groupData,
+      };
       setGroups((prev) =>
         prev.map((g) =>
-          g.id === groupData.id ? { ...g, title: groupData.title, color: groupData.color, icon: groupData.icon } : g
+          g.id === groupData.id ? updatedGroup : g
         )
       );
+      if (user) {
+        saveGroupToFirestore(updatedGroup.listId || activeListId, updatedGroup);
+      }
     } else {
       // Create new
       const newGroupId = `aisle-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
@@ -1518,6 +1525,9 @@ export default function App() {
         createdAt: new Date().toISOString(),
       };
       setGroups((prev) => [...prev, newGroup]);
+      if (user) {
+        saveGroupToFirestore(activeListId, newGroup);
+      }
     }
   };
 
@@ -1542,6 +1552,12 @@ export default function App() {
 
     setGroups((prev) => [...prev, newGroup]);
     setItems((prev) => [...prev, ...newItems]);
+
+    if (user) {
+      saveGroupToFirestore(groupToDup.listId || activeListId, newGroup);
+      saveItemsBatchToFirestore(groupToDup.listId || activeListId, newItems);
+    }
+
     showToast(language === 'ar' ? 'تم نسخ الممر بنجاح' : 'Aisle duplicated successfully');
   };
 
@@ -1575,7 +1591,8 @@ export default function App() {
           setGroups((prev) => [...prev, groupToDelete]);
           setItems((prev) => [...prev, ...itemsToDelete]);
           if (user) {
-            syncAllToFirestore(user.uid, lists, [...groups, groupToDelete], [...items, ...itemsToDelete]);
+            saveGroupToFirestore(targetListId, groupToDelete);
+            saveItemsBatchToFirestore(targetListId, itemsToDelete);
           }
         });
       },
@@ -1617,7 +1634,7 @@ export default function App() {
     showToast(t.allCompletedCleared, () => {
       setItems((prev) => [...prev, ...completedInGroup]);
       if (user) {
-        syncAllToFirestore(user.uid, lists, groups, [...items, ...completedInGroup]);
+        saveItemsBatchToFirestore(targetListId, completedInGroup);
       }
     });
   };
@@ -1652,17 +1669,37 @@ export default function App() {
     showToast(t.allCompletedCleared, () => {
       setItems((prev) => [...prev, ...completedList]);
       if (user) {
-        syncAllToFirestore(user.uid, lists, groups, [...items, ...completedList]);
+        const listItemsMap = new Map<string, ListItem[]>();
+        completedList.forEach((item) => {
+          const parentGroup = groups.find((g) => g.id === item.groupId);
+          const itemExplicitListId = (item as unknown as { listId?: string }).listId;
+          const listId = itemExplicitListId || parentGroup?.listId || activeListId || 'list-groceries';
+          const arr = listItemsMap.get(listId) || [];
+          arr.push(item);
+          listItemsMap.set(listId, arr);
+        });
+        for (const [listId, listItems] of listItemsMap.entries()) {
+          saveItemsBatchToFirestore(listId, listItems);
+        }
       }
     });
   };
 
   const handleUncheckAll = () => {
     const previousItems = [...items];
-    setItems((prev) => prev.map((i) => ({ ...i, completed: false, completedAt: undefined })));
+    const uncheckedList = items.map((i) => ({ ...i, completed: false, completedAt: undefined }));
+    setItems(uncheckedList);
     sounds.playPop();
+    if (user) {
+      const activeListItemsToSync = uncheckedList.filter((i) => activeListGroupIds.has(i.groupId));
+      saveItemsBatchToFirestore(activeListId, activeListItemsToSync);
+    }
     showToast(language === 'ar' ? 'تمت إعادة تعيين جميع الأصناف إلى السلة' : 'All items unchecked', () => {
       setItems(previousItems);
+      if (user) {
+        const prevListItemsToSync = previousItems.filter((i) => activeListGroupIds.has(i.groupId));
+        saveItemsBatchToFirestore(activeListId, prevListItemsToSync);
+      }
     });
   };
 
@@ -1700,21 +1737,34 @@ export default function App() {
       isPinned: false,
     };
     setItems((prev) => [newItem, ...prev]);
+    if (user) {
+      const parentGroup = groups.find((g) => g.id === groupId);
+      const targetListId = parentGroup?.listId || activeListId || 'list-groceries';
+      saveItemToFirestore(targetListId, newItem);
+    }
   };
 
   const handleSaveItemModal = (itemData: Partial<ListItem> & { id?: string }) => {
     sounds.playPop();
     if (itemData.id) {
       // Edit existing
+      const existing = items.find((i) => i.id === itemData.id);
+      const updatedItem: ListItem = { ...(existing || { id: itemData.id, groupId: groups[0]?.id || 'default', createdAt: new Date().toISOString() }), ...itemData } as ListItem;
       setItems((prev) =>
-        prev.map((item) => (item.id === itemData.id ? ({ ...item, ...itemData } as ListItem) : item))
+        prev.map((item) => (item.id === itemData.id ? updatedItem : item))
       );
+      if (user) {
+        const parentGroup = groups.find((g) => g.id === updatedItem.groupId);
+        const targetListId = (updatedItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+        saveItemToFirestore(targetListId, updatedItem);
+      }
     } else {
       // Add new
       const newItemId = `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+      const targetGroupId = itemData.groupId || groups[0]?.id || 'default';
       const newItem: ListItem = {
         id: newItemId,
-        groupId: itemData.groupId || groups[0]?.id || 'default',
+        groupId: targetGroupId,
         title: itemData.title || '',
         quantity: itemData.quantity,
         unit: itemData.unit,
@@ -1728,86 +1778,106 @@ export default function App() {
         isHighlighted: Boolean(itemData.isHighlighted),
       };
       setItems((prev) => [newItem, ...prev]);
+      if (user) {
+        const parentGroup = groups.find((g) => g.id === targetGroupId);
+        const targetListId = parentGroup?.listId || activeListId || 'list-groceries';
+        saveItemToFirestore(targetListId, newItem);
+      }
     }
   };
 
   const handleToggleCompleteItem = (itemId: string) => {
-    setItems((prev) => {
-      const targetItem = prev.find((i) => i.id === itemId);
-      const next = prev.map((item) => {
-        if (item.id === itemId) {
-          const nextCompleted = !item.completed;
-          return {
-            ...item,
-            completed: nextCompleted,
-            completedAt: nextCompleted ? new Date().toISOString() : undefined,
-          };
-        }
-        return item;
+    const targetItem = items.find((i) => i.id === itemId);
+    if (!targetItem) return;
+    const nextCompleted = !targetItem.completed;
+    const updated: ListItem = {
+      ...targetItem,
+      completed: nextCompleted,
+      completedAt: nextCompleted ? new Date().toISOString() : undefined,
+    };
+    setItems((prev) => prev.map((item) => (item.id === itemId ? updated : item)));
+
+    if (user) {
+      const parentGroup = groups.find((g) => g.id === targetItem.groupId);
+      const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+      updateItemFieldsInFirestore(targetListId, itemId, {
+        completed: nextCompleted,
+        completedAt: nextCompleted ? new Date().toISOString() : undefined,
       });
+    }
 
-      // Check if all items in the grocery list are completed -> trigger celebratory confetti
-      if (targetItem && !targetItem.completed) {
-        const allCompleted = next.length > 0 && next.every((i) => i.completed);
-        if (allCompleted) {
-          try {
-            confetti({
-              particleCount: 100,
-              spread: 80,
-              origin: { y: 0.6 },
-            });
-          } catch {}
-        }
+    // Check if all items in the grocery list are completed -> trigger celebratory confetti
+    if (!targetItem.completed) {
+      const allCompleted = items.length > 0 && items.every((i) => (i.id === itemId ? true : i.completed));
+      if (allCompleted) {
+        try {
+          confetti({
+            particleCount: 100,
+            spread: 80,
+            origin: { y: 0.6 },
+          });
+        } catch {}
       }
-
-      return next;
-    });
+    }
   };
 
   const handleUpdateQuantity = (itemId: string, delta: number) => {
     sounds.playPop();
+    const targetItem = items.find((i) => i.id === itemId);
+    if (!targetItem) return;
+    const current = targetItem.quantity ?? 1;
+    const nextQty = Math.max(1, current + delta);
     setItems((prev) =>
-      prev.map((item) => {
-        if (item.id === itemId) {
-          const current = item.quantity ?? 1;
-          const nextQty = Math.max(1, current + delta);
-          return { ...item, quantity: nextQty };
-        }
-        return item;
-      })
+      prev.map((item) => (item.id === itemId ? { ...item, quantity: nextQty } : item))
     );
+    if (user) {
+      const parentGroup = groups.find((g) => g.id === targetItem.groupId);
+      const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+      queueDebouncedItemFieldUpdate(targetListId, itemId, { quantity: nextQty }, 500);
+    }
   };
 
   const handleInlineUpdateTitle = (itemId: string, newTitle: string) => {
+    const targetItem = items.find((i) => i.id === itemId);
+    if (!targetItem) return;
     setItems((prev) =>
       prev.map((i) => (i.id === itemId ? { ...i, title: newTitle } : i))
     );
+    if (user) {
+      const parentGroup = groups.find((g) => g.id === targetItem.groupId);
+      const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+      queueDebouncedItemFieldUpdate(targetListId, itemId, { title: newTitle }, 600);
+    }
   };
 
   const handleTogglePinItem = (itemId: string) => {
     sounds.playPop();
+    const targetItem = items.find((i) => i.id === itemId);
+    if (!targetItem) return;
+    const nextPinned = !targetItem.isPinned;
     setItems((prev) =>
-      prev.map((i) => {
-        if (i.id === itemId) {
-          const nextPinned = !i.isPinned;
-          return { ...i, isPinned: nextPinned };
-        }
-        return i;
-      })
+      prev.map((i) => (i.id === itemId ? { ...i, isPinned: nextPinned } : i))
     );
+    if (user) {
+      const parentGroup = groups.find((g) => g.id === targetItem.groupId);
+      const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+      updateItemFieldsInFirestore(targetListId, itemId, { isPinned: nextPinned });
+    }
   };
 
   const handleToggleHighlightItem = (itemId: string) => {
     sounds.playPop();
+    const targetItem = items.find((i) => i.id === itemId);
+    if (!targetItem) return;
+    const nextHighlighted = !targetItem.isHighlighted;
     setItems((prev) =>
-      prev.map((i) => {
-        if (i.id === itemId) {
-          const nextHighlighted = !i.isHighlighted;
-          return { ...i, isHighlighted: nextHighlighted };
-        }
-        return i;
-      })
+      prev.map((i) => (i.id === itemId ? { ...i, isHighlighted: nextHighlighted } : i))
     );
+    if (user) {
+      const parentGroup = groups.find((g) => g.id === targetItem.groupId);
+      const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+      updateItemFieldsInFirestore(targetListId, itemId, { isHighlighted: nextHighlighted });
+    }
   };
 
   const handleDuplicateItem = (itemToDup: ListItem) => {
@@ -1822,6 +1892,11 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
     setItems((prev) => [newItem, ...prev]);
+    if (user) {
+      const parentGroup = groups.find((g) => g.id === newItem.groupId);
+      const targetListId = (newItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+      saveItemToFirestore(targetListId, newItem);
+    }
     showToast(language === 'ar' ? 'تم نسخ الصنف' : 'Item duplicated');
   };
 
@@ -1830,6 +1905,11 @@ export default function App() {
     setItems((prev) =>
       prev.map((i) => (i.id === itemId ? { ...i, groupId: targetGroupId } : i))
     );
+    if (user) {
+      const parentGroup = groups.find((g) => g.id === targetGroupId);
+      const targetListId = parentGroup?.listId || activeListId || 'list-groceries';
+      updateItemFieldsInFirestore(targetListId, itemId, { groupId: targetGroupId });
+    }
     showToast(language === 'ar' ? 'تم نقل الصنف إلى الممر' : 'Item moved to aisle');
   };
 
@@ -1856,7 +1936,7 @@ export default function App() {
     showToast(t.taskDeleted, () => {
       setItems((prev) => [itemToDelete, ...prev]);
       if (user) {
-        syncAllToFirestore(user.uid, lists, groups, [itemToDelete, ...items]);
+        saveItemToFirestore(targetListId, itemToDelete);
       }
     });
   };
@@ -1925,6 +2005,10 @@ export default function App() {
       const insertAt = groupDropPosition === 'below' ? targetIdx + 1 : targetIdx;
       newGroups.splice(insertAt > sourceIdx ? insertAt - 1 : insertAt, 0, removed);
       setGroups(newGroups);
+      if (user) {
+        const activeGroupsToSync = newGroups.filter((g) => (g.listId || 'list-groceries') === activeListId);
+        saveGroupsBatchToFirestore(activeListId, activeGroupsToSync);
+      }
     }
 
     setDraggingGroupId(null);
@@ -2001,6 +2085,10 @@ export default function App() {
     updatedItems.splice(insertAt > sourceIdx ? insertAt - 1 : insertAt, 0, movedItem);
 
     setItems(updatedItems);
+    if (user) {
+      updateItemFieldsInFirestore(activeListId, movedItem.id, { groupId: targetGroupId });
+    }
+
     setDraggingItemId(null);
     setItemDropTargetId(null);
     setItemDropPosition(null);
@@ -2012,9 +2100,14 @@ export default function App() {
     e.stopPropagation();
 
     sounds.playDrop();
+    const itemToMoveId = draggingItemId;
     setItems((prev) =>
-      prev.map((i) => (i.id === draggingItemId ? { ...i, groupId: targetGroupId } : i))
+      prev.map((i) => (i.id === itemToMoveId ? { ...i, groupId: targetGroupId } : i))
     );
+    if (user) {
+      updateItemFieldsInFirestore(activeListId, itemToMoveId, { groupId: targetGroupId });
+    }
+
     setDraggingItemId(null);
     setItemDropTargetId(null);
     setItemDropPosition(null);
@@ -2048,25 +2141,28 @@ export default function App() {
 
     if (replace) {
       // Update the active list's title and description based on the chosen template and language
+      let updatedTargetList: AppList | undefined;
       setLists((prevLists) =>
-        prevLists.map((l) =>
-          l.id === targetListId
-            ? {
-                ...l,
-                title: tpl.name,
-                description: tpl.desc,
-                icon: tpl.icon || l.icon,
-                color:
-                  templateKey === 'weekly'
-                    ? '#10b981'
-                    : templateKey === 'freshMarket'
-                    ? '#06b6d4'
-                    : templateKey === 'bbq'
-                    ? '#ef4444'
-                    : '#f59e0b',
-              }
-            : l
-        )
+        prevLists.map((l) => {
+          if (l.id === targetListId) {
+            updatedTargetList = {
+              ...l,
+              title: tpl.name,
+              description: tpl.desc,
+              icon: tpl.icon || l.icon,
+              color:
+                templateKey === 'weekly'
+                  ? '#10b981'
+                  : templateKey === 'freshMarket'
+                  ? '#06b6d4'
+                  : templateKey === 'bbq'
+                  ? '#ef4444'
+                  : '#f59e0b',
+            };
+            return updatedTargetList;
+          }
+          return l;
+        })
       );
 
       setGroups((prev) => [
@@ -2077,26 +2173,47 @@ export default function App() {
         ...prev.filter((i) => !activeListGroupIds.has(i.groupId)),
         ...newItems,
       ]);
+
+      if (user) {
+        if (updatedTargetList) {
+          saveListToFirestore(updatedTargetList, user.uid);
+        }
+        saveGroupsBatchToFirestore(targetListId, newGroups);
+        saveItemsBatchToFirestore(targetListId, newItems);
+      }
+
       showToast(language === 'ar' ? `تم تحميل "${tpl.name}" وتحديث عنوان القائمة` : `Loaded "${tpl.name}" and updated list title`);
     } else {
       // If appending to an empty list, update the title to the template's localized name as well
+      let updatedTargetList: AppList | undefined;
       if (activeListItems.length === 0) {
         setLists((prevLists) =>
-          prevLists.map((l) =>
-            l.id === targetListId
-              ? {
-                  ...l,
-                  title: tpl.name,
-                  description: tpl.desc,
-                  icon: tpl.icon || l.icon,
-                }
-              : l
-          )
+          prevLists.map((l) => {
+            if (l.id === targetListId) {
+              updatedTargetList = {
+                ...l,
+                title: tpl.name,
+                description: tpl.desc,
+                icon: tpl.icon || l.icon,
+              };
+              return updatedTargetList;
+            }
+            return l;
+          })
         );
       }
 
       setGroups((prev) => [...prev, ...newGroups]);
       setItems((prev) => [...prev, ...newItems]);
+
+      if (user) {
+        if (updatedTargetList) {
+          saveListToFirestore(updatedTargetList, user.uid);
+        }
+        saveGroupsBatchToFirestore(targetListId, newGroups);
+        saveItemsBatchToFirestore(targetListId, newItems);
+      }
+
       showToast(language === 'ar' ? `تمت إضافة "${tpl.name}" للقائمة الحالية` : `Appended "${tpl.name}" items to list`);
     }
   };
