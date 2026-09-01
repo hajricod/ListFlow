@@ -390,23 +390,31 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                         )}
                       </div>
 
-                      <div className="min-w-0 flex items-center gap-1.5">
-                        <span
-                          className={`text-xs font-semibold block truncate ${
-                            isActive
-                              ? 'text-neutral-900 dark:text-neutral-50 font-bold'
-                              : 'text-neutral-700 dark:text-neutral-300 group-hover/item:text-neutral-900 dark:group-hover/item:text-neutral-100'
-                          }`}
-                        >
-                          {list.title}
-                        </span>
-
-                        {isReadOnly && (
+                      <div className="min-w-0 flex flex-col justify-center">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <span
-                            className="px-1 py-0.2 rounded bg-neutral-100 dark:bg-neutral-800 text-[9px] font-bold text-neutral-500 dark:text-neutral-400 shrink-0 flex items-center gap-0.5"
-                            title={t.viewOnlyBanner}
+                            className={`text-xs font-semibold block truncate ${
+                              isActive
+                                ? 'text-neutral-900 dark:text-neutral-50 font-bold'
+                                : 'text-neutral-700 dark:text-neutral-300 group-hover/item:text-neutral-900 dark:group-hover/item:text-neutral-100'
+                            }`}
                           >
-                            <Eye className="w-2.5 h-2.5" />
+                            {list.title}
+                          </span>
+
+                          {isReadOnly && (
+                            <span
+                              className="px-1 py-0.2 rounded bg-neutral-100 dark:bg-neutral-800 text-[9px] font-bold text-neutral-500 dark:text-neutral-400 shrink-0 flex items-center gap-0.5"
+                              title={t.viewOnlyBanner}
+                            >
+                              <Eye className="w-2.5 h-2.5" />
+                            </span>
+                          )}
+                        </div>
+
+                        {list.description && (
+                          <span className="text-[10px] text-neutral-400 dark:text-neutral-500 truncate block max-w-[140px] sm:max-w-[160px] leading-tight">
+                            {list.description}
                           </span>
                         )}
                       </div>

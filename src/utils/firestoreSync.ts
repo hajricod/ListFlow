@@ -7,6 +7,7 @@ import {
   updateDoc,
   deleteDoc,
   deleteField,
+  FieldValue,
   writeBatch,
   onSnapshot,
   query,
@@ -103,6 +104,9 @@ export function isQuotaExceededError(error: unknown): boolean {
 export function sanitizeForFirestore<T>(data: T): T {
   if (data === null || data === undefined) {
     return null as unknown as T;
+  }
+  if (data instanceof FieldValue) {
+    return data;
   }
   if (Array.isArray(data)) {
     return data
@@ -1522,7 +1526,7 @@ export async function saveListToFirestore(
       };
     }
 
-    const listPayload: AppList = {
+    const listPayload: Record<string, unknown> = {
       ...list,
       ownerId,
       ownerEmail,
@@ -1535,6 +1539,13 @@ export async function saveListToFirestore(
       shareLinkToken: list.shareLinkToken || `tok_${Math.random().toString(36).substring(2, 10)}`,
       updatedAt: new Date().toISOString(),
     };
+
+    // If description is undefined or empty string, explicitly set it so merge: true or setDoc clears/updates it in Firestore
+    if (list.description) {
+      listPayload.description = list.description;
+    } else {
+      listPayload.description = deleteField();
+    }
 
     const listRef = doc(db, 'lists', list.id);
     await setDoc(listRef, sanitizeForFirestore(listPayload), { merge: true });
