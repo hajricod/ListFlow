@@ -137,6 +137,7 @@ export interface UserCloudData {
   gridColumns?: 1 | 2;
   activeListId?: string;
   onboardingSeen?: boolean;
+  userGroupOrders?: Record<string, string[]>;
 }
 
 export interface UserPreferencesPayload {
@@ -147,6 +148,7 @@ export interface UserPreferencesPayload {
   gridColumns?: 1 | 2;
   activeListId?: string;
   onboardingSeen?: boolean;
+  userGroupOrders?: Record<string, string[]>;
 }
 
 // 1. Sync User Profile / Preferences
@@ -186,6 +188,7 @@ export async function syncUserProfile(
       if (preferences.gridColumns !== undefined) payload.gridColumns = preferences.gridColumns;
       if (preferences.activeListId) payload.activeListId = preferences.activeListId;
       if (preferences.onboardingSeen !== undefined) payload.onboardingSeen = preferences.onboardingSeen;
+      if (preferences.userGroupOrders) payload.userGroupOrders = preferences.userGroupOrders;
     }
 
     await setDoc(userDocRef, sanitizeForFirestore(payload), { merge: true });
@@ -222,6 +225,9 @@ export async function fetchUserProfilePreferences(userId: string): Promise<UserP
       gridColumns: (u.gridColumns === 1 || u.gridColumns === 2) ? u.gridColumns : undefined,
       activeListId: u.activeListId as string | undefined,
       onboardingSeen: typeof u.onboardingSeen === 'boolean' ? u.onboardingSeen : undefined,
+      userGroupOrders: (u.userGroupOrders && typeof u.userGroupOrders === 'object' && !Array.isArray(u.userGroupOrders))
+        ? (u.userGroupOrders as Record<string, string[]>)
+        : undefined,
     };
   } catch (err) {
     console.warn('Error fetching user preferences from Firestore:', err);
@@ -655,6 +661,9 @@ export function subscribeToUserCloudData(
           gridColumns: u.gridColumns,
           activeListId: u.activeListId,
           onboardingSeen: typeof u.onboardingSeen === 'boolean' ? u.onboardingSeen : undefined,
+          userGroupOrders: (u.userGroupOrders && typeof u.userGroupOrders === 'object' && !Array.isArray(u.userGroupOrders))
+            ? (u.userGroupOrders as Record<string, string[]>)
+            : undefined,
         };
         emitCombinedData();
       }

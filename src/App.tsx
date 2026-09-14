@@ -43,6 +43,8 @@ import {
   saveStoredGridColumns,
   loadStoredCollapsedGroups,
   saveStoredCollapsedGroups,
+  loadStoredGroupOrders,
+  saveStoredGroupOrders,
   loadStoredOnboardingSeen,
   saveStoredOnboardingSeen,
   clearGuestStorage,
@@ -187,6 +189,9 @@ export default function App() {
       isCollapsed: collapsedSet.has(g.id),
     }));
   });
+  const [userGroupOrders, setUserGroupOrders] = useState<Record<string, string[]>>(() =>
+    loadStoredGroupOrders()
+  );
   const [items, setItems] = useState<ListItem[]>(() => loadStoredItems());
 
   // 2. Filters & Search State
@@ -256,6 +261,11 @@ export default function App() {
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [itemDropTargetId, setItemDropTargetId] = useState<string | null>(null);
   const [itemDropPosition, setItemDropPosition] = useState<'above' | 'below' | null>(null);
+
+  const draggingGroupIdRef = useRef<string | null>(null);
+  const draggingItemIdRef = useRef<string | null>(null);
+  const groupDropPositionRef = useRef<'above' | 'below' | null>(null);
+  const itemDropPositionRef = useRef<'above' | 'below' | null>(null);
 
   const t = getTranslation(language);
 
@@ -516,6 +526,7 @@ export default function App() {
         gridColumns?: 1 | 2;
         activeListId?: string;
         onboardingSeen?: boolean;
+        userGroupOrders?: Record<string, string[]>;
       },
       uid?: string | null
     ) => {
@@ -553,6 +564,13 @@ export default function App() {
       if (prefs.onboardingSeen === true) {
         saveStoredOnboardingSeen(true, uid);
       }
+      if (prefs.userGroupOrders && typeof prefs.userGroupOrders === 'object') {
+        setUserGroupOrders((prev) => {
+          const merged = { ...prev, ...prefs.userGroupOrders };
+          saveStoredGroupOrders(merged, uid);
+          return merged;
+        });
+      }
     },
     []
   );
@@ -582,6 +600,7 @@ export default function App() {
         ...g,
         isCollapsed: collapsedSet.has(g.id),
       }));
+      const initialGroupOrders = loadStoredGroupOrders(currentUid);
       const initialItems = loadStoredItems(currentUid);
       const initialActiveListId = loadActiveListId(initialLists, currentUid);
       const initialLang = loadStoredLanguage(currentUid);
@@ -592,6 +611,7 @@ export default function App() {
 
       setLists(initialLists);
       setGroups(initialGroups);
+      setUserGroupOrders(initialGroupOrders);
       setItems(initialItems);
       setActiveListId(initialActiveListId);
       setLanguage(initialLang);
@@ -636,6 +656,7 @@ export default function App() {
             ...g,
             isCollapsed: userCollapsedSet.has(g.id),
           }));
+          const userGroupOrdersData = loadStoredGroupOrders(currentUid);
           const userItems = loadStoredItems(currentUid);
           const userActiveListId = loadActiveListId(userLists, currentUid);
           const userLang = loadStoredLanguage(currentUid);
@@ -646,6 +667,7 @@ export default function App() {
 
           setLists(userLists);
           setGroups(userGroups);
+          setUserGroupOrders(userGroupOrdersData);
           setItems(userItems);
           setActiveListId(userActiveListId);
           setLanguage(userLang);
@@ -941,8 +963,24 @@ export default function App() {
   }, [language, showToast]);
 
   const activeGroups = useMemo(() => {
-    return groups.filter((g) => (g.listId || 'list-groceries') === activeListId);
-  }, [groups, activeListId]);
+    const listGroups = groups.filter((g) => (g.listId || 'list-groceries') === activeListId);
+    const orderList = userGroupOrders[activeListId];
+
+    if (orderList && orderList.length > 0) {
+      const orderMap = new Map<string, number>();
+      orderList.forEach((id, index) => {
+        orderMap.set(id, index);
+      });
+      return [...listGroups].sort((a, b) => {
+        const orderA = orderMap.has(a.id) ? orderMap.get(a.id)! : 999999;
+        const orderB = orderMap.has(b.id) ? orderMap.get(b.id)! : 999999;
+        if (orderA !== orderB) return orderA - orderB;
+        return (a.order ?? 0) - (b.order ?? 0);
+      });
+    }
+
+    return [...listGroups].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }, [groups, activeListId, userGroupOrders]);
 
   const activeListGroupIds = useMemo(() => new Set(activeGroups.map((g) => g.id)), [activeGroups]);
 
@@ -1036,6 +1074,31 @@ export default function App() {
     });
   }, [activeListItems, searchQuery, filterState, activeGroups]);
 
+  // Helper to consistently sort items of any group list by pin, completion, manual order, and fallback creation date
+  const getSortedGroupItems = useCallback(
+    (sourceList: ListItem[], groupId: string) => {
+      const groupItems = sourceList.filter((i) => i.groupId === groupId);
+      const pinned = groupItems.filter((i) => i.isPinned);
+      const unpinned = groupItems.filter((i) => !i.isPinned);
+
+      const sortFn = (a: ListItem, b: ListItem) => {
+        if (a.completed !== b.completed) {
+          return a.completed ? 1 : -1;
+        }
+
+        const orderA = typeof a.order === 'number' ? a.order : 0;
+        const orderB = typeof b.order === 'number' ? b.order : 0;
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        return (a.createdAt || '').localeCompare(b.createdAt || '');
+      };
+
+      return [...pinned.sort(sortFn), ...unpinned.sort(sortFn)];
+    },
+    []
+  );
+
   // Group Items Organizer with Sorting & Pinning
   const getGroupSortedItems = useCallback(
     (groupId: string) => {
@@ -1057,7 +1120,13 @@ export default function App() {
         } else if (filterState.sortBy === 'createdAt') {
           return b.createdAt.localeCompare(a.createdAt);
         }
-        return 0;
+
+        const orderA = typeof a.order === 'number' ? a.order : 0;
+        const orderB = typeof b.order === 'number' ? b.order : 0;
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        return (a.createdAt || '').localeCompare(b.createdAt || '');
       };
 
       return [...pinned.sort(sortFn), ...unpinned.sort(sortFn)];
@@ -1525,6 +1594,18 @@ export default function App() {
         createdAt: new Date().toISOString(),
       };
       setGroups((prev) => [...prev, newGroup]);
+      setUserGroupOrders((prev) => {
+        const currentListOrders = prev[activeListId] ? [...prev[activeListId]] : activeGroups.map((g) => g.id);
+        if (!currentListOrders.includes(newGroupId)) {
+          currentListOrders.push(newGroupId);
+        }
+        const updated = { ...prev, [activeListId]: currentListOrders };
+        saveStoredGroupOrders(updated, user?.uid);
+        if (user?.uid) {
+          syncUserProfile(user.uid, { userGroupOrders: updated });
+        }
+        return updated;
+      });
       if (user) {
         saveGroupToFirestore(activeListId, newGroup);
       }
@@ -1552,6 +1633,21 @@ export default function App() {
 
     setGroups((prev) => [...prev, newGroup]);
     setItems((prev) => [...prev, ...newItems]);
+    setUserGroupOrders((prev) => {
+      const currentListOrders = prev[activeListId] ? [...prev[activeListId]] : activeGroups.map((g) => g.id);
+      const dupIdx = currentListOrders.indexOf(groupToDup.id);
+      if (dupIdx !== -1) {
+        currentListOrders.splice(dupIdx + 1, 0, newGroupId);
+      } else {
+        currentListOrders.push(newGroupId);
+      }
+      const updated = { ...prev, [activeListId]: currentListOrders };
+      saveStoredGroupOrders(updated, user?.uid);
+      if (user?.uid) {
+        syncUserProfile(user.uid, { userGroupOrders: updated });
+      }
+      return updated;
+    });
 
     if (user) {
       saveGroupToFirestore(groupToDup.listId || activeListId, newGroup);
@@ -1577,6 +1673,16 @@ export default function App() {
         sounds.playDelete();
         setGroups((prev) => prev.filter((g) => g.id !== groupId));
         setItems((prev) => prev.filter((i) => i.groupId !== groupId));
+        setUserGroupOrders((prev) => {
+          if (!prev[targetListId]) return prev;
+          const filtered = prev[targetListId].filter((id) => id !== groupId);
+          const updated = { ...prev, [targetListId]: filtered };
+          saveStoredGroupOrders(updated, user?.uid);
+          if (user?.uid) {
+            syncUserProfile(user.uid, { userGroupOrders: updated });
+          }
+          return updated;
+        });
 
         if (user) {
           try {
@@ -1723,6 +1829,9 @@ export default function App() {
     }
 
     const newItemId = `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const groupExistingItems = items.filter((i) => i.groupId === groupId);
+    const maxOrder = groupExistingItems.reduce((max, i) => Math.max(max, typeof i.order === 'number' ? i.order : 0), 0);
+
     const newItem: ListItem = {
       id: newItemId,
       groupId,
@@ -1735,6 +1844,7 @@ export default function App() {
       tags: [],
       subtasks: [],
       isPinned: false,
+      order: maxOrder + 1000,
     };
     setItems((prev) => [newItem, ...prev]);
     if (user) {
@@ -1762,6 +1872,9 @@ export default function App() {
       // Add new
       const newItemId = `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
       const targetGroupId = itemData.groupId || groups[0]?.id || 'default';
+      const groupExistingItems = items.filter((i) => i.groupId === targetGroupId);
+      const maxOrder = groupExistingItems.reduce((max, i) => Math.max(max, typeof i.order === 'number' ? i.order : 0), 0);
+
       const newItem: ListItem = {
         id: newItemId,
         groupId: targetGroupId,
@@ -1776,6 +1889,7 @@ export default function App() {
         subtasks: itemData.subtasks || [],
         isPinned: Boolean(itemData.isPinned),
         isHighlighted: Boolean(itemData.isHighlighted),
+        order: maxOrder + 1000,
       };
       setItems((prev) => [newItem, ...prev]);
       if (user) {
@@ -1941,16 +2055,54 @@ export default function App() {
     });
   };
 
-  // Drag and Drop Logic: Groups / Aisles
+  // Move Group Up/Down (Personal order - does NOT sync or overwrite shared members' view)
+  const handleMoveGroup = (groupId: string, direction: 'up' | 'down') => {
+    const currentActive = [...activeGroups];
+    const idx = currentActive.findIndex((g) => g.id === groupId);
+    if (idx === -1) return;
+    if (direction === 'up' && idx === 0) return;
+    if (direction === 'down' && idx === currentActive.length - 1) return;
+
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    const reordered = [...currentActive];
+    const [moved] = reordered.splice(idx, 1);
+    reordered.splice(targetIdx, 0, moved);
+
+    const newGroupOrderIds = reordered.map((g) => g.id);
+
+    setUserGroupOrders((prev) => {
+      const updated = {
+        ...prev,
+        [activeListId]: newGroupOrderIds,
+      };
+      saveStoredGroupOrders(updated, user?.uid);
+      if (user?.uid) {
+        syncUserProfile(user.uid, { userGroupOrders: updated });
+      }
+      return updated;
+    });
+
+    sounds.playPop();
+  };
+
+  // Drag and Drop Logic: Groups / Aisles (Personal per-user order)
   const handleGroupDragStart = (e: React.DragEvent, groupId: string) => {
-    e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'GROUP', id: groupId }));
-    if (e.dataTransfer) {
+    if (isReadOnly) return;
+    try {
+      e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'GROUP', id: groupId }));
       e.dataTransfer.effectAllowed = 'move';
+    } catch {
+      // Ignore if dataTransfer is not available
     }
+    draggingGroupIdRef.current = groupId;
     setDraggingGroupId(groupId);
   };
 
   const handleDragEnd = () => {
+    draggingGroupIdRef.current = null;
+    draggingItemIdRef.current = null;
+    groupDropPositionRef.current = null;
+    itemDropPositionRef.current = null;
     setDraggingGroupId(null);
     setGroupDropTargetId(null);
     setGroupDropPosition(null);
@@ -1960,8 +2112,10 @@ export default function App() {
   };
 
   const handleGroupDragOver = (e: React.DragEvent, targetGroupId: string) => {
+    const currentDragId = draggingGroupIdRef.current || draggingGroupId;
+    if (!currentDragId || currentDragId === targetGroupId) return;
     e.preventDefault();
-    if (!draggingGroupId || draggingGroupId === targetGroupId) return;
+    e.stopPropagation();
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = 'move';
     }
@@ -1970,6 +2124,7 @@ export default function App() {
     const midY = targetElem.top + targetElem.height / 2;
     const position = e.clientY < midY ? 'above' : 'below';
 
+    groupDropPositionRef.current = position;
     setGroupDropTargetId((prev) => (prev !== targetGroupId ? targetGroupId : prev));
     setGroupDropPosition((prev) => (prev !== position ? position : prev));
   };
@@ -1982,55 +2137,89 @@ export default function App() {
     ) {
       return;
     }
-    setGroupDropTargetId(null);
-    setGroupDropPosition(null);
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    if (x > 0 && y > 0 && (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom)) {
+      setGroupDropTargetId(null);
+      setGroupDropPosition(null);
+    }
   };
 
   const handleGroupDrop = (e: React.DragEvent, targetGroupId: string) => {
     e.preventDefault();
-    if (!draggingGroupId || draggingGroupId === targetGroupId) {
-      setDraggingGroupId(null);
-      setGroupDropTargetId(null);
-      setGroupDropPosition(null);
+    e.stopPropagation();
+
+    const currentDraggingId = draggingGroupIdRef.current || draggingGroupId;
+    if (!currentDraggingId || currentDraggingId === targetGroupId) {
+      handleDragEnd();
       return;
     }
 
     sounds.playDrop();
-    const sourceIdx = groups.findIndex((g) => g.id === draggingGroupId);
-    const targetIdx = groups.findIndex((g) => g.id === targetGroupId);
+
+    const currentActive = [...activeGroups];
+    const sourceIdx = currentActive.findIndex((g) => g.id === currentDraggingId);
+    const targetIdx = currentActive.findIndex((g) => g.id === targetGroupId);
 
     if (sourceIdx !== -1 && targetIdx !== -1) {
-      const newGroups = [...groups];
-      const [removed] = newGroups.splice(sourceIdx, 1);
-      const insertAt = groupDropPosition === 'below' ? targetIdx + 1 : targetIdx;
-      newGroups.splice(insertAt > sourceIdx ? insertAt - 1 : insertAt, 0, removed);
-      setGroups(newGroups);
-      if (user) {
-        const activeGroupsToSync = newGroups.filter((g) => (g.listId || 'list-groceries') === activeListId);
-        saveGroupsBatchToFirestore(activeListId, activeGroupsToSync);
-      }
+      const reordered = [...currentActive];
+      const [removed] = reordered.splice(sourceIdx, 1);
+      const pos = groupDropPositionRef.current || groupDropPosition;
+      const insertAt = pos === 'below' ? targetIdx + 1 : targetIdx;
+      const finalInsert = insertAt > sourceIdx ? insertAt - 1 : insertAt;
+      reordered.splice(finalInsert, 0, removed);
+
+      const newGroupOrderIds = reordered.map((g) => g.id);
+
+      setUserGroupOrders((prev) => {
+        const updated = {
+          ...prev,
+          [activeListId]: newGroupOrderIds,
+        };
+        saveStoredGroupOrders(updated, user?.uid);
+        if (user?.uid) {
+          syncUserProfile(user.uid, { userGroupOrders: updated });
+        }
+        return updated;
+      });
+
+      setGroups((prev) => {
+        const orderMap = new Map(newGroupOrderIds.map((id, idx) => [id, (idx + 1) * 1000]));
+        const updated = prev.map((g) => {
+          if (orderMap.has(g.id)) {
+            return { ...g, order: orderMap.get(g.id)! };
+          }
+          return g;
+        });
+        saveStoredGroups(updated, user?.uid);
+        return updated;
+      });
     }
 
-    setDraggingGroupId(null);
-    setGroupDropTargetId(null);
-    setGroupDropPosition(null);
+    handleDragEnd();
   };
 
   // Drag and Drop Logic: Items
   const handleItemDragStart = (e: React.DragEvent, itemId: string, sourceGroupId: string) => {
-    e.dataTransfer.setData(
-      'text/plain',
-      JSON.stringify({ type: 'ITEM', id: itemId, sourceGroupId })
-    );
-    if (e.dataTransfer) {
+    if (isReadOnly) return;
+    try {
+      e.dataTransfer.setData(
+        'text/plain',
+        JSON.stringify({ type: 'ITEM', id: itemId, sourceGroupId })
+      );
       e.dataTransfer.effectAllowed = 'move';
+    } catch {
+      // Ignore if dataTransfer is not available
     }
+    draggingItemIdRef.current = itemId;
     setDraggingItemId(itemId);
   };
 
   const handleItemDragOver = (e: React.DragEvent, targetItemId: string) => {
+    const activeItemId = draggingItemIdRef.current || draggingItemId;
     // Only accept items, never when dragging a group
-    if (!draggingItemId || draggingGroupId || draggingItemId === targetItemId) return;
+    if (!activeItemId || draggingGroupIdRef.current || activeItemId === targetItemId) return;
     e.preventDefault();
     e.stopPropagation();
     if (e.dataTransfer) {
@@ -2041,12 +2230,12 @@ export default function App() {
     const midY = targetElem.top + targetElem.height / 2;
     const position = e.clientY < midY ? 'above' : 'below';
 
+    itemDropPositionRef.current = position;
     setItemDropTargetId((prev) => (prev !== targetItemId ? targetItemId : prev));
     setItemDropPosition((prev) => (prev !== position ? position : prev));
   };
 
   const handleItemDragLeave = (e: React.DragEvent) => {
-    if (!draggingItemId) return;
     if (
       e.currentTarget &&
       e.relatedTarget &&
@@ -2054,63 +2243,215 @@ export default function App() {
     ) {
       return;
     }
-    setItemDropTargetId(null);
-    setItemDropPosition(null);
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    if (x > 0 && y > 0 && (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom)) {
+      setItemDropTargetId(null);
+      setItemDropPosition(null);
+    }
+  };
+
+  // Move Item Up/Down within its group
+  const handleMoveItem = (itemId: string, direction: 'up' | 'down') => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+
+    if (filterState.sortBy !== 'manual') {
+      setFilterState((prev) => ({ ...prev, sortBy: 'manual' }));
+    }
+
+    // Get current group items in their sorted order
+    const groupItems = getSortedGroupItems(items, item.groupId);
+    const idx = groupItems.findIndex((i) => i.id === itemId);
+    if (idx === -1) return;
+    if (direction === 'up' && idx === 0) return;
+    if (direction === 'down' && idx === groupItems.length - 1) return;
+
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    const reordered = [...groupItems];
+    const [moved] = reordered.splice(idx, 1);
+    reordered.splice(targetIdx, 0, moved);
+
+    const reorderedWithOrder = reordered.map((it, i) => ({
+      ...it,
+      order: (i + 1) * 1000,
+    }));
+
+    const orderMap = new Map(reorderedWithOrder.map((it) => [it.id, it]));
+    setItems((prev) => prev.map((it) => orderMap.get(it.id) || it));
+
+    sounds.playPop();
+
+    if (user) {
+      const parentGroup = groups.find((g) => g.id === item.groupId);
+      const targetListId = (item as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+      saveItemsBatchToFirestore(targetListId, reorderedWithOrder);
+    }
   };
 
   const handleItemDrop = (e: React.DragEvent, targetItemId: string, targetGroupId: string) => {
-    if (!draggingItemId || draggingGroupId || draggingItemId === targetItemId) {
-      if (draggingItemId) {
-        setDraggingItemId(null);
-        setItemDropTargetId(null);
-        setItemDropPosition(null);
-      }
-      return;
-    }
     e.preventDefault();
     e.stopPropagation();
 
-    sounds.playDrop();
-    const sourceItem = items.find((i) => i.id === draggingItemId);
-    if (!sourceItem) return;
-
-    const sourceIdx = items.findIndex((i) => i.id === draggingItemId);
-    const targetIdx = items.findIndex((i) => i.id === targetItemId);
-
-    const updatedItems = [...items];
-    const [movedItem] = updatedItems.splice(sourceIdx, 1);
-    movedItem.groupId = targetGroupId;
-
-    const insertAt = itemDropPosition === 'below' ? targetIdx + 1 : targetIdx;
-    updatedItems.splice(insertAt > sourceIdx ? insertAt - 1 : insertAt, 0, movedItem);
-
-    setItems(updatedItems);
-    if (user) {
-      updateItemFieldsInFirestore(activeListId, movedItem.id, { groupId: targetGroupId });
+    const activeItemId = draggingItemIdRef.current || draggingItemId;
+    if (!activeItemId || draggingGroupIdRef.current || activeItemId === targetItemId) {
+      handleDragEnd();
+      return;
     }
 
-    setDraggingItemId(null);
-    setItemDropTargetId(null);
-    setItemDropPosition(null);
+    sounds.playDrop();
+    const sourceItem = items.find((i) => i.id === activeItemId);
+    const targetItem = items.find((i) => i.id === targetItemId);
+    if (!sourceItem || !targetItem) {
+      handleDragEnd();
+      return;
+    }
+
+    if (filterState.sortBy !== 'manual') {
+      setFilterState((prev) => ({ ...prev, sortBy: 'manual' }));
+    }
+
+    const isSameGroup = sourceItem.groupId === targetGroupId;
+
+    // Get current items in target group (in their sorted order)
+    let targetGroupItems = getSortedGroupItems(items, targetGroupId);
+
+    // If source item is already in target group, remove it first
+    targetGroupItems = targetGroupItems.filter((i) => i.id !== sourceItem.id);
+
+    // Find position of target item
+    const targetIdx = targetGroupItems.findIndex((i) => i.id === targetItemId);
+    if (targetIdx === -1) {
+      handleDragEnd();
+      return;
+    }
+
+    const pos = itemDropPositionRef.current || itemDropPosition;
+    const insertIdx = pos === 'below' ? targetIdx + 1 : targetIdx;
+
+    const movedSourceItem: ListItem = {
+      ...sourceItem,
+      groupId: targetGroupId,
+      isPinned: targetItem.isPinned,
+    };
+
+    targetGroupItems.splice(insertIdx, 0, movedSourceItem);
+
+    // Re-index target group items with clean 1000, 2000, 3000... orders
+    const reorderedTargetItems = targetGroupItems.map((item, idx) => ({
+      ...item,
+      order: (idx + 1) * 1000,
+    }));
+
+    // If moved from another group, also re-index the old group
+    let reorderedSourceItems: ListItem[] = [];
+    if (!isSameGroup) {
+      const remainingSourceItems = getSortedGroupItems(
+        items.filter((i) => i.id !== sourceItem.id),
+        sourceItem.groupId
+      );
+      reorderedSourceItems = remainingSourceItems.map((item, idx) => ({
+        ...item,
+        order: (idx + 1) * 1000,
+      }));
+    }
+
+    const map = new Map<string, ListItem>();
+    reorderedTargetItems.forEach((it) => map.set(it.id, it));
+    reorderedSourceItems.forEach((it) => map.set(it.id, it));
+
+    setItems((prev) => {
+      const updated = prev.map((it) => map.get(it.id) || it);
+      if (!updated.some((it) => it.id === movedSourceItem.id)) {
+        updated.push(map.get(movedSourceItem.id)!);
+      }
+      return updated;
+    });
+
+    if (user) {
+      const targetGroup = groups.find((g) => g.id === targetGroupId);
+      const targetListId = targetGroup?.listId || activeListId || 'list-groceries';
+      saveItemsBatchToFirestore(targetListId, reorderedTargetItems);
+
+      if (!isSameGroup) {
+        const sourceGroup = groups.find((g) => g.id === sourceItem.groupId);
+        const sourceListId = sourceGroup?.listId || activeListId || 'list-groceries';
+        saveItemsBatchToFirestore(sourceListId, reorderedSourceItems);
+      }
+    }
+
+    handleDragEnd();
   };
 
   const handleItemDropInEmptyGroup = (e: React.DragEvent, targetGroupId: string) => {
-    if (!draggingItemId || draggingGroupId) return;
     e.preventDefault();
     e.stopPropagation();
 
-    sounds.playDrop();
-    const itemToMoveId = draggingItemId;
-    setItems((prev) =>
-      prev.map((i) => (i.id === itemToMoveId ? { ...i, groupId: targetGroupId } : i))
-    );
-    if (user) {
-      updateItemFieldsInFirestore(activeListId, itemToMoveId, { groupId: targetGroupId });
+    const activeItemId = draggingItemIdRef.current || draggingItemId;
+    if (!activeItemId || draggingGroupIdRef.current) {
+      handleDragEnd();
+      return;
     }
 
-    setDraggingItemId(null);
-    setItemDropTargetId(null);
-    setItemDropPosition(null);
+    sounds.playDrop();
+    const sourceItem = items.find((i) => i.id === activeItemId);
+    if (!sourceItem) {
+      handleDragEnd();
+      return;
+    }
+
+    if (filterState.sortBy !== 'manual') {
+      setFilterState((prev) => ({ ...prev, sortBy: 'manual' }));
+    }
+
+    // Get current items in target group
+    const targetGroupItems = getSortedGroupItems(items.filter((i) => i.id !== sourceItem.id), targetGroupId);
+    const maxOrder = targetGroupItems.reduce((max, it) => Math.max(max, it.order ?? 0), 0);
+
+    const movedItem: ListItem = {
+      ...sourceItem,
+      groupId: targetGroupId,
+      order: maxOrder + 1000,
+    };
+
+    let reorderedSourceItems: ListItem[] = [];
+    if (sourceItem.groupId !== targetGroupId) {
+      const remaining = getSortedGroupItems(
+        items.filter((i) => i.id !== sourceItem.id),
+        sourceItem.groupId
+      );
+      reorderedSourceItems = remaining.map((item, idx) => ({
+        ...item,
+        order: (idx + 1) * 1000,
+      }));
+    }
+
+    const map = new Map<string, ListItem>();
+    map.set(movedItem.id, movedItem);
+    reorderedSourceItems.forEach((it) => map.set(it.id, it));
+
+    setItems((prev) => {
+      const updated = prev.map((it) => map.get(it.id) || it);
+      if (!updated.some((it) => it.id === movedItem.id)) {
+        updated.push(movedItem);
+      }
+      return updated;
+    });
+
+    if (user) {
+      const targetGroup = groups.find((g) => g.id === targetGroupId);
+      const targetListId = targetGroup?.listId || activeListId || 'list-groceries';
+      saveItemsBatchToFirestore(targetListId, [movedItem]);
+
+      if (sourceItem.groupId !== targetGroupId) {
+        const sourceGroup = groups.find((g) => g.id === sourceItem.groupId);
+        const sourceListId = sourceGroup?.listId || activeListId || 'list-groceries';
+        saveItemsBatchToFirestore(sourceListId, reorderedSourceItems);
+      }
+    }
+
+    handleDragEnd();
   };
 
   // Templates & JSON Export/Import
@@ -2625,7 +2966,7 @@ export default function App() {
                       : 'grid grid-cols-1 max-w-4xl mx-auto'
                   }`}
                 >
-                  {activeGroups.map((group) => {
+                  {activeGroups.map((group, groupIndex) => {
                     const groupSortedItems = getGroupSortedItems(group.id);
                     return (
                       <GroupCard
@@ -2645,6 +2986,10 @@ export default function App() {
                         onDuplicateGroup={handleDuplicateGroup}
                         onClearCompletedInGroup={handleClearCompletedInGroup}
                         onSortGroupItems={handleSortGroupItems}
+                        onMoveGroupUp={() => handleMoveGroup(group.id, 'up')}
+                        onMoveGroupDown={() => handleMoveGroup(group.id, 'down')}
+                        canMoveUp={groupIndex > 0}
+                        canMoveDown={groupIndex < activeGroups.length - 1}
                         onAddItem={handleAddItem}
                         onToggleComplete={handleToggleCompleteItem}
                         onEditItem={(item) => {
@@ -2659,8 +3004,11 @@ export default function App() {
                         onMoveToGroup={handleMoveToGroup}
                         onInlineUpdateTitle={handleInlineUpdateTitle}
                         onUpdateQuantity={handleUpdateQuantity}
+                        onMoveItemUp={(itemId) => handleMoveItem(itemId, 'up')}
+                        onMoveItemDown={(itemId) => handleMoveItem(itemId, 'down')}
                         // Group DnD
                         isDraggingGroup={draggingGroupId === group.id}
+                        draggingGroupId={draggingGroupId}
                         onGroupDragStart={handleGroupDragStart}
                         onGroupDragOver={handleGroupDragOver}
                         onGroupDragLeave={handleGroupDragLeave}

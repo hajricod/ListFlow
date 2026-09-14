@@ -11,6 +11,8 @@ import {
   Plus,
   Minus,
   Highlighter,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { ListItem, ListGroup, Language } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -31,8 +33,13 @@ interface ItemRowProps {
   onMoveToGroup: (itemId: string, targetGroupId: string) => void;
   onInlineUpdateTitle: (id: string, newTitle: string) => void;
   onUpdateQuantity?: (id: string, delta: number) => void;
+  onMoveItemUp?: (id: string) => void;
+  onMoveItemDown?: (id: string) => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
   // Drag and Drop props
   isDragging?: boolean;
+  draggingItemId?: string | null;
   onDragStart: (e: React.DragEvent, id: string, groupId: string) => void;
   onDragEnd?: () => void;
   onDragOver: (e: React.DragEvent, id: string) => void;
@@ -79,7 +86,12 @@ export const ItemRow: React.FC<ItemRowProps> = ({
   onMoveToGroup,
   onInlineUpdateTitle,
   onUpdateQuantity,
+  onMoveItemUp,
+  onMoveItemDown,
+  canMoveUp = false,
+  canMoveDown = false,
   isDragging,
+  draggingItemId,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -155,13 +167,22 @@ export const ItemRow: React.FC<ItemRowProps> = ({
     <div
       id={`grocery-item-${item.id}`}
       data-menu-open={menuOpen ? 'true' : undefined}
-      draggable
-      onDragStart={(e) => onDragStart(e, item.id, item.groupId)}
+      draggable={!isReadOnly}
+      onDragStart={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button, input, textarea, select, [data-no-drag]')) {
+          e.preventDefault();
+          return;
+        }
+        onDragStart(e, item.id, item.groupId);
+      }}
       onDragEnd={onDragEnd}
       onDragOver={(e) => onDragOver(e, item.id)}
       onDragLeave={onDragLeave}
       onDrop={(e) => onDrop(e, item.id, item.groupId)}
-      className={`group/item relative flex flex-col gap-1.5 p-3 rounded-xl transition-colors duration-150 border ${
+      className={`group/item relative flex flex-col gap-1.5 p-3 rounded-xl transition-colors duration-150 border select-none ${
+        !isReadOnly ? 'cursor-grab active:cursor-grabbing' : ''
+      } ${
         menuOpen ? 'z-40' : 'z-1 hover:z-10'
       } ${
         isDragging ? 'opacity-30' : 'opacity-100'
@@ -183,19 +204,21 @@ export const ItemRow: React.FC<ItemRowProps> = ({
         <div className="absolute -bottom-1 inset-x-2 h-0.5 bg-emerald-500 dark:bg-emerald-400 rounded-full shadow-xs z-30 pointer-events-none" />
       )}
 
-      {/* Top Meta Bar: Drag Handle, Checkbox, Pinned, Quantity Badge & Actions */}
-      <div className="flex items-center justify-between gap-2">
-        {/* Left: Drag Grip, Checkbox, Pinned, Quantity */}
-        <div className="flex items-center gap-2 min-w-0">
-          {/* Drag Grip Handle */}
-          {!isReadOnly && (
-            <div
-              className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-grab active:cursor-grabbing p-0.5 -ms-1 rounded transition-colors touch-none shrink-0"
-              title={t.dragToReorder}
-            >
-              <GripVertical className="w-4 h-4" />
-            </div>
-          )}
+      {/* Inner contents wrapped with pointer-events-none while another item is dragged so drop target doesn't flicker */}
+      <div className={`flex flex-col gap-1.5 w-full ${draggingItemId && draggingItemId !== item.id ? 'pointer-events-none' : ''}`}>
+        {/* Top Meta Bar: Drag Handle, Checkbox, Pinned, Quantity Badge & Actions */}
+        <div className="flex items-center justify-between gap-2">
+          {/* Left: Drag Grip, Checkbox, Pinned, Quantity */}
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Drag Grip Handle */}
+            {!isReadOnly && (
+              <div
+                className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-grab active:cursor-grabbing p-1 -ms-1 rounded transition-colors shrink-0"
+                title={t.dragToReorder}
+              >
+                <GripVertical className="w-4 h-4" />
+              </div>
+            )}
 
           {/* In-Cart Checkbox Button */}
           <button
@@ -268,9 +291,45 @@ export const ItemRow: React.FC<ItemRowProps> = ({
           )}
         </div>
 
-        {/* Right: More Options Menu */}
+        {/* Right: Quick Reorder buttons & More Options Menu */}
         {!isReadOnly && (
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-0.5 shrink-0">
+            {/* Quick Move Up/Down buttons (visible on hover) */}
+            {(canMoveUp || canMoveDown) && (
+              <div className="flex items-center opacity-0 group-hover/item:opacity-100 transition-opacity">
+                {canMoveUp && onMoveItemUp && (
+                  <button
+                    id={`item-move-up-${item.id}`}
+                    type="button"
+                    data-no-drag
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMoveItemUp(item.id);
+                    }}
+                    className="p-1 rounded-md text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                    title={t.moveUp}
+                  >
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {canMoveDown && onMoveItemDown && (
+                  <button
+                    id={`item-move-down-${item.id}`}
+                    type="button"
+                    data-no-drag
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMoveItemDown(item.id);
+                    }}
+                    className="p-1 rounded-md text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                    title={t.moveDown}
+                  >
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="relative" ref={menuRef}>
               <button
                 id={`menu-trigger-${item.id}`}
@@ -340,6 +399,34 @@ export const ItemRow: React.FC<ItemRowProps> = ({
                     <Copy className="w-3.5 h-3.5" />
                     <span>{t.duplicate}</span>
                   </button>
+
+                  {/* Move Up */}
+                  {canMoveUp && onMoveItemUp && (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onMoveItemUp(item.id);
+                      }}
+                      className="w-full px-3 py-2 text-start flex items-center gap-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                      <span>{t.moveUp}</span>
+                    </button>
+                  )}
+
+                  {/* Move Down */}
+                  {canMoveDown && onMoveItemDown && (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onMoveItemDown(item.id);
+                      }}
+                      className="w-full px-3 py-2 text-start flex items-center gap-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                      <span>{t.moveDown}</span>
+                    </button>
+                  )}
 
                   {/* Move to another Aisle */}
                   {otherGroups.length > 0 && (
@@ -472,6 +559,7 @@ export const ItemRow: React.FC<ItemRowProps> = ({
             }`}
           />
         </button>
+      </div>
       </div>
     </div>
   );

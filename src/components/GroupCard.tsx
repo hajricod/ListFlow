@@ -10,6 +10,8 @@ import {
   Copy,
   CheckCircle2,
   ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   ListTodo,
 } from 'lucide-react';
 import { ListGroup, ListItem, Language, Priority, SortOption } from '../types';
@@ -31,6 +33,12 @@ interface GroupCardProps {
   onDuplicateGroup: (group: ListGroup) => void;
   onClearCompletedInGroup: (groupId: string) => void;
   onSortGroupItems: (groupId: string, option: SortOption) => void;
+  onMoveGroupUp?: (groupId: string) => void;
+  onMoveGroupDown?: (groupId: string) => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMoveItemUp?: (itemId: string) => void;
+  onMoveItemDown?: (itemId: string) => void;
   // Item operations
   onAddItem: (groupId: string, title: string, priority?: Priority) => void;
   onToggleComplete: (itemId: string) => void;
@@ -44,6 +52,7 @@ interface GroupCardProps {
   onUpdateQuantity?: (itemId: string, delta: number) => void;
   // Drag & Drop
   isDraggingGroup?: boolean;
+  draggingGroupId?: string | null;
   onGroupDragStart: (e: React.DragEvent, groupId: string) => void;
   onGroupDragOver: (e: React.DragEvent, groupId: string) => void;
   onGroupDragLeave: (e: React.DragEvent) => void;
@@ -74,6 +83,12 @@ export const GroupCard: React.FC<GroupCardProps> = ({
   onDuplicateGroup,
   onClearCompletedInGroup,
   onSortGroupItems,
+  onMoveGroupUp,
+  onMoveGroupDown,
+  canMoveUp = false,
+  canMoveDown = false,
+  onMoveItemUp,
+  onMoveItemDown,
   onAddItem,
   onToggleComplete,
   onEditItem,
@@ -85,6 +100,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
   onInlineUpdateTitle,
   onUpdateQuantity,
   isDraggingGroup,
+  draggingGroupId,
   onGroupDragStart,
   onGroupDragOver,
   onGroupDragLeave,
@@ -139,9 +155,12 @@ export const GroupCard: React.FC<GroupCardProps> = ({
 
   const handleEmptyZoneDragOver = (e: React.DragEvent) => {
     // Only accept items, never groups
-    if (!draggingItemId || isDraggingGroup) return;
+    if (!draggingItemId || draggingGroupId) return;
     e.preventDefault();
     e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move';
+    }
     setIsOverEmptyZone(true);
   };
 
@@ -150,7 +169,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
   };
 
   const handleEmptyZoneDrop = (e: React.DragEvent) => {
-    if (!draggingItemId || isDraggingGroup) return;
+    if (!draggingItemId || draggingGroupId) return;
     e.preventDefault();
     e.stopPropagation();
     setIsOverEmptyZone(false);
@@ -160,9 +179,28 @@ export const GroupCard: React.FC<GroupCardProps> = ({
   return (
     <div
       id={`group-card-${group.id}`}
-      onDragOver={(e) => onGroupDragOver(e, group.id)}
-      onDragLeave={onGroupDragLeave}
-      onDrop={(e) => onGroupDrop(e, group.id)}
+      onDragOver={(e) => {
+        if (draggingGroupId) {
+          onGroupDragOver(e, group.id);
+        } else if (draggingItemId) {
+          e.preventDefault();
+          if (e.dataTransfer) {
+            e.dataTransfer.dropEffect = 'move';
+          }
+        }
+      }}
+      onDragLeave={(e) => {
+        if (draggingGroupId) {
+          onGroupDragLeave(e);
+        }
+      }}
+      onDrop={(e) => {
+        if (draggingGroupId) {
+          onGroupDrop(e, group.id);
+        } else if (draggingItemId) {
+          onItemDropInEmptyGroup(e, group.id);
+        }
+      }}
       className={`rounded-2xl relative transition-colors duration-150 border bg-white dark:bg-neutral-900/90 shadow-xs flex flex-col ${
         menuOpen
           ? 'z-40'
@@ -179,14 +217,28 @@ export const GroupCard: React.FC<GroupCardProps> = ({
         <div className="absolute -bottom-1.5 inset-x-2 h-1 bg-emerald-500 dark:bg-emerald-400 rounded-full shadow-xs z-30 pointer-events-none" />
       )}
 
-      {/* Group Header */}
-      <div
-        className={`p-3.5 sm:p-4 select-none transition-colors ${
-          group.isCollapsed
-            ? 'rounded-2xl'
-            : 'border-b border-neutral-100 dark:border-neutral-800/80 rounded-t-2xl'
-        }`}
-      >
+      {/* Inner contents wrapped with pointer-events-none while draggingGroupId is active so group drop is continuous */}
+      <div className={`flex flex-col flex-1 ${draggingGroupId ? 'pointer-events-none' : ''}`}>
+        {/* Group Header */}
+        <div
+          draggable={!isReadOnly}
+          onDragStart={(e) => {
+            const target = e.target as HTMLElement;
+            if (target.closest('button, input, textarea, select, [data-no-drag]')) {
+              e.preventDefault();
+              return;
+            }
+            onGroupDragStart(e, group.id);
+          }}
+          onDragEnd={onDragEnd}
+          className={`p-3.5 sm:p-4 select-none transition-colors ${
+            !isReadOnly ? 'cursor-grab active:cursor-grabbing' : ''
+          } ${
+            group.isCollapsed
+              ? 'rounded-2xl'
+              : 'border-b border-neutral-100 dark:border-neutral-800/80 rounded-t-2xl'
+          }`}
+        >
         {/* Top Control Bar: Color Pill, Drag Handle, Collapse Button, Count Badge, Progress & Options */}
         <div className="flex items-center justify-between gap-2">
           {/* Left Controls & Status Badge */}
@@ -210,7 +262,8 @@ export const GroupCard: React.FC<GroupCardProps> = ({
               <div
                 draggable
                 onDragStart={(e) => onGroupDragStart(e, group.id)}
-                className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-grab active:cursor-grabbing p-1 rounded-lg transition-colors touch-none"
+                onDragEnd={onDragEnd}
+                className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-grab active:cursor-grabbing p-1 rounded-lg transition-colors select-none"
                 title={t.dragGroup}
               >
                 <GripHorizontal className="w-4 h-4" />
@@ -288,6 +341,33 @@ export const GroupCard: React.FC<GroupCardProps> = ({
                       <Copy className="w-3.5 h-3.5 text-neutral-400" />
                       <span>{t.duplicate}</span>
                     </button>
+
+                    {/* Move Up and Move Down options */}
+                    {canMoveUp && onMoveGroupUp && (
+                      <button
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onMoveGroupUp(group.id);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-700/60 transition-colors cursor-pointer text-start"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5 text-neutral-400" />
+                        <span>{t.moveUpGroup || t.moveUp}</span>
+                      </button>
+                    )}
+
+                    {canMoveDown && onMoveGroupDown && (
+                      <button
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onMoveGroupDown(group.id);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-700/60 transition-colors cursor-pointer text-start"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5 text-neutral-400" />
+                        <span>{t.moveDownGroup || t.moveDown}</span>
+                      </button>
+                    )}
 
                     {/* Sort sub-options */}
                     <div className="relative">
@@ -411,7 +491,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
                 </p>
               </div>
             ) : (
-              items.map((item) => (
+              items.map((item, itemIndex) => (
                 <ItemRow
                   key={item.id}
                   item={item}
@@ -428,7 +508,12 @@ export const GroupCard: React.FC<GroupCardProps> = ({
                   onMoveToGroup={onMoveToGroup}
                   onInlineUpdateTitle={onInlineUpdateTitle}
                   onUpdateQuantity={onUpdateQuantity}
+                  onMoveItemUp={onMoveItemUp}
+                  onMoveItemDown={onMoveItemDown}
+                  canMoveUp={itemIndex > 0}
+                  canMoveDown={itemIndex < items.length - 1}
                   isDragging={draggingItemId === item.id}
+                  draggingItemId={draggingItemId}
                   onDragStart={onItemDragStart}
                   onDragEnd={onDragEnd}
                   onDragOver={onItemDragOver}
@@ -441,6 +526,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

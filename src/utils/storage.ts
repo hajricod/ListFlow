@@ -12,6 +12,7 @@ const STORAGE_KEYS = {
   GRID_COLUMNS: 'taskflow_grid_columns_v1',
   ONBOARDING_SEEN: 'listflow_onboarding_seen_v1',
   COLLAPSED_GROUPS: 'listflow_collapsed_groups_v1',
+  GROUP_ORDERS: 'listflow_group_orders_v1',
 };
 
 export const SEED_LISTS: Record<Language, AppList[]> = {
@@ -1410,13 +1411,14 @@ export const saveStoredGroups = (groups: ListGroup[], userId?: string | null) =>
 
 export const loadStoredItems = (userId?: string | null): ListItem[] => {
   const normalizeItems = (rawItems: any[]): ListItem[] => {
-    return rawItems.map((item) => ({
+    return rawItems.map((item, index) => ({
       ...item,
       tags: Array.isArray(item.tags) ? item.tags : [],
       subtasks: Array.isArray(item.subtasks) ? item.subtasks : [],
       quantity: item.quantity ?? 1,
       completed: Boolean(item.completed),
       isPinned: Boolean(item.isPinned),
+      order: typeof item.order === 'number' ? item.order : (index + 1) * 1000,
     }));
   };
 
@@ -1636,6 +1638,52 @@ export const saveStoredCollapsedGroups = (collapsedIds: string[], userId?: strin
       localStorage.setItem(getUserStorageKey(STORAGE_KEYS.COLLAPSED_GROUPS, null), JSON.stringify(collapsedIds));
     }
   } catch {}
+};
+
+export const loadStoredGroupOrders = (userId?: string | null): Record<string, string[]> => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.GROUP_ORDERS, userId);
+    const raw = localStorage.getItem(key);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, string[]>;
+      }
+    }
+
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.GROUP_ORDERS, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey);
+        if (lastRaw !== null) {
+          const lastParsed = JSON.parse(lastRaw);
+          if (lastParsed && typeof lastParsed === 'object' && !Array.isArray(lastParsed)) {
+            return lastParsed as Record<string, string[]>;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load group orders from localStorage', err);
+  }
+  return {};
+};
+
+export const saveStoredGroupOrders = (
+  groupOrders: Record<string, string[]>,
+  userId?: string | null
+) => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.GROUP_ORDERS, userId);
+    localStorage.setItem(key, JSON.stringify(groupOrders));
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.GROUP_ORDERS, null), JSON.stringify(groupOrders));
+      setLastActiveUserId(userId);
+    }
+  } catch (err) {
+    console.error('Failed to save group orders', err);
+  }
 };
 
 export const loadStoredOnboardingSeen = (userId?: string | null): boolean => {
