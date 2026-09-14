@@ -384,14 +384,12 @@ export async function syncAllToFirestore(
         continue;
       }
 
-      // Group expansion/collapse is purely a per-user local UI preference and should NOT be shared with other members
-      const { isCollapsed: _ignoredCollapsed, ...sharedGroupFields } = group;
-
       const groupRef = doc(db, 'lists', listId, 'groups', group.id);
       currentBatch.set(
         groupRef,
         sanitizeForFirestore({
-          ...sharedGroupFields,
+          ...group,
+          isCollapsed: Boolean(group.isCollapsed),
           listId,
           order: group.order !== undefined ? group.order : i,
           updatedAt: new Date().toISOString(),
@@ -1418,11 +1416,11 @@ export async function saveGroupToFirestore(
   if (!listId || !group || !group.id) return false;
   try {
     const groupRef = doc(db, 'lists', listId, 'groups', group.id);
-    const { isCollapsed: _ignoredCollapsed, ...sharedGroupFields } = group;
     await setDoc(
       groupRef,
       sanitizeForFirestore({
-        ...sharedGroupFields,
+        ...group,
+        isCollapsed: Boolean(group.isCollapsed),
         listId,
         updatedAt: new Date().toISOString(),
       }),
@@ -1447,11 +1445,10 @@ export async function updateGroupFieldsInFirestore(
   if (!listId || !groupId || !fields) return false;
   try {
     const groupRef = doc(db, 'lists', listId, 'groups', groupId);
-    const { isCollapsed: _ignoredCollapsed, ...sharedFields } = fields;
     await setDoc(
       groupRef,
       sanitizeForFirestore({
-        ...sharedFields,
+        ...fields,
         updatedAt: new Date().toISOString(),
       }),
       { merge: true }
@@ -1478,11 +1475,11 @@ export async function saveGroupsBatchToFirestore(
     groups.forEach((group) => {
       if (group && group.id) {
         const groupRef = doc(db, 'lists', listId, 'groups', group.id);
-        const { isCollapsed: _ignoredCollapsed, ...sharedGroupFields } = group;
         batch.set(
           groupRef,
           sanitizeForFirestore({
-            ...sharedGroupFields,
+            ...group,
+            isCollapsed: Boolean(group.isCollapsed),
             listId,
             updatedAt: now,
           }),

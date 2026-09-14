@@ -186,7 +186,7 @@ export default function App() {
     const collapsedSet = new Set(loadStoredCollapsedGroups());
     return rawGroups.map((g) => ({
       ...g,
-      isCollapsed: collapsedSet.has(g.id),
+      isCollapsed: typeof g.isCollapsed === 'boolean' ? g.isCollapsed : collapsedSet.has(g.id),
     }));
   });
   const [userGroupOrders, setUserGroupOrders] = useState<Record<string, string[]>>(() =>
@@ -598,7 +598,7 @@ export default function App() {
       const collapsedSet = new Set(loadStoredCollapsedGroups(currentUid));
       const initialGroups = rawInitialGroups.map((g) => ({
         ...g,
-        isCollapsed: collapsedSet.has(g.id),
+        isCollapsed: typeof g.isCollapsed === 'boolean' ? g.isCollapsed : collapsedSet.has(g.id),
       }));
       const initialGroupOrders = loadStoredGroupOrders(currentUid);
       const initialItems = loadStoredItems(currentUid);
@@ -654,7 +654,7 @@ export default function App() {
           const userCollapsedSet = new Set(loadStoredCollapsedGroups(currentUid));
           const userGroups = rawUserGroups.map((g) => ({
             ...g,
-            isCollapsed: userCollapsedSet.has(g.id),
+            isCollapsed: typeof g.isCollapsed === 'boolean' ? g.isCollapsed : userCollapsedSet.has(g.id),
           }));
           const userGroupOrdersData = loadStoredGroupOrders(currentUid);
           const userItems = loadStoredItems(currentUid);
@@ -708,22 +708,24 @@ export default function App() {
           setLists(cloudData.lists);
           saveStoredLists(cloudData.lists, user.uid);
           if (cloudData.groups) {
-            // Retain the current user's local collapsed state so remote member expand/collapse changes don't overwrite it
             setGroups((prevGroups) => {
               const currentCollapsedMap = new Map(prevGroups.map((g) => [g.id, Boolean(g.isCollapsed)]));
               const localStoredCollapsed = new Set(loadStoredCollapsedGroups(user.uid));
 
-              return cloudData.groups.map((cg) => {
-                const isLocallyCollapsed = currentCollapsedMap.has(cg.id)
-                  ? currentCollapsedMap.get(cg.id)
-                  : localStoredCollapsed.has(cg.id);
+              const syncedGroups = cloudData.groups.map((cg) => {
+                const isCollapsed = typeof cg.isCollapsed === 'boolean'
+                  ? cg.isCollapsed
+                  : (currentCollapsedMap.has(cg.id)
+                    ? Boolean(currentCollapsedMap.get(cg.id))
+                    : localStoredCollapsed.has(cg.id));
                 return {
                   ...cg,
-                  isCollapsed: isLocallyCollapsed,
+                  isCollapsed,
                 };
               });
+              saveStoredGroups(syncedGroups, user.uid);
+              return syncedGroups;
             });
-            saveStoredGroups(cloudData.groups, user.uid);
           }
           if (cloudData.items) {
             setItems(cloudData.items);
@@ -1145,7 +1147,15 @@ export default function App() {
 
       // 1. Ensure the group containing the found item is expanded so it's visible
       setGroups((prevGroups) =>
-        prevGroups.map((g) => (g.id === targetGroupId && g.isCollapsed ? { ...g, isCollapsed: false } : g))
+        prevGroups.map((g) => {
+          if (g.id === targetGroupId && g.isCollapsed) {
+            if (user && !isReadOnly) {
+              updateGroupFieldsInFirestore(g.listId || activeListId, g.id, { isCollapsed: false });
+            }
+            return { ...g, isCollapsed: false };
+          }
+          return g;
+        })
       );
 
       // 2. Smoothly scroll to the found item element
@@ -1707,15 +1717,47 @@ export default function App() {
 
   const handleToggleCollapseGroup = (groupId: string) => {
     sounds.playPop();
-    setGroups((prev) =>
-      prev.map((g) => (g.id === groupId ? { ...g, isCollapsed: !g.isCollapsed } : g))
+    const currentGroup = groups.find((g) => g.id === groupId);
+    const nextCollapsedState = currentGroup ? !Boolean(currentGroup.isCollapsed) : true;
+    const targetListId = currentGroup?.listId || activeListId || 'list-groceries';
+
+    const updatedGroups = groups.map((g) =>
+      g.id === groupId ? { ...g, isCollapsed: nextCollapsedState } : g
     );
+
+    setGroups(updatedGroups);
+
+    // Save to local storage collapsed IDs immediately
+    const collapsedIds = updatedGroups.filter((g) => g.isCollapsed).map((g) => g.id);
+    saveStoredCollapsedGroups(collapsedIds, user?.uid);
+
+    if (user && !isReadOnly) {
+      updateGroupFieldsInFirestore(targetListId, groupId, { isCollapsed: nextCollapsedState });
+    }
   };
 
   const handleToggleCollapseAll = () => {
     sounds.playPop();
     const nextState = !allCollapsed;
-    setGroups((prev) => prev.map((g) => ({ ...g, isCollapsed: nextState })));
+    const targetGroupsToUpdate: ListGroup[] = [];
+
+    const updatedGroups = groups.map((g) => {
+      if ((g.listId || 'list-groceries') === activeListId) {
+        const updated = { ...g, isCollapsed: nextState };
+        targetGroupsToUpdate.push(updated);
+        return updated;
+      }
+      return g;
+    });
+
+    setGroups(updatedGroups);
+
+    const collapsedIds = updatedGroups.filter((g) => g.isCollapsed).map((g) => g.id);
+    saveStoredCollapsedGroups(collapsedIds, user?.uid);
+
+    if (user && !isReadOnly && targetGroupsToUpdate.length > 0) {
+      saveGroupsBatchToFirestore(activeListId, targetGroupsToUpdate);
+    }
   };
 
   const handleClearCompletedInGroup = async (groupId: string) => {
@@ -1847,6 +1889,20 @@ export default function App() {
       order: maxOrder + 1000,
     };
     setItems((prev) => [newItem, ...prev]);
+
+    // Also ensure target group is uncollapsed so the user sees the new item
+    setGroups((prev) =>
+      prev.map((g) => {
+        if (g.id === groupId && g.isCollapsed) {
+          if (user && !isReadOnly) {
+            updateGroupFieldsInFirestore(g.listId || activeListId, g.id, { isCollapsed: false });
+          }
+          return { ...g, isCollapsed: false };
+        }
+        return g;
+      })
+    );
+
     if (user) {
       const parentGroup = groups.find((g) => g.id === groupId);
       const targetListId = parentGroup?.listId || activeListId || 'list-groceries';
@@ -1892,6 +1948,20 @@ export default function App() {
         order: maxOrder + 1000,
       };
       setItems((prev) => [newItem, ...prev]);
+
+      // Also ensure target group is uncollapsed so the new item is visible
+      setGroups((prev) =>
+        prev.map((g) => {
+          if (g.id === targetGroupId && g.isCollapsed) {
+            if (user && !isReadOnly) {
+              updateGroupFieldsInFirestore(g.listId || activeListId, g.id, { isCollapsed: false });
+            }
+            return { ...g, isCollapsed: false };
+          }
+          return g;
+        })
+      );
+
       if (user) {
         const parentGroup = groups.find((g) => g.id === targetGroupId);
         const targetListId = parentGroup?.listId || activeListId || 'list-groceries';
@@ -2184,17 +2254,21 @@ export default function App() {
         return updated;
       });
 
-      setGroups((prev) => {
-        const orderMap = new Map(newGroupOrderIds.map((id, idx) => [id, (idx + 1) * 1000]));
-        const updated = prev.map((g) => {
-          if (orderMap.has(g.id)) {
-            return { ...g, order: orderMap.get(g.id)! };
-          }
-          return g;
-        });
-        saveStoredGroups(updated, user?.uid);
-        return updated;
+      const orderMap = new Map(newGroupOrderIds.map((id, idx) => [id, (idx + 1) * 1000]));
+      const updatedGroups = groups.map((g) => {
+        if (orderMap.has(g.id)) {
+          return { ...g, order: orderMap.get(g.id)! };
+        }
+        return g;
       });
+
+      setGroups(updatedGroups);
+      saveStoredGroups(updatedGroups, user?.uid);
+
+      if (user && !isReadOnly) {
+        const groupsToBatch = updatedGroups.filter((g) => (g.listId || 'list-groceries') === activeListId);
+        saveGroupsBatchToFirestore(activeListId, groupsToBatch);
+      }
     }
 
     handleDragEnd();

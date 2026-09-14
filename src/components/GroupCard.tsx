@@ -217,14 +217,14 @@ export const GroupCard: React.FC<GroupCardProps> = ({
         <div className="absolute -bottom-1.5 inset-x-2 h-1 bg-emerald-500 dark:bg-emerald-400 rounded-full shadow-xs z-30 pointer-events-none" />
       )}
 
-      {/* Inner contents wrapped with pointer-events-none while draggingGroupId is active so group drop is continuous */}
-      <div className={`flex flex-col flex-1 ${draggingGroupId ? 'pointer-events-none' : ''}`}>
+      {/* Inner contents wrapped with pointer-events-none while another group is dragged so group drop target is continuous and doesn't flicker */}
+      <div className={`flex flex-col flex-1 ${draggingGroupId && draggingGroupId !== group.id ? 'pointer-events-none' : ''}`}>
         {/* Group Header */}
         <div
           draggable={!isReadOnly}
           onDragStart={(e) => {
             const target = e.target as HTMLElement;
-            if (target.closest('button, input, textarea, select, [data-no-drag]')) {
+            if (target.closest('button, input, textarea, select, a, [data-no-drag]')) {
               e.preventDefault();
               return;
             }
@@ -261,9 +261,12 @@ export const GroupCard: React.FC<GroupCardProps> = ({
             {!isReadOnly && (
               <div
                 draggable
-                onDragStart={(e) => onGroupDragStart(e, group.id)}
+                onDragStart={(e) => {
+                  e.stopPropagation();
+                  onGroupDragStart(e, group.id);
+                }}
                 onDragEnd={onDragEnd}
-                className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-grab active:cursor-grabbing p-1 rounded-lg transition-colors select-none"
+                className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors select-none"
                 title={t.dragGroup}
               >
                 <GripHorizontal className="w-4 h-4" />
@@ -272,9 +275,15 @@ export const GroupCard: React.FC<GroupCardProps> = ({
 
             {/* Collapse/Expand button */}
             <button
-              onClick={() => onToggleCollapse(group.id)}
-              className="p-1 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 rounded transition-colors cursor-pointer"
+              type="button"
+              data-no-drag
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleCollapse(group.id);
+              }}
+              className="p-1 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
               title={group.isCollapsed ? t.expand : t.collapse}
+              aria-label={group.isCollapsed ? t.expand : t.collapse}
             >
               {group.isCollapsed ? (
                 <ChevronRight className="w-4 h-4 rtl:rotate-180 transition-transform" />
@@ -441,8 +450,13 @@ export const GroupCard: React.FC<GroupCardProps> = ({
         {/* Separate Row for Group Title: Maximizes space and readability */}
         <div className="mt-2.5 pt-0.5">
           <h3
-            onClick={() => onToggleCollapse(group.id)}
-            className="text-base sm:text-[17px] font-bold text-neutral-900 dark:text-neutral-100 cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors leading-snug break-words"
+            data-no-drag
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleCollapse(group.id);
+            }}
+            title={group.isCollapsed ? t.expand : t.collapse}
+            className="text-base sm:text-[17px] font-bold text-neutral-900 dark:text-neutral-100 cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors leading-snug break-words select-none"
           >
             {group.title}
           </h3>
