@@ -559,6 +559,202 @@ export default function App() {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   };
 
+  // ---------------------------------------------------------------------------
+  // Mobile Back Navigation & "Double Back to Exit" Handler
+  // ---------------------------------------------------------------------------
+  const lastBackPressRef = useRef<number>(0);
+  const languageRef = useRef(language);
+  languageRef.current = language;
+
+  const overlaysStateRef = useRef({
+    isSidebarOpen,
+    confirmModalOpen: confirmModalState.isOpen,
+    isItemModalOpen,
+    isGroupModalOpen,
+    isListModalOpen,
+    isShareModalOpen,
+    isTemplatesModalOpen,
+    isShortcutsModalOpen,
+    isJoinModalOpen,
+    isOnboardingModalOpen,
+    isAuthModalOpen,
+    isPwaModalOpen: pwa.isModalOpen,
+    isSettingsView: currentView === 'settings',
+  });
+
+  useEffect(() => {
+    overlaysStateRef.current = {
+      isSidebarOpen,
+      confirmModalOpen: confirmModalState.isOpen,
+      isItemModalOpen,
+      isGroupModalOpen,
+      isListModalOpen,
+      isShareModalOpen,
+      isTemplatesModalOpen,
+      isShortcutsModalOpen,
+      isJoinModalOpen,
+      isOnboardingModalOpen,
+      isAuthModalOpen,
+      isPwaModalOpen: pwa.isModalOpen,
+      isSettingsView: currentView === 'settings',
+    };
+  }, [
+    isSidebarOpen,
+    confirmModalState.isOpen,
+    isItemModalOpen,
+    isGroupModalOpen,
+    isListModalOpen,
+    isShareModalOpen,
+    isTemplatesModalOpen,
+    isShortcutsModalOpen,
+    isJoinModalOpen,
+    isOnboardingModalOpen,
+    isAuthModalOpen,
+    pwa.isModalOpen,
+    currentView,
+  ]);
+
+  useEffect(() => {
+    // Prime the history stack with an app entry point
+    try {
+      window.history.pushState({ app: 'listflow-root' }, '');
+    } catch {
+      // Ignore if iframe or restricted environment
+    }
+
+    const handlePopState = () => {
+      const overlays = overlaysStateRef.current;
+
+      // 1. If any drawer, modal, or overlay is open, close it first without exiting
+      if (overlays.isSidebarOpen) {
+        setIsSidebarOpen(false);
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        return;
+      }
+      if (overlays.confirmModalOpen) {
+        setConfirmModalState((prev) => ({ ...prev, isOpen: false }));
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        return;
+      }
+      if (overlays.isItemModalOpen) {
+        setIsItemModalOpen(false);
+        setSelectedItemForEdit(null);
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        return;
+      }
+      if (overlays.isGroupModalOpen) {
+        setIsGroupModalOpen(false);
+        setSelectedGroupForEdit(null);
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        return;
+      }
+      if (overlays.isListModalOpen) {
+        setIsListModalOpen(false);
+        setSelectedListForEdit(null);
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        return;
+      }
+      if (overlays.isShareModalOpen) {
+        setIsShareModalOpen(false);
+        setSelectedListForShare(null);
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        return;
+      }
+      if (overlays.isTemplatesModalOpen) {
+        setIsTemplatesModalOpen(false);
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        return;
+      }
+      if (overlays.isShortcutsModalOpen) {
+        setIsShortcutsModalOpen(false);
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        return;
+      }
+      if (overlays.isJoinModalOpen) {
+        setIsJoinModalOpen(false);
+        setJoinModalInvitation(null);
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        return;
+      }
+      if (overlays.isOnboardingModalOpen) {
+        setIsOnboardingModalOpen(false);
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        return;
+      }
+      if (overlays.isAuthModalOpen) {
+        setIsAuthModalOpen(false);
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        return;
+      }
+      if (overlays.isPwaModalOpen) {
+        pwa.setIsModalOpen(false);
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        return;
+      }
+
+      // 2. If in Settings view, return to workspace
+      if (overlays.isSettingsView) {
+        setCurrentView('workspace');
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        return;
+      }
+
+      // 3. User is on the main workspace: double back to exit logic
+      const now = Date.now();
+      const DOUBLE_BACK_DELAY_MS = 2000;
+
+      if (now - lastBackPressRef.current < DOUBLE_BACK_DELAY_MS) {
+        // Second back press within 2 seconds: allow back navigation / exit
+        lastBackPressRef.current = 0;
+        try {
+          window.history.back();
+        } catch {}
+      } else {
+        // First back press: inform user and retain user in the app
+        lastBackPressRef.current = now;
+        try {
+          window.history.pushState({ app: 'listflow-root' }, '');
+        } catch {}
+        const currentLang = languageRef.current;
+        const msg =
+          getTranslation(currentLang).pressBackAgainToExit ||
+          (currentLang === 'ar' ? 'اضغط رجوع مرة أخرى للخروج' : 'Press back again to exit');
+        showToast(msg, undefined, 'info');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [pwa, showToast]);
+
   // Centralized Helper to Apply and Cache User Preferences
   const applyUserPreferences = useCallback(
     (
