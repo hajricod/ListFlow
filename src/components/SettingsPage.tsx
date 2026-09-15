@@ -168,34 +168,37 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       </div>
 
       {/* 1. Account & Sync Card */}
-      <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900 border border-neutral-200/80 dark:border-neutral-800 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
+      <div
+        id="settings-account-sync-card"
+        className="p-3.5 sm:p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900 border border-neutral-200/80 dark:border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4"
+      >
+        <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
           {user ? (
             user.photoURL ? (
               <img
                 src={user.photoURL}
                 alt={user.displayName || 'User'}
                 referrerPolicy="no-referrer"
-                className="w-10 h-10 rounded-full object-cover shrink-0"
+                className="w-11 h-11 rounded-xl object-cover ring-1 ring-emerald-500/30 shrink-0 mt-0.5 sm:mt-0"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+              <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-base shadow-xs shrink-0 mt-0.5 sm:mt-0">
                 {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
               </div>
             )
           ) : (
-            <div className="w-10 h-10 rounded-full bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 flex items-center justify-center font-bold text-sm shrink-0">
+            <div className="w-11 h-11 rounded-xl bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 flex items-center justify-center font-bold text-base shadow-xs shrink-0 mt-0.5 sm:mt-0">
               G
             </div>
           )}
 
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1 space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-sm text-neutral-900 dark:text-neutral-100 truncate">
+              <span className="font-semibold text-sm sm:text-base text-neutral-900 dark:text-neutral-100 break-words leading-tight">
                 {user ? user.displayName || user.email : t.guestMode}
               </span>
               <span
-                className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${
+                className={`text-[11px] px-2.5 py-0.5 rounded-full font-medium inline-flex items-center gap-1.5 shrink-0 ${
                   user
                     ? syncStatus === 'syncing'
                       ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300'
@@ -230,20 +233,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 )}
               </span>
             </div>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 break-words leading-relaxed line-clamp-2">
               {user ? user.email : t.guestModeDesc}
             </p>
           </div>
         </div>
 
-        <div className="shrink-0">
+        {/* Action Button: full width on mobile so it doesn't get squeezed with large fonts */}
+        <div className="w-full sm:w-auto shrink-0 pt-2 sm:pt-0 border-t border-neutral-200/60 dark:border-neutral-800/60 sm:border-t-0 flex justify-end">
           {user ? (
             onSignOut && (
               <button
                 id="settings-signout-btn"
                 type="button"
                 onClick={onSignOut}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer flex items-center gap-1.5"
+                className="w-full sm:w-auto px-4 py-2 sm:py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-neutral-700 dark:text-neutral-300 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-neutral-800 sm:bg-transparent sm:dark:bg-transparent border border-neutral-200/80 dark:border-neutral-700/80 sm:border-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>{t.signOut}</span>
@@ -255,7 +259,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 id="settings-signin-btn"
                 type="button"
                 onClick={onOpenAuthModal}
-                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2.5 sm:py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
               >
                 <LogIn className="w-3.5 h-3.5" />
                 <span>{t.login}</span>
@@ -427,28 +431,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     Aa
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 truncate"
-                        style={{
-                          fontFamily:
-                            language === 'ar'
-                              ? getFontFamilyOption(fontFamily).fontFamilyArabic
-                              : getFontFamilyOption(fontFamily).fontFamilyLatin,
-                        }}
-                      >
-                        {language === 'ar'
-                          ? getFontFamilyOption(fontFamily).nameAr
-                          : getFontFamilyOption(fontFamily).nameEn}
-                      </span>
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 shrink-0">
-                        {language === 'ar'
-                          ? getFontFamilyOption(fontFamily).categoryAr
-                          : getFontFamilyOption(fontFamily).categoryEn}
-                      </span>
-                    </div>
-                    <p
-                      className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5"
+                    <span
+                      className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 truncate block"
                       style={{
                         fontFamily:
                           language === 'ar'
@@ -457,9 +441,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       }}
                     >
                       {language === 'ar'
-                        ? getFontFamilyOption(fontFamily).sampleAr
-                        : getFontFamilyOption(fontFamily).sampleEn}
-                    </p>
+                        ? getFontFamilyOption(fontFamily).nameAr
+                        : getFontFamilyOption(fontFamily).nameEn}
+                    </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 text-neutral-400 dark:text-neutral-500">
@@ -574,11 +558,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         {getFontSizeOption(fontSize).scalePercent}%
                       </span>
                     </div>
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
-                      {language === 'ar'
-                        ? getFontSizeOption(fontSize).descAr
-                        : getFontSizeOption(fontSize).descEn}
-                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 text-neutral-400 dark:text-neutral-500">
