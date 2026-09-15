@@ -1,4 +1,4 @@
-import { AppList, ListGroup, ListItem, Language, Theme, ThemeColor } from '../types';
+import { AppList, ListGroup, ListItem, Language, Theme, ThemeColor, FontFamily, FontSize } from '../types';
 
 const STORAGE_KEYS = {
   LISTS: 'taskflow_app_lists_v3',
@@ -8,6 +8,8 @@ const STORAGE_KEYS = {
   LANGUAGE: 'taskflow_language_v1',
   THEME: 'taskflow_theme_v1',
   THEME_COLOR: 'taskflow_theme_color_v1',
+  FONT_FAMILY: 'listflow_font_family_v1',
+  FONT_SIZE: 'listflow_font_size_v1',
   SOUND: 'taskflow_sound_v1',
   GRID_COLUMNS: 'taskflow_grid_columns_v1',
   ONBOARDING_SEEN: 'listflow_onboarding_seen_v1',
@@ -1553,6 +1555,74 @@ export const saveStoredThemeColor = (color: ThemeColor, userId?: string | null) 
     localStorage.setItem(key, color);
     if (userId) {
       localStorage.setItem(getUserStorageKey(STORAGE_KEYS.THEME_COLOR, null), color);
+      setLastActiveUserId(userId);
+    }
+  } catch {}
+};
+
+export const loadStoredFontFamily = (userId?: string | null): FontFamily => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.FONT_FAMILY, userId);
+    const raw = localStorage.getItem(key) as FontFamily;
+    const validFonts: FontFamily[] = [
+      'default',
+      'inter',
+      'cairo',
+      'alexandria',
+      'serif',
+      'mono',
+      'system',
+    ];
+    if (raw && validFonts.includes(raw)) return raw;
+
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.FONT_FAMILY, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey) as FontFamily;
+        if (lastRaw && validFonts.includes(lastRaw)) return lastRaw;
+      }
+    }
+  } catch {}
+  return 'default';
+};
+
+export const saveStoredFontFamily = (font: FontFamily, userId?: string | null) => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.FONT_FAMILY, userId);
+    localStorage.setItem(key, font);
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.FONT_FAMILY, null), font);
+      setLastActiveUserId(userId);
+    }
+  } catch {}
+};
+
+export const loadStoredFontSize = (userId?: string | null): FontSize => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.FONT_SIZE, userId);
+    const raw = localStorage.getItem(key) as FontSize;
+    const validSizes: FontSize[] = ['small', 'medium', 'large', 'xlarge'];
+    if (raw && validSizes.includes(raw)) return raw;
+
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.FONT_SIZE, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey) as FontSize;
+        if (lastRaw && validSizes.includes(lastRaw)) return lastRaw;
+      }
+    }
+  } catch {}
+  return 'medium';
+};
+
+export const saveStoredFontSize = (size: FontSize, userId?: string | null) => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.FONT_SIZE, userId);
+    localStorage.setItem(key, size);
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.FONT_SIZE, null), size);
       setLastActiveUserId(userId);
     }
   } catch {}

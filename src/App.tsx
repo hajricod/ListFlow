@@ -13,6 +13,8 @@ import {
   Language,
   Theme,
   ThemeColor,
+  FontFamily,
+  FontSize,
   FilterState,
   Priority,
   SortOption,
@@ -37,6 +39,10 @@ import {
   saveStoredTheme,
   loadStoredThemeColor,
   saveStoredThemeColor,
+  loadStoredFontFamily,
+  saveStoredFontFamily,
+  loadStoredFontSize,
+  saveStoredFontSize,
   loadStoredSound,
   saveStoredSound,
   loadStoredGridColumns,
@@ -58,6 +64,7 @@ import {
 import { getTranslation } from './locales/translations';
 import { sounds } from './utils/audio';
 import { applyThemeColorToDOM, getThemeColorOption } from './utils/themeColors';
+import { applyTypographyToDOM } from './utils/typography';
 
 import { Navbar } from './components/Navbar';
 import { SideMenu } from './components/SideMenu';
@@ -115,6 +122,8 @@ export default function App() {
   const [language, setLanguage] = useState<Language>(() => loadStoredLanguage());
   const [theme, setTheme] = useState<Theme>(() => loadStoredTheme());
   const [themeColor, setThemeColor] = useState<ThemeColor>(() => loadStoredThemeColor());
+  const [fontFamily, setFontFamily] = useState<FontFamily>(() => loadStoredFontFamily());
+  const [fontSize, setFontSize] = useState<FontSize>(() => loadStoredFontSize());
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => loadStoredSound());
 
   // PWA Installation Hook
@@ -337,6 +346,34 @@ export default function App() {
     [user]
   );
 
+  const handleFontFamilyChange = useCallback(
+    (newFont: FontFamily) => {
+      setFontFamily(newFont);
+      saveStoredFontFamily(newFont, user?.uid);
+      applyTypographyToDOM(newFont, fontSize);
+      if (user) {
+        syncUserProfile(user, { fontFamily: newFont }).catch((err) => {
+          console.warn('Font family profile sync warning:', err);
+        });
+      }
+    },
+    [user, fontSize]
+  );
+
+  const handleFontSizeChange = useCallback(
+    (newSize: FontSize) => {
+      setFontSize(newSize);
+      saveStoredFontSize(newSize, user?.uid);
+      applyTypographyToDOM(fontFamily, newSize);
+      if (user) {
+        syncUserProfile(user, { fontSize: newSize }).catch((err) => {
+          console.warn('Font size profile sync warning:', err);
+        });
+      }
+    },
+    [user, fontFamily]
+  );
+
   const handleSoundToggle = useCallback(() => {
     setSoundEnabled((prev) => {
       const next = !prev;
@@ -350,6 +387,13 @@ export default function App() {
       return next;
     });
   }, [user]);
+
+  // Apply Typography to DOM & persist to storage
+  useEffect(() => {
+    applyTypographyToDOM(fontFamily, fontSize);
+    saveStoredFontFamily(fontFamily, user?.uid);
+    saveStoredFontSize(fontSize, user?.uid);
+  }, [fontFamily, fontSize, user?.uid]);
 
   const checkedOnboardingUserUidsRef = useRef<Set<string>>(new Set());
 
@@ -522,6 +566,8 @@ export default function App() {
         language?: Language;
         theme?: Theme;
         themeColor?: ThemeColor;
+        fontFamily?: FontFamily;
+        fontSize?: FontSize;
         soundEnabled?: boolean;
         gridColumns?: 1 | 2;
         activeListId?: string;
@@ -547,6 +593,16 @@ export default function App() {
         setThemeColor(prefs.themeColor);
         saveStoredThemeColor(prefs.themeColor, uid);
         applyThemeColorToDOM(prefs.themeColor);
+      }
+      if (prefs.fontFamily) {
+        setFontFamily(prefs.fontFamily);
+        saveStoredFontFamily(prefs.fontFamily, uid);
+        applyTypographyToDOM(prefs.fontFamily, fontSize);
+      }
+      if (prefs.fontSize) {
+        setFontSize(prefs.fontSize);
+        saveStoredFontSize(prefs.fontSize, uid);
+        applyTypographyToDOM(fontFamily, prefs.fontSize);
       }
       if (typeof prefs.soundEnabled === 'boolean') {
         setSoundEnabled(prefs.soundEnabled);
@@ -606,6 +662,8 @@ export default function App() {
       const initialLang = loadStoredLanguage(currentUid);
       const initialTheme = loadStoredTheme(currentUid);
       const initialThemeColor = loadStoredThemeColor(currentUid);
+      const initialFont = loadStoredFontFamily(currentUid);
+      const initialFontSize = loadStoredFontSize(currentUid);
       const initialSound = loadStoredSound(currentUid);
       const initialGrid = loadStoredGridColumns(currentUid);
 
@@ -617,6 +675,9 @@ export default function App() {
       setLanguage(initialLang);
       setTheme(initialTheme);
       setThemeColor(initialThemeColor);
+      setFontFamily(initialFont);
+      setFontSize(initialFontSize);
+      applyTypographyToDOM(initialFont, initialFontSize);
       setSoundEnabled(initialSound);
       setGridColumns(initialGrid);
 
@@ -662,6 +723,8 @@ export default function App() {
           const userLang = loadStoredLanguage(currentUid);
           const userTheme = loadStoredTheme(currentUid);
           const userThemeColor = loadStoredThemeColor(currentUid);
+          const userFont = loadStoredFontFamily(currentUid);
+          const userFontSize = loadStoredFontSize(currentUid);
           const userSound = loadStoredSound(currentUid);
           const userGrid = loadStoredGridColumns(currentUid);
 
@@ -673,6 +736,9 @@ export default function App() {
           setLanguage(userLang);
           setTheme(userTheme);
           setThemeColor(userThemeColor);
+          setFontFamily(userFont);
+          setFontSize(userFontSize);
+          applyTypographyToDOM(userFont, userFontSize);
           setSoundEnabled(userSound);
           setGridColumns(userGrid);
         }
@@ -815,6 +881,8 @@ export default function App() {
           language,
           theme,
           themeColor,
+          fontFamily,
+          fontSize,
           soundEnabled,
           gridColumns,
           activeListId,
@@ -833,7 +901,7 @@ export default function App() {
         clearTimeout(prefSyncTimeoutRef.current);
       }
     };
-  }, [user, language, theme, themeColor, soundEnabled, gridColumns, activeListId]);
+  }, [user, language, theme, themeColor, fontFamily, fontSize, soundEnabled, gridColumns, activeListId]);
 
   // Handle Online / Offline Connectivity Resumption
   useEffect(() => {
@@ -2772,6 +2840,10 @@ export default function App() {
               onThemeToggle={cycleTheme}
               themeColor={themeColor}
               onThemeColorChange={handleThemeColorChange}
+              fontFamily={fontFamily}
+              onFontFamilyChange={handleFontFamilyChange}
+              fontSize={fontSize}
+              onFontSizeChange={handleFontSizeChange}
               soundEnabled={soundEnabled}
               onSoundToggle={handleSoundToggle}
               gridColumns={gridColumns}

@@ -115,6 +115,17 @@ export type ThemeColor =
   | 'cyan'
   | 'orange';
 
+export type FontFamily =
+  | 'default'
+  | 'inter'
+  | 'cairo'
+  | 'alexandria'
+  | 'serif'
+  | 'mono'
+  | 'system';
+
+export type FontSize = 'small' | 'medium' | 'large' | 'xlarge';
+
 export type AppView = 'workspace' | 'settings';
 export type SortOption = 'manual' | 'alphabetical' | 'createdAt' | 'quantity';
 export type SortDirection = 'asc' | 'desc';

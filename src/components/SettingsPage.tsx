@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   ArrowLeft,
   Moon,
@@ -13,10 +13,18 @@ import {
   Check,
   Heart,
   Info,
+  Type,
+  ChevronDown,
 } from 'lucide-react';
-import { Language, SyncStatus, Theme, ThemeColor } from '../types';
+import { Language, SyncStatus, Theme, ThemeColor, FontFamily, FontSize } from '../types';
 import { getTranslation } from '../locales/translations';
 import { THEME_COLOR_OPTIONS } from '../utils/themeColors';
+import {
+  FONT_FAMILY_OPTIONS,
+  FONT_SIZE_OPTIONS,
+  getFontFamilyOption,
+  getFontSizeOption,
+} from '../utils/typography';
 import { User } from 'firebase/auth';
 
 interface SettingsPageProps {
@@ -27,6 +35,10 @@ interface SettingsPageProps {
   onThemeToggle: () => void;
   themeColor?: ThemeColor;
   onThemeColorChange?: (color: ThemeColor) => void;
+  fontFamily?: FontFamily;
+  onFontFamilyChange?: (font: FontFamily) => void;
+  fontSize?: FontSize;
+  onFontSizeChange?: (size: FontSize) => void;
   soundEnabled: boolean;
   onSoundToggle: () => void;
   gridColumns?: 1 | 2;
@@ -56,6 +68,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onThemeToggle,
   themeColor = 'emerald',
   onThemeColorChange,
+  fontFamily = 'default',
+  onFontFamilyChange,
+  fontSize = 'medium',
+  onFontSizeChange,
   soundEnabled,
   onSoundToggle,
   gridColumns = 2,
@@ -74,6 +90,35 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 }) => {
   const t = getTranslation(language);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Dropdown state for Font Family and Font Size
+  const [isFontDropdownOpen, setIsFontDropdownOpen] = useState(false);
+  const [isSizeDropdownOpen, setIsSizeDropdownOpen] = useState(false);
+  const fontDropdownRef = useRef<HTMLDivElement>(null);
+  const sizeDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (fontDropdownRef.current && !fontDropdownRef.current.contains(e.target as Node)) {
+        setIsFontDropdownOpen(false);
+      }
+      if (sizeDropdownRef.current && !sizeDropdownRef.current.contains(e.target as Node)) {
+        setIsSizeDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFontDropdownOpen(false);
+        setIsSizeDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -341,6 +386,281 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Font Family Dropdown Menu */}
+          <div className="p-3.5 space-y-2 relative" ref={fontDropdownRef}>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Type className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100 block">
+                    {t.fontFamily}
+                  </span>
+                </div>
+                <span className="text-xs text-neutral-500 dark:text-neutral-400 block mt-0.5">
+                  {t.fontFamilyDesc}
+                </span>
+              </div>
+            </div>
+
+            {/* Dropdown Menu Trigger Button */}
+            <div className="relative">
+              <button
+                id="font-family-dropdown-trigger"
+                type="button"
+                onClick={() => {
+                  setIsFontDropdownOpen((prev) => !prev);
+                  setIsSizeDropdownOpen(false);
+                }}
+                className={`w-full flex items-center justify-between gap-3 p-3 rounded-xl border text-start transition-all cursor-pointer bg-white/80 dark:bg-neutral-800/80 ${
+                  isFontDropdownOpen
+                    ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                    : 'border-neutral-200/90 dark:border-neutral-700/80 hover:border-neutral-300 dark:hover:border-neutral-600'
+                }`}
+                aria-haspopup="listbox"
+                aria-expanded={isFontDropdownOpen}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/60 dark:border-emerald-800/50 flex items-center justify-center shrink-0 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
+                    Aa
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 truncate"
+                        style={{
+                          fontFamily:
+                            language === 'ar'
+                              ? getFontFamilyOption(fontFamily).fontFamilyArabic
+                              : getFontFamilyOption(fontFamily).fontFamilyLatin,
+                        }}
+                      >
+                        {language === 'ar'
+                          ? getFontFamilyOption(fontFamily).nameAr
+                          : getFontFamilyOption(fontFamily).nameEn}
+                      </span>
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 shrink-0">
+                        {language === 'ar'
+                          ? getFontFamilyOption(fontFamily).categoryAr
+                          : getFontFamilyOption(fontFamily).categoryEn}
+                      </span>
+                    </div>
+                    <p
+                      className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5"
+                      style={{
+                        fontFamily:
+                          language === 'ar'
+                            ? getFontFamilyOption(fontFamily).fontFamilyArabic
+                            : getFontFamilyOption(fontFamily).fontFamilyLatin,
+                      }}
+                    >
+                      {language === 'ar'
+                        ? getFontFamilyOption(fontFamily).sampleAr
+                        : getFontFamilyOption(fontFamily).sampleEn}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 text-neutral-400 dark:text-neutral-500">
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform duration-200 ${
+                      isFontDropdownOpen ? 'rotate-180 text-emerald-600 dark:text-emerald-400' : ''
+                    }`}
+                  />
+                </div>
+              </button>
+
+              {/* Floating Dropdown Menu Panel */}
+              {isFontDropdownOpen && (
+                <div
+                  id="font-family-dropdown-menu"
+                  className="absolute z-30 start-0 end-0 mt-1.5 max-h-72 overflow-y-auto rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200/90 dark:border-neutral-700/80 shadow-xl p-1.5 space-y-1 backdrop-blur-md"
+                  role="listbox"
+                >
+                  {FONT_FAMILY_OPTIONS.map((opt) => {
+                    const isSelected = fontFamily === opt.id;
+                    const fontCss = language === 'ar' ? opt.fontFamilyArabic : opt.fontFamilyLatin;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => {
+                          onFontFamilyChange && onFontFamilyChange(opt.id);
+                          setIsFontDropdownOpen(false);
+                        }}
+                        className={`w-full p-2.5 rounded-xl text-start transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
+                          isSelected
+                            ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-200 border border-emerald-300/80 dark:border-emerald-800/80'
+                            : 'hover:bg-neutral-100 dark:hover:bg-neutral-800/80 text-neutral-800 dark:text-neutral-200 border border-transparent'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-sm font-semibold truncate"
+                              style={{ fontFamily: fontCss }}
+                            >
+                              {language === 'ar' ? opt.nameAr : opt.nameEn}
+                            </span>
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 shrink-0">
+                              {language === 'ar' ? opt.categoryAr : opt.categoryEn}
+                            </span>
+                          </div>
+                          <p
+                            className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5"
+                            style={{ fontFamily: fontCss }}
+                          >
+                            {language === 'ar' ? opt.sampleAr : opt.sampleEn}
+                          </p>
+                        </div>
+                        {isSelected && (
+                          <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Font & Display Size Dropdown Menu */}
+          <div className="p-3.5 space-y-2 relative" ref={sizeDropdownRef}>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100 block">
+                  {t.fontSize}
+                </span>
+                <span className="text-xs text-neutral-500 dark:text-neutral-400 block mt-0.5">
+                  {t.fontSizeDesc}
+                </span>
+              </div>
+            </div>
+
+            {/* Dropdown Trigger */}
+            <div className="relative">
+              <button
+                id="font-size-dropdown-trigger"
+                type="button"
+                onClick={() => {
+                  setIsSizeDropdownOpen((prev) => !prev);
+                  setIsFontDropdownOpen(false);
+                }}
+                className={`w-full flex items-center justify-between gap-3 p-3 rounded-xl border text-start transition-all cursor-pointer bg-white/80 dark:bg-neutral-800/80 ${
+                  isSizeDropdownOpen
+                    ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                    : 'border-neutral-200/90 dark:border-neutral-700/80 hover:border-neutral-300 dark:hover:border-neutral-600'
+                }`}
+                aria-haspopup="listbox"
+                aria-expanded={isSizeDropdownOpen}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-neutral-200/80 dark:border-neutral-700/80 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 font-bold text-xs">
+                    {getFontSizeOption(fontSize).basePx}px
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 truncate">
+                        {language === 'ar'
+                          ? getFontSizeOption(fontSize).nameAr
+                          : getFontSizeOption(fontSize).nameEn}
+                      </span>
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-neutral-200/70 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 shrink-0">
+                        {getFontSizeOption(fontSize).scalePercent}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
+                      {language === 'ar'
+                        ? getFontSizeOption(fontSize).descAr
+                        : getFontSizeOption(fontSize).descEn}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 text-neutral-400 dark:text-neutral-500">
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform duration-200 ${
+                      isSizeDropdownOpen ? 'rotate-180 text-emerald-600 dark:text-emerald-400' : ''
+                    }`}
+                  />
+                </div>
+              </button>
+
+              {/* Floating Dropdown Menu Panel */}
+              {isSizeDropdownOpen && (
+                <div
+                  id="font-size-dropdown-menu"
+                  className="absolute z-30 start-0 end-0 mt-1.5 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200/90 dark:border-neutral-700/80 shadow-xl p-1.5 space-y-1 backdrop-blur-md"
+                  role="listbox"
+                >
+                  {FONT_SIZE_OPTIONS.map((opt) => {
+                    const isSelected = fontSize === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => {
+                          onFontSizeChange && onFontSizeChange(opt.id);
+                          setIsSizeDropdownOpen(false);
+                        }}
+                        className={`w-full p-2.5 rounded-xl text-start transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
+                          isSelected
+                            ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-200 border border-emerald-300/80 dark:border-emerald-800/80'
+                            : 'hover:bg-neutral-100 dark:hover:bg-neutral-800/80 text-neutral-800 dark:text-neutral-200 border border-transparent'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold">
+                              {language === 'ar' ? opt.nameAr : opt.nameEn}
+                            </span>
+                            <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 shrink-0">
+                              {opt.basePx}px ({opt.scalePercent}%)
+                            </span>
+                          </div>
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                            {language === 'ar' ? opt.descAr : opt.descEn}
+                          </p>
+                        </div>
+                        {isSelected && (
+                          <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Live Typography Preview Card */}
+            <div className="mt-2 p-3 rounded-xl bg-white/70 dark:bg-neutral-800/50 border border-neutral-200/70 dark:border-neutral-700/60 space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+                <span>{t.previewTypography}</span>
+                <span className="text-[10px] font-mono opacity-80">
+                  {getFontFamilyOption(fontFamily).id} • {fontSize}
+                </span>
+              </div>
+              <div className="flex items-center gap-2.5 p-2 rounded-lg bg-neutral-50 dark:bg-neutral-900/80 border border-neutral-200/50 dark:border-neutral-800">
+                <div className="w-4 h-4 rounded border-2 border-emerald-500 bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                  <Check className="w-3 h-3 stroke-[3]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-neutral-900 dark:text-neutral-100 truncate">
+                    {t.fontStylePreview}
+                  </p>
+                </div>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 shrink-0">
+                  {language === 'ar' ? 'مكتمل' : 'Done'}
+                </span>
+              </div>
             </div>
           </div>
 

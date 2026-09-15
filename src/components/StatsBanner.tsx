@@ -136,7 +136,7 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                   type="button"
                   id="main-add-item-btn"
                   onClick={onOpenNewItemModal}
-                  className="flex items-center justify-center gap-1.5 h-9 sm:h-9.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all shadow-xs cursor-pointer min-w-0"
+                  className="hidden sm:flex items-center justify-center gap-1.5 h-9 sm:h-9.5 px-3.5 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all shadow-xs cursor-pointer min-w-0"
                 >
                   <PlusCircle className="w-4 h-4 stroke-[2.3] shrink-0" />
                   <span className="truncate">{t.addItem}</span>
@@ -351,11 +351,6 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                     >
                       {filterState.hideCompleted ? t.showCompleted : t.hideCompleted}
                     </p>
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                      {filterState.hideCompleted
-                        ? `${completedTasks} ${t.collected || 'completed'} ${t.items || 'items'} hidden from view`
-                        : 'Display all active and completed items'}
-                    </p>
                   </div>
                 </div>
                 <div
@@ -427,7 +422,6 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                     </div>
                     <div>
                       <p className="text-xs font-semibold">{t.twoColumns}</p>
-                      <p className="text-[10px] text-neutral-500 dark:text-neutral-400">Grid view</p>
                     </div>
                   </button>
 
@@ -452,7 +446,6 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                     </div>
                     <div>
                       <p className="text-xs font-semibold">{t.oneColumn}</p>
-                      <p className="text-[10px] text-neutral-500 dark:text-neutral-400">Full width</p>
                     </div>
                   </button>
                 </div>

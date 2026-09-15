@@ -2,10 +2,11 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
-import { loadStoredTheme, loadStoredThemeColor } from './utils/storage';
+import { loadStoredTheme, loadStoredThemeColor, loadStoredFontFamily, loadStoredFontSize } from './utils/storage';
 import { applyThemeColorToDOM } from './utils/themeColors';
+import { applyTypographyToDOM } from './utils/typography';
 
-// Initialize theme & accent color before paint
+// Initialize theme, accent color & typography before paint
 try {
   const initialTheme = loadStoredTheme();
   const isDark =
@@ -21,6 +22,10 @@ try {
 
   const initialThemeColor = loadStoredThemeColor();
   applyThemeColorToDOM(initialThemeColor);
+
+  const initialFont = loadStoredFontFamily();
+  const initialFontSize = loadStoredFontSize();
+  applyTypographyToDOM(initialFont, initialFontSize);
 } catch {}
 
 // Register Service Worker for PWA

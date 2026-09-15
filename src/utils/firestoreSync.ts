@@ -23,6 +23,8 @@ import {
   Language,
   Theme,
   ThemeColor,
+  FontFamily,
+  FontSize,
   ShareRole,
   ShareMember,
   PendingInvitation,
@@ -144,6 +146,8 @@ export interface UserPreferencesPayload {
   language?: Language;
   theme?: Theme;
   themeColor?: ThemeColor;
+  fontFamily?: FontFamily;
+  fontSize?: FontSize;
   soundEnabled?: boolean;
   gridColumns?: 1 | 2;
   activeListId?: string;
@@ -184,6 +188,8 @@ export async function syncUserProfile(
       if (preferences.language) payload.language = preferences.language;
       if (preferences.theme) payload.theme = preferences.theme;
       if (preferences.themeColor) payload.themeColor = preferences.themeColor;
+      if (preferences.fontFamily) payload.fontFamily = preferences.fontFamily;
+      if (preferences.fontSize) payload.fontSize = preferences.fontSize;
       if (preferences.soundEnabled !== undefined) payload.soundEnabled = preferences.soundEnabled;
       if (preferences.gridColumns !== undefined) payload.gridColumns = preferences.gridColumns;
       if (preferences.activeListId) payload.activeListId = preferences.activeListId;
@@ -221,6 +227,8 @@ export async function fetchUserProfilePreferences(userId: string): Promise<UserP
       language: (u.language === 'en' || u.language === 'ar') ? u.language : undefined,
       theme: (u.theme === 'light' || u.theme === 'dark' || u.theme === 'system') ? u.theme : undefined,
       themeColor: u.themeColor as ThemeColor | undefined,
+      fontFamily: u.fontFamily as FontFamily | undefined,
+      fontSize: u.fontSize as FontSize | undefined,
       soundEnabled: typeof u.soundEnabled === 'boolean' ? u.soundEnabled : undefined,
       gridColumns: (u.gridColumns === 1 || u.gridColumns === 2) ? u.gridColumns : undefined,
       activeListId: u.activeListId as string | undefined,
