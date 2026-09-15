@@ -621,11 +621,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
             {/* Live Typography Preview Card */}
             <div className="mt-2 p-3 rounded-xl bg-white/70 dark:bg-neutral-800/50 border border-neutral-200/70 dark:border-neutral-700/60 space-y-2">
-              <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+              <div className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
                 <span>{t.previewTypography}</span>
-                <span className="text-[10px] font-mono opacity-80">
-                  {getFontFamilyOption(fontFamily).id} • {fontSize}
-                </span>
               </div>
               <div className="flex items-center gap-2.5 p-2 rounded-lg bg-neutral-50 dark:bg-neutral-900/80 border border-neutral-200/50 dark:border-neutral-800">
                 <div className="w-4 h-4 rounded border-2 border-emerald-500 bg-emerald-500 text-white flex items-center justify-center shrink-0">

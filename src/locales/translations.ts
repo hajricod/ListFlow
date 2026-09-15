@@ -4,7 +4,7 @@ export const translations = {
   en: {
     appName: 'List Flow',
     appSubtitle: 'Organized Grouped Lists & Tasks',
-    searchPlaceholder: 'Search items, groups, notes... (Press /)',
+    searchPlaceholder: 'Search',
     toggleSidebar: 'Toggle Side Menu',
     closeSidebar: 'Close Side Menu',
     collapseSidebar: 'Collapse Side Menu',
@@ -395,7 +395,7 @@ export const translations = {
   ar: {
     appName: 'ليست فلو',
     appSubtitle: 'تنظيم القوائم والمجموعات والمهام',
-    searchPlaceholder: 'ابحث في العناصر، المجموعات، الملاحظات... (اضغط /)',
+    searchPlaceholder: 'بحث',
     toggleSidebar: 'تبديل القائمة الجانبية',
     closeSidebar: 'إغلاق القائمة الجانبية',
     collapseSidebar: 'طي القائمة الجانبية',

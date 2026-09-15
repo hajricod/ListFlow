@@ -1004,6 +1004,10 @@ export default function App() {
             applyUserPreferences(cloudData.preferences, user.uid);
           }
 
+          if (cloudData.pendingInvitations) {
+            setPendingInvitations(cloudData.pendingInvitations);
+          }
+
           if (isInitialCloudLoadRef.current) {
             showToast(t.loginSuccess, undefined, 'success');
             isInitialCloudLoadRef.current = false;
@@ -1019,21 +1023,23 @@ export default function App() {
 
           setSyncStatus('synced');
         } else if (isInitialCloudLoadRef.current) {
-          // New user initial database seed with user's local items
+          // New user initial database seed with user's local items - executes at most once
+          isInitialCloudLoadRef.current = false;
           const currentLocalLists = loadStoredLists(user.uid);
           const currentLocalGroups = loadStoredGroups(user.uid);
           const currentLocalItems = loadStoredItems(user.uid);
 
-          syncAllToFirestore(user.uid, currentLocalLists, currentLocalGroups, currentLocalItems);
-          syncUserProfile(user, {
-            language,
-            theme,
-            themeColor,
-            soundEnabled,
-            gridColumns,
-            activeListId,
-          });
-          isInitialCloudLoadRef.current = false;
+          if (currentLocalLists.length > 0) {
+            syncAllToFirestore(user.uid, currentLocalLists, currentLocalGroups, currentLocalItems);
+            syncUserProfile(user, {
+              language,
+              theme,
+              themeColor,
+              soundEnabled,
+              gridColumns,
+              activeListId,
+            });
+          }
           showToast(t.loginSuccess, undefined, 'success');
           setSyncStatus('synced');
         }
@@ -1090,7 +1096,7 @@ export default function App() {
           console.error('Preferences sync to Firestore failed:', err);
         }
       }
-    }, 500);
+    }, 1500);
 
     return () => {
       if (prefSyncTimeoutRef.current) {
@@ -1103,10 +1109,7 @@ export default function App() {
   useEffect(() => {
     const handleOnline = () => {
       if (user) {
-        setSyncStatus('syncing');
-        syncAllToFirestore(user.uid, lists, groups, items).then((ok) => {
-          setSyncStatus(ok ? 'synced' : 'error');
-        });
+        setSyncStatus('synced');
       }
     };
 
@@ -1123,7 +1126,7 @@ export default function App() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [user, lists, groups, items]);
+  }, [user]);
 
   // Active List Derived Groups & Items
   const activeList = useMemo(() => {
@@ -1184,20 +1187,6 @@ export default function App() {
   const isReadOnly = useMemo(() => {
     return !isOwner && userRole === 'read';
   }, [isOwner, userRole]);
-
-  // Real-time Pending Invitations for Logged In User
-  useEffect(() => {
-    if (!user?.email) {
-      setPendingInvitations([]);
-      return;
-    }
-    const unsubscribe = listenToPendingInvitations(user.email, (invites) => {
-      setPendingInvitations(invites);
-    });
-    return () => {
-      unsubscribe();
-    };
-  }, [user?.email]);
 
   // Handle ?joinList=LIST_ID or ?share=LIST_ID in URL query parameters on initial page load
   useEffect(() => {
@@ -2530,8 +2519,15 @@ export default function App() {
       saveStoredGroups(updatedGroups, user?.uid);
 
       if (user && !isReadOnly) {
-        const groupsToBatch = updatedGroups.filter((g) => (g.listId || 'list-groceries') === activeListId);
-        saveGroupsBatchToFirestore(activeListId, groupsToBatch);
+        const groupsToBatch = updatedGroups
+          .filter((g) => (g.listId || 'list-groceries') === activeListId)
+          .filter((g) => {
+            const existing = groups.find((prev) => prev.id === g.id);
+            return !existing || existing.order !== g.order;
+          });
+        if (groupsToBatch.length > 0) {
+          saveGroupsBatchToFirestore(activeListId, groupsToBatch);
+        }
       }
     }
 
@@ -2624,7 +2620,13 @@ export default function App() {
     if (user) {
       const parentGroup = groups.find((g) => g.id === item.groupId);
       const targetListId = (item as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
-      saveItemsBatchToFirestore(targetListId, reorderedWithOrder);
+      const changedItems = reorderedWithOrder.filter((it) => {
+        const existing = items.find((prev) => prev.id === it.id);
+        return !existing || existing.order !== it.order;
+      });
+      if (changedItems.length > 0) {
+        saveItemsBatchToFirestore(targetListId, changedItems);
+      }
     }
   };
 
@@ -2710,12 +2712,24 @@ export default function App() {
     if (user) {
       const targetGroup = groups.find((g) => g.id === targetGroupId);
       const targetListId = targetGroup?.listId || activeListId || 'list-groceries';
-      saveItemsBatchToFirestore(targetListId, reorderedTargetItems);
+      const changedTargetItems = reorderedTargetItems.filter((it) => {
+        const existing = items.find((prev) => prev.id === it.id);
+        return !existing || existing.order !== it.order || existing.groupId !== it.groupId || existing.isPinned !== it.isPinned;
+      });
+      if (changedTargetItems.length > 0) {
+        saveItemsBatchToFirestore(targetListId, changedTargetItems);
+      }
 
       if (!isSameGroup) {
         const sourceGroup = groups.find((g) => g.id === sourceItem.groupId);
         const sourceListId = sourceGroup?.listId || activeListId || 'list-groceries';
-        saveItemsBatchToFirestore(sourceListId, reorderedSourceItems);
+        const changedSourceItems = reorderedSourceItems.filter((it) => {
+          const existing = items.find((prev) => prev.id === it.id);
+          return !existing || existing.order !== it.order;
+        });
+        if (changedSourceItems.length > 0) {
+          saveItemsBatchToFirestore(sourceListId, changedSourceItems);
+        }
       }
     }
 
@@ -2785,7 +2799,13 @@ export default function App() {
       if (sourceItem.groupId !== targetGroupId) {
         const sourceGroup = groups.find((g) => g.id === sourceItem.groupId);
         const sourceListId = sourceGroup?.listId || activeListId || 'list-groceries';
-        saveItemsBatchToFirestore(sourceListId, reorderedSourceItems);
+        const changedSourceItems = reorderedSourceItems.filter((it) => {
+          const existing = items.find((prev) => prev.id === it.id);
+          return !existing || existing.order !== it.order;
+        });
+        if (changedSourceItems.length > 0) {
+          saveItemsBatchToFirestore(sourceListId, changedSourceItems);
+        }
       }
     }
 

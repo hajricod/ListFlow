@@ -74,9 +74,6 @@ export function useAuth() {
     const unsubscribe = subscribeToAuth((currentUser) => {
       setUser(currentUser);
       setLoading(false);
-      if (currentUser) {
-        syncUserProfile(currentUser);
-      }
     });
 
     return () => unsubscribe();

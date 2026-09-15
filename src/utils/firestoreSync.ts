@@ -155,6 +155,9 @@ export interface UserPreferencesPayload {
   userGroupOrders?: Record<string, string[]>;
 }
 
+// In-memory cache to prevent duplicate profile and preference sync writes
+const lastSyncedUserProfileMap = new Map<string, string>();
+
 // 1. Sync User Profile / Preferences
 export async function syncUserProfile(
   userOrUid: User | string,
@@ -167,37 +170,39 @@ export async function syncUserProfile(
   const displayName = (typeof userOrUid === 'object' && userOrUid !== null ? userOrUid.displayName : auth.currentUser?.displayName) || '';
   const photoURL = (typeof userOrUid === 'object' && userOrUid !== null ? userOrUid.photoURL : auth.currentUser?.photoURL) || '';
 
+  const payload: Record<string, unknown> = {
+    userId: uid,
+  };
+
+  if (email) payload.email = email;
+  if (displayName) payload.displayName = displayName;
+  if (photoURL) payload.photoURL = photoURL;
+
+  if (preferences) {
+    if (preferences.language !== undefined) payload.language = preferences.language;
+    if (preferences.theme !== undefined) payload.theme = preferences.theme;
+    if (preferences.themeColor !== undefined) payload.themeColor = preferences.themeColor;
+    if (preferences.fontFamily !== undefined) payload.fontFamily = preferences.fontFamily;
+    if (preferences.fontSize !== undefined) payload.fontSize = preferences.fontSize;
+    if (preferences.soundEnabled !== undefined) payload.soundEnabled = preferences.soundEnabled;
+    if (preferences.gridColumns !== undefined) payload.gridColumns = preferences.gridColumns;
+    if (preferences.activeListId !== undefined) payload.activeListId = preferences.activeListId;
+    if (preferences.onboardingSeen !== undefined) payload.onboardingSeen = preferences.onboardingSeen;
+    if (preferences.userGroupOrders !== undefined) payload.userGroupOrders = preferences.userGroupOrders;
+  }
+
+  // Deduplication check: compare serializable payload to avoid redundant Firestore network writes
+  const cacheKey = JSON.stringify(payload);
+  if (lastSyncedUserProfileMap.get(uid) === cacheKey) {
+    return true;
+  }
+
   try {
     const userDocRef = doc(db, 'users', uid);
-    const existing = await getDoc(userDocRef);
-
-    const payload: Record<string, unknown> = {
-      userId: uid,
-      email,
-      displayName,
-      photoURL,
-      lastActiveAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (!existing.exists()) {
-      payload.createdAt = new Date().toISOString();
-    }
-
-    if (preferences) {
-      if (preferences.language) payload.language = preferences.language;
-      if (preferences.theme) payload.theme = preferences.theme;
-      if (preferences.themeColor) payload.themeColor = preferences.themeColor;
-      if (preferences.fontFamily) payload.fontFamily = preferences.fontFamily;
-      if (preferences.fontSize) payload.fontSize = preferences.fontSize;
-      if (preferences.soundEnabled !== undefined) payload.soundEnabled = preferences.soundEnabled;
-      if (preferences.gridColumns !== undefined) payload.gridColumns = preferences.gridColumns;
-      if (preferences.activeListId) payload.activeListId = preferences.activeListId;
-      if (preferences.onboardingSeen !== undefined) payload.onboardingSeen = preferences.onboardingSeen;
-      if (preferences.userGroupOrders) payload.userGroupOrders = preferences.userGroupOrders;
-    }
+    payload.updatedAt = new Date().toISOString();
 
     await setDoc(userDocRef, sanitizeForFirestore(payload), { merge: true });
+    lastSyncedUserProfileMap.set(uid, cacheKey);
     return true;
   } catch (error) {
     if (isQuotaExceededError(error)) {
@@ -485,6 +490,8 @@ export function subscribeToUserCloudData(
 
   let memberLists: AppList[] = [];
   let invitedLists: AppList[] = [];
+  let initialMemberListsLoaded = false;
+  let emitTimer: ReturnType<typeof setTimeout> | null = null;
   const allListsGroupsMap: Map<string, Map<string, ListGroup>> = new Map();
   const allListsItemsMap: Map<string, Map<string, ListItem>> = new Map();
   const groupSubUnsubs: Map<string, Unsubscribe> = new Map();
@@ -492,6 +499,9 @@ export function subscribeToUserCloudData(
   let latestUserData: Partial<UserCloudData> | null = null;
 
   const emitCombinedData = () => {
+    if (!initialMemberListsLoaded) {
+      return;
+    }
     // Combine member lists
     const combinedListsMap = new Map<string, AppList>();
     memberLists.forEach((l) => {
@@ -593,6 +603,12 @@ export function subscribeToUserCloudData(
     });
   };
 
+  const scheduleEmit = () => {
+    if (!initialMemberListsLoaded) return;
+    if (emitTimer) clearTimeout(emitTimer);
+    emitTimer = setTimeout(emitCombinedData, 50);
+  };
+
   const updateSubcollectionsListeners = (listsList: AppList[]) => {
     const activeListIds = new Set(listsList.map((l) => l.id));
 
@@ -624,7 +640,7 @@ export function subscribeToUserCloudData(
               listGroups.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as ListGroup);
             });
             allListsGroupsMap.set(list.id, listGroups);
-            emitCombinedData();
+            scheduleEmit();
           },
           (err) => {
             console.warn(`Groups listener error for list ${list.id}:`, err);
@@ -642,7 +658,7 @@ export function subscribeToUserCloudData(
               listItems.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as ListItem);
             });
             allListsItemsMap.set(list.id, listItems);
-            emitCombinedData();
+            scheduleEmit();
           },
           (err) => {
             console.warn(`Items listener error for list ${list.id}:`, err);
@@ -671,7 +687,7 @@ export function subscribeToUserCloudData(
             ? (u.userGroupOrders as Record<string, string[]>)
             : undefined,
         };
-        emitCombinedData();
+        scheduleEmit();
       }
     },
     (err) => {
@@ -691,8 +707,9 @@ export function subscribeToUserCloudData(
       const arr: AppList[] = [];
       snapshot.forEach((d) => arr.push(d.data() as AppList));
       memberLists = arr;
+      initialMemberListsLoaded = true;
       updateSubcollectionsListeners(memberLists);
-      emitCombinedData();
+      scheduleEmit();
     },
     (err) => {
       if (isQuotaExceededError(err)) {
@@ -717,7 +734,7 @@ export function subscribeToUserCloudData(
         const arr: AppList[] = [];
         snapshot.forEach((d) => arr.push(d.data() as AppList));
         invitedLists = arr;
-        emitCombinedData();
+        scheduleEmit();
       },
       (err) => {
         console.warn('Invited lists query error:', err);
@@ -726,6 +743,7 @@ export function subscribeToUserCloudData(
   }
 
   return () => {
+    if (emitTimer) clearTimeout(emitTimer);
     unsubUser();
     unsubMemberLists();
     unsubInvitedLists();
