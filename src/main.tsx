@@ -28,10 +28,32 @@ try {
   applyTypographyToDOM(initialFont, initialFontSize);
 } catch {}
 
-// Register Service Worker for PWA
+// Register Service Worker for PWA with automatic update detection
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((registration) => {
+        // Check for updates on startup
+        registration.update().catch(() => {});
+
+        // Check for updates when user returns to tab / unlocks phone
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            registration.update().catch(() => {});
+          }
+        });
+      })
+      .catch(() => {});
+
+    // Reload if service worker controller updates to ensure fresh code
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    });
   });
 }
 

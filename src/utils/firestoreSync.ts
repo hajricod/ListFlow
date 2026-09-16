@@ -460,7 +460,17 @@ export async function syncAllToFirestore(
   }
 }
 
-// 3. Real-time Subscription for Multi-User & Shared Lists Synchronization
+export interface SubscribeOptions {
+  initialActiveListId?: string;
+  cachedGroups?: ListGroup[];
+  cachedItems?: ListItem[];
+}
+
+export type UserCloudSubscription = (() => void) & {
+  switchActiveList: (newListId: string) => void;
+};
+
+// 3. Real-time Subscription for Multi-User & Shared Lists Synchronization (Active-List Optimized)
 export function subscribeToUserCloudData(
   userOrUid: User | string,
   onUpdate: (data: {
@@ -470,8 +480,9 @@ export function subscribeToUserCloudData(
     pendingInvitations?: PendingInvitation[];
     preferences?: Partial<UserCloudData>;
   }) => void,
-  onError?: (error: Error) => void
-): Unsubscribe {
+  onError?: (error: Error) => void,
+  options?: SubscribeOptions
+): UserCloudSubscription {
   let userId = '';
   let userEmail = '';
 
@@ -485,18 +496,44 @@ export function subscribeToUserCloudData(
 
   if (!userId) {
     console.warn('subscribeToUserCloudData called without valid userId');
-    return () => {};
+    const dummy = (() => {}) as UserCloudSubscription;
+    dummy.switchActiveList = () => {};
+    return dummy;
   }
 
   let memberLists: AppList[] = [];
   let invitedLists: AppList[] = [];
   let initialMemberListsLoaded = false;
   let emitTimer: ReturnType<typeof setTimeout> | null = null;
+  let currentActiveListId = options?.initialActiveListId || '';
+
   const allListsGroupsMap: Map<string, Map<string, ListGroup>> = new Map();
   const allListsItemsMap: Map<string, Map<string, ListItem>> = new Map();
   const groupSubUnsubs: Map<string, Unsubscribe> = new Map();
   const itemSubUnsubs: Map<string, Unsubscribe> = new Map();
   let latestUserData: Partial<UserCloudData> | null = null;
+
+  // Pre-seed local cached groups & items so sidebar stats and other lists have instant offline counts
+  if (options?.cachedGroups && options.cachedGroups.length > 0) {
+    options.cachedGroups.forEach((g) => {
+      const listId = g.listId || 'list-groceries';
+      if (!allListsGroupsMap.has(listId)) {
+        allListsGroupsMap.set(listId, new Map());
+      }
+      allListsGroupsMap.get(listId)!.set(g.id, g);
+    });
+  }
+
+  if (options?.cachedItems && options.cachedItems.length > 0) {
+    options.cachedItems.forEach((it) => {
+      const parentGroup = options?.cachedGroups?.find((g) => g.id === it.groupId);
+      const listId = (it as { listId?: string }).listId || parentGroup?.listId || 'list-groceries';
+      if (!allListsItemsMap.has(listId)) {
+        allListsItemsMap.set(listId, new Map());
+      }
+      allListsItemsMap.get(listId)!.set(it.id, it);
+    });
+  }
 
   const emitCombinedData = () => {
     if (!initialMemberListsLoaded) {
@@ -610,63 +647,73 @@ export function subscribeToUserCloudData(
   };
 
   const updateSubcollectionsListeners = (listsList: AppList[]) => {
-    const activeListIds = new Set(listsList.map((l) => l.id));
+    if (!listsList || listsList.length === 0) return;
 
-    // Cleanup unsubscribed lists
+    // Determine target active list
+    const targetList = (currentActiveListId && listsList.find((l) => l.id === currentActiveListId)) || listsList[0];
+    const targetListId = targetList.id;
+    currentActiveListId = targetListId;
+
+    // Unsubscribe listeners from any list that is not the active list (active-list optimization)
     for (const [listId, unsub] of groupSubUnsubs.entries()) {
-      if (!activeListIds.has(listId)) {
+      if (listId !== targetListId) {
         unsub();
         groupSubUnsubs.delete(listId);
-        allListsGroupsMap.delete(listId);
       }
     }
 
     for (const [listId, unsub] of itemSubUnsubs.entries()) {
-      if (!activeListIds.has(listId)) {
+      if (listId !== targetListId) {
         unsub();
         itemSubUnsubs.delete(listId);
-        allListsItemsMap.delete(listId);
       }
     }
 
-    // Attach listeners for new lists
-    listsList.forEach((list) => {
-      if (!groupSubUnsubs.has(list.id)) {
-        const unsubG = onSnapshot(
-          collection(db, 'lists', list.id, 'groups'),
-          (snap) => {
-            const listGroups = new Map<string, ListGroup>();
-            snap.forEach((docSnap) => {
-              listGroups.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as ListGroup);
-            });
-            allListsGroupsMap.set(list.id, listGroups);
-            scheduleEmit();
-          },
-          (err) => {
-            console.warn(`Groups listener error for list ${list.id}:`, err);
-          }
-        );
-        groupSubUnsubs.set(list.id, unsubG);
-      }
+    // Attach listener for active list groups
+    if (!groupSubUnsubs.has(targetListId)) {
+      const unsubG = onSnapshot(
+        collection(db, 'lists', targetListId, 'groups'),
+        (snap) => {
+          const listGroups = new Map<string, ListGroup>();
+          snap.forEach((docSnap) => {
+            listGroups.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as ListGroup);
+          });
+          allListsGroupsMap.set(targetListId, listGroups);
+          scheduleEmit();
+        },
+        (err) => {
+          console.warn(`Groups listener error for active list ${targetListId}:`, err);
+        }
+      );
+      groupSubUnsubs.set(targetListId, unsubG);
+    }
 
-      if (!itemSubUnsubs.has(list.id)) {
-        const unsubI = onSnapshot(
-          collection(db, 'lists', list.id, 'items'),
-          (snap) => {
-            const listItems = new Map<string, ListItem>();
-            snap.forEach((docSnap) => {
-              listItems.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as ListItem);
-            });
-            allListsItemsMap.set(list.id, listItems);
-            scheduleEmit();
-          },
-          (err) => {
-            console.warn(`Items listener error for list ${list.id}:`, err);
-          }
-        );
-        itemSubUnsubs.set(list.id, unsubI);
-      }
-    });
+    // Attach listener for active list items
+    if (!itemSubUnsubs.has(targetListId)) {
+      const unsubI = onSnapshot(
+        collection(db, 'lists', targetListId, 'items'),
+        (snap) => {
+          const listItems = new Map<string, ListItem>();
+          snap.forEach((docSnap) => {
+            listItems.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as ListItem);
+          });
+          allListsItemsMap.set(targetListId, listItems);
+          scheduleEmit();
+        },
+        (err) => {
+          console.warn(`Items listener error for active list ${targetListId}:`, err);
+        }
+      );
+      itemSubUnsubs.set(targetListId, unsubI);
+    }
+  };
+
+  const switchActiveList = (newListId: string) => {
+    if (!newListId || newListId === currentActiveListId) return;
+    currentActiveListId = newListId;
+    if (memberLists.length > 0) {
+      updateSubcollectionsListeners(memberLists);
+    }
   };
 
   // 1. Listen to user document
@@ -742,14 +789,17 @@ export function subscribeToUserCloudData(
     );
   }
 
-  return () => {
+  const unsubscribe = (() => {
     if (emitTimer) clearTimeout(emitTimer);
     unsubUser();
     unsubMemberLists();
     unsubInvitedLists();
     groupSubUnsubs.forEach((unsub) => unsub());
     itemSubUnsubs.forEach((unsub) => unsub());
-  };
+  }) as UserCloudSubscription;
+
+  unsubscribe.switchActiveList = switchActiveList;
+  return unsubscribe;
 }
 
 // 4. Invite a User to a List (by Email)

@@ -89,6 +89,7 @@ import {
   fetchUserCloudData,
   fetchUserProfilePreferences,
   subscribeToUserCloudData,
+  UserCloudSubscription,
   syncAllToFirestore,
   syncUserProfile,
   isQuotaExceededError,
@@ -275,6 +276,7 @@ export default function App() {
   const draggingItemIdRef = useRef<string | null>(null);
   const groupDropPositionRef = useRef<'above' | 'below' | null>(null);
   const itemDropPositionRef = useRef<'above' | 'below' | null>(null);
+  const cloudSubscriptionRef = useRef<UserCloudSubscription | null>(null);
 
   const t = getTranslation(language);
 
@@ -962,7 +964,7 @@ export default function App() {
     isInitialCloudLoadRef.current = true;
     setSyncStatus('syncing');
 
-    const unsubscribe = subscribeToUserCloudData(
+    const subscription = subscribeToUserCloudData(
       user.uid,
       (cloudData) => {
         if (cloudData.lists && cloudData.lists.length > 0) {
@@ -1052,13 +1054,28 @@ export default function App() {
           console.error('Real-time subscription error:', err);
           setSyncStatus('error');
         }
+      },
+      {
+        initialActiveListId: activeListId,
+        cachedGroups: loadStoredGroups(user.uid),
+        cachedItems: loadStoredItems(user.uid),
       }
     );
 
+    cloudSubscriptionRef.current = subscription;
+
     return () => {
-      unsubscribe();
+      subscription();
+      cloudSubscriptionRef.current = null;
     };
   }, [user?.uid, authLoading, showToast, t.loginSuccess, applyUserPreferences]);
+
+  // Active-List optimization: dynamically switch real-time listener when user selects another list
+  useEffect(() => {
+    if (cloudSubscriptionRef.current && activeListId) {
+      cloudSubscriptionRef.current.switchActiveList(activeListId);
+    }
+  }, [activeListId]);
 
   // Local persistence whenever Lists, Groups, or Items change locally
   useEffect(() => {
