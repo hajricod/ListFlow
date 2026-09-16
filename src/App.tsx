@@ -565,8 +565,14 @@ export default function App() {
   // Mobile Back Navigation & "Double Back to Exit" Handler
   // ---------------------------------------------------------------------------
   const lastBackPressRef = useRef<number>(0);
+  const backPressTimerRef = useRef<number | null>(null);
+  const isExitingRef = useRef<boolean>(false);
   const languageRef = useRef(language);
   languageRef.current = language;
+  const showToastRef = useRef(showToast);
+  showToastRef.current = showToast;
+  const pwaRef = useRef(pwa);
+  pwaRef.current = pwa;
 
   const overlaysStateRef = useRef({
     isSidebarOpen,
@@ -617,7 +623,7 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    // Prime the history stack with an app entry point
+    // Prime the history stack with an app entry point only once on mount
     try {
       window.history.pushState({ app: 'listflow-root' }, '');
     } catch {
@@ -625,6 +631,11 @@ export default function App() {
     }
 
     const handlePopState = () => {
+      // If user confirmed exit, allow normal browser back navigation without re-intercepting
+      if (isExitingRef.current) {
+        return;
+      }
+
       const overlays = overlaysStateRef.current;
 
       // 1. If any drawer, modal, or overlay is open, close it first without exiting
@@ -633,6 +644,7 @@ export default function App() {
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+        lastBackPressRef.current = 0;
         return;
       }
       if (overlays.confirmModalOpen) {
@@ -640,6 +652,7 @@ export default function App() {
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+        lastBackPressRef.current = 0;
         return;
       }
       if (overlays.isItemModalOpen) {
@@ -648,6 +661,7 @@ export default function App() {
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+        lastBackPressRef.current = 0;
         return;
       }
       if (overlays.isGroupModalOpen) {
@@ -656,6 +670,7 @@ export default function App() {
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+        lastBackPressRef.current = 0;
         return;
       }
       if (overlays.isListModalOpen) {
@@ -664,6 +679,7 @@ export default function App() {
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+        lastBackPressRef.current = 0;
         return;
       }
       if (overlays.isShareModalOpen) {
@@ -672,6 +688,7 @@ export default function App() {
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+        lastBackPressRef.current = 0;
         return;
       }
       if (overlays.isTemplatesModalOpen) {
@@ -679,6 +696,7 @@ export default function App() {
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+        lastBackPressRef.current = 0;
         return;
       }
       if (overlays.isShortcutsModalOpen) {
@@ -686,6 +704,7 @@ export default function App() {
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+        lastBackPressRef.current = 0;
         return;
       }
       if (overlays.isJoinModalOpen) {
@@ -694,6 +713,7 @@ export default function App() {
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+        lastBackPressRef.current = 0;
         return;
       }
       if (overlays.isOnboardingModalOpen) {
@@ -701,6 +721,7 @@ export default function App() {
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+        lastBackPressRef.current = 0;
         return;
       }
       if (overlays.isAuthModalOpen) {
@@ -708,13 +729,15 @@ export default function App() {
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+        lastBackPressRef.current = 0;
         return;
       }
       if (overlays.isPwaModalOpen) {
-        pwa.setIsModalOpen(false);
+        pwaRef.current.setIsModalOpen(false);
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+        lastBackPressRef.current = 0;
         return;
       }
 
@@ -724,6 +747,7 @@ export default function App() {
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+        lastBackPressRef.current = 0;
         return;
       }
 
@@ -732,30 +756,53 @@ export default function App() {
       const DOUBLE_BACK_DELAY_MS = 2000;
 
       if (now - lastBackPressRef.current < DOUBLE_BACK_DELAY_MS) {
-        // Second back press within 2 seconds: allow back navigation / exit
+        // Second back press within 2 seconds: allow exit / back navigation
+        isExitingRef.current = true;
         lastBackPressRef.current = 0;
+        if (backPressTimerRef.current) {
+          clearTimeout(backPressTimerRef.current);
+          backPressTimerRef.current = null;
+        }
+
+        // Try window.close() (effective for standalone PWAs or script-opened tabs)
+        try {
+          window.close();
+        } catch {}
+
+        // Navigate backward in history (will not be intercepted because isExitingRef is true)
         try {
           window.history.back();
         } catch {}
       } else {
         // First back press: inform user and retain user in the app
         lastBackPressRef.current = now;
+        if (backPressTimerRef.current) {
+          clearTimeout(backPressTimerRef.current);
+        }
+        backPressTimerRef.current = window.setTimeout(() => {
+          lastBackPressRef.current = 0;
+        }, DOUBLE_BACK_DELAY_MS);
+
         try {
           window.history.pushState({ app: 'listflow-root' }, '');
         } catch {}
+
         const currentLang = languageRef.current;
         const msg =
           getTranslation(currentLang).pressBackAgainToExit ||
           (currentLang === 'ar' ? 'اضغط رجوع مرة أخرى للخروج' : 'Press back again to exit');
-        showToast(msg, undefined, 'info');
+        showToastRef.current(msg, undefined, 'info');
       }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => {
       window.removeEventListener('popstate', handlePopState);
+      if (backPressTimerRef.current) {
+        clearTimeout(backPressTimerRef.current);
+      }
     };
-  }, [pwa, showToast]);
+  }, []);
 
   // Centralized Helper to Apply and Cache User Preferences
   const applyUserPreferences = useCallback(
