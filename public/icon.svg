@@ -1,30 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="tf-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#10b981" />
-      <stop offset="100%" stop-color="#059669" />
+    <!-- Short Arm Gradient (Left Piece) -->
+    <linearGradient id="lf-short-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#28baa7" />
+      <stop offset="60%" stop-color="#1ea696" />
+      <stop offset="100%" stop-color="#148578" />
     </linearGradient>
-    <filter id="tf-shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#059669" flood-opacity="0.35" />
-    </filter>
+
+    <!-- Long Arm Gradient (Right Piece) -->
+    <linearGradient id="lf-long-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0a544c" />
+      <stop offset="25%" stop-color="#116e64" />
+      <stop offset="65%" stop-color="#199083" />
+      <stop offset="100%" stop-color="#25ad9b" />
+    </linearGradient>
   </defs>
-  <!-- Background Rounded Squircle -->
-  <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#tf-grad)" filter="url(#tf-shadow)" />
-  
-  <!-- Subtle Inner Overlay -->
-  <rect x="48" y="48" width="416" height="416" rx="96" fill="white" fill-opacity="0.08" stroke="white" stroke-width="4" stroke-opacity="0.25" />
 
-  <!-- Flow Lines & Check Graphic -->
-  <g fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Top Bar -->
-    <path d="M140 160 h150" stroke-width="28" stroke-opacity="0.9" />
-    <circle cx="340" cy="160" r="16" fill="white" />
-    
-    <!-- Middle Main Check Mark & Row -->
-    <path d="M140 256 l48 48 l104 -104" stroke-width="32" />
-    <path d="M340 256 h32" stroke-width="28" stroke-opacity="0.9" />
+  <g transform="translate(252, 265) rotate(-45)">
+    <!-- Short Arm (Left Piece) -->
+    <rect 
+      x="-94" 
+      y="-179.5" 
+      width="104" 
+      height="120" 
+      rx="32" 
+      ry="32" 
+      fill="url(#lf-short-grad)" 
+    />
 
-    <!-- Bottom Bar -->
-    <path d="M140 352 h232" stroke-width="28" stroke-opacity="0.9" />
+    <!-- Long Arm + Vertex (Right Piece) -->
+    <rect 
+      x="-94" 
+      y="-52" 
+      width="296" 
+      height="104" 
+      rx="32" 
+      ry="32" 
+      fill="url(#lf-long-grad)" 
+    />
   </g>
 </svg>

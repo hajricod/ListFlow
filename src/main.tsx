@@ -28,33 +28,52 @@ try {
   applyTypographyToDOM(initialFont, initialFontSize);
 } catch {}
 
-// Register Service Worker for PWA with automatic update detection
+// Manage Service Worker for PWA (Active in production, safely cleaned up in dev)
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/sw.js')
-      .then((registration) => {
-        // Check for updates on startup
-        registration.update().catch(() => {});
-
-        // Check for updates when user returns to tab / unlocks phone
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') {
-            registration.update().catch(() => {});
-          }
-        });
-      })
-      .catch(() => {});
-
-    // Reload if service worker controller updates to ensure fresh code
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
+  if (import.meta.env.DEV) {
+    // In dev mode, unregister any service worker and clear caches to prevent stale React module duplication
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister().catch(() => {});
       }
     });
-  });
+    if ('caches' in window) {
+      caches.keys().then((keys) => {
+        for (const key of keys) {
+          if (key.startsWith('listflow-')) {
+            caches.delete(key).catch(() => {});
+          }
+        }
+      });
+    }
+  } else {
+    // In production, register Service Worker with automatic update detection
+    window.addEventListener('load', () => {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((registration) => {
+          // Check for updates on startup
+          registration.update().catch(() => {});
+
+          // Check for updates when user returns to tab / unlocks phone
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+              registration.update().catch(() => {});
+            }
+          });
+        })
+        .catch(() => {});
+
+      // Reload if service worker controller updates to ensure fresh code
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+    });
+  }
 }
 
 createRoot(document.getElementById('root')!).render(

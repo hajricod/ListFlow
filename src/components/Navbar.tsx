@@ -1,12 +1,12 @@
 import React from 'react';
 import {
-  ListTodo,
   Menu,
   Settings,
 } from 'lucide-react';
 import { Language, Theme, SyncStatus } from '../types';
 import { getTranslation } from '../locales/translations';
 import { User } from 'firebase/auth';
+import { AppLogo } from './AppLogo';
 
 interface NavbarProps {
   language: Language;
@@ -82,8 +82,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="flex items-center gap-2.5 cursor-pointer group min-w-0"
               title={t.backToWorkspace}
             >
-              <div className="w-8.5 h-8.5 sm:w-9.5 sm:h-9.5 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-sm shadow-emerald-500/20 group-hover:scale-105 transition-transform shrink-0">
-                <ListTodo className="w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2.5]" />
+              <div className="w-8.5 h-8.5 sm:w-9.5 sm:h-9.5 rounded-xl bg-neutral-900 dark:bg-black flex items-center justify-center border border-neutral-800/80 dark:border-neutral-800 shadow-2xs group-hover:scale-105 transition-transform shrink-0 p-1.5">
+                <AppLogo className="w-full h-full" />
               </div>
               <div className="min-w-0">
                 <span className="font-bold text-base sm:text-lg tracking-tight text-neutral-900 dark:text-neutral-50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors block truncate">

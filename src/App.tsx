@@ -756,7 +756,7 @@ export default function App() {
       const DOUBLE_BACK_DELAY_MS = 2000;
 
       if (now - lastBackPressRef.current < DOUBLE_BACK_DELAY_MS) {
-        // Second back press within 2 seconds: allow exit / back navigation
+        // Second back press within 2 seconds: allow exit
         isExitingRef.current = true;
         lastBackPressRef.current = 0;
         if (backPressTimerRef.current) {
@@ -764,15 +764,34 @@ export default function App() {
           backPressTimerRef.current = null;
         }
 
-        // Try window.close() (effective for standalone PWAs or script-opened tabs)
+        // 1. If in Tauri desktop/mobile app, invoke process exit
+        try {
+          if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
+            (window as any).__TAURI_INTERNALS__.invoke('plugin:process|exit', { code: 0 });
+          }
+        } catch {}
+
+        // 2. If in Cordova/Capacitor/WebView wrapper
+        try {
+          if (typeof navigator !== 'undefined' && (navigator as any).app?.exitApp) {
+            (navigator as any).app.exitApp();
+          }
+        } catch {}
+
+        // 3. Try window.close() (effective for standalone PWAs or script-launched windows)
         try {
           window.close();
         } catch {}
 
-        // Navigate backward in history (will not be intercepted because isExitingRef is true)
+        // 4. Navigate backward to exit the application history
         try {
-          window.history.back();
-        } catch {}
+          // Go back past the prime and toast push states to cleanly exit the app
+          window.history.go(-2);
+        } catch {
+          try {
+            window.history.back();
+          } catch {}
+        }
       } else {
         // First back press: inform user and retain user in the app
         lastBackPressRef.current = now;

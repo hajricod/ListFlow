@@ -1,10 +1,12 @@
 // ListFlow Service Worker for Offline PWA Support (Network-First for fresh updates)
-const CACHE_NAME = 'listflow-v2';
+const CACHE_NAME = 'listflow-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
   '/icon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -44,12 +46,18 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Skip caching for Firebase APIs, Google Auth, and external services
+  // Never cache Firebase APIs, Google Auth, external services, or Vite dev assets
   if (
     url.hostname.includes('firestore.googleapis.com') ||
     url.hostname.includes('identitytoolkit.googleapis.com') ||
     url.hostname.includes('firebaseio.com') ||
-    url.hostname.includes('google.com')
+    url.hostname.includes('google.com') ||
+    url.pathname.includes('/@vite') ||
+    url.pathname.includes('/@fs') ||
+    url.pathname.includes('/node_modules') ||
+    url.pathname.startsWith('/src/') ||
+    url.search.includes('v=') ||
+    url.search.includes('t=')
   ) {
     return;
   }

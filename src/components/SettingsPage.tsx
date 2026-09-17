@@ -26,6 +26,7 @@ import {
   getFontSizeOption,
 } from '../utils/typography';
 import { User } from 'firebase/auth';
+import { AppLogo } from './AppLogo';
 
 interface SettingsPageProps {
   language: Language;
@@ -788,14 +789,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </h2>
         
         <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900 border border-neutral-200/80 dark:border-neutral-800 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
-                List Flow
-              </h3>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                {language === 'ar' ? 'الإصدار 1.0.0' : 'Version 1.0.0'}
-              </p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-neutral-900 dark:bg-black border border-neutral-800/80 dark:border-neutral-800 flex items-center justify-center p-2 shrink-0 shadow-2xs">
+                <AppLogo className="w-full h-full" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
+                  List Flow
+                </h3>
+                <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                  {language === 'ar' ? 'الإصدار 1.0.0' : 'Version 1.0.0'}
+                </p>
+              </div>
             </div>
 
             {onOpenOnboarding && (

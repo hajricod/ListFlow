@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Language } from '../types';
 import { getTranslation } from '../locales/translations';
+import { AppLogo } from './AppLogo';
 
 interface InstallAppModalProps {
   isOpen: boolean;
@@ -51,8 +52,8 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between pb-1">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-              <Smartphone className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-neutral-900 dark:bg-black border border-neutral-800/80 dark:border-neutral-800 flex items-center justify-center p-2 shrink-0 shadow-2xs">
+              <AppLogo className="w-full h-full" />
             </div>
             <div>
               <h2 className="text-base font-bold text-neutral-900 dark:text-neutral-100">
