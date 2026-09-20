@@ -6,7 +6,7 @@ interface AppLogoProps {
 }
 
 export function AppLogo({
-  className = 'w-6 h-6',
+  className = 'w-7 h-7',
   size,
 }: AppLogoProps) {
   return (
@@ -33,7 +33,7 @@ export function AppLogo({
         </linearGradient>
       </defs>
 
-      <g transform="translate(252, 265) rotate(-45)">
+      <g transform="translate(264, 302) scale(1.2) rotate(-45)">
         {/* Short Arm (Left Piece) */}
         <rect
           x="-94"

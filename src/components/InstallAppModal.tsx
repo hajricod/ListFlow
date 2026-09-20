@@ -52,7 +52,7 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between pb-1">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-neutral-900 dark:bg-black border border-neutral-800/80 dark:border-neutral-800 flex items-center justify-center p-2 shrink-0 shadow-2xs">
+            <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-neutral-950 border border-emerald-200/90 dark:border-neutral-800 flex items-center justify-center p-1.5 shrink-0 shadow-2xs">
               <AppLogo className="w-full h-full" />
             </div>
             <div>

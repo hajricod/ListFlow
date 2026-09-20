@@ -82,7 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="flex items-center gap-2.5 cursor-pointer group min-w-0"
               title={t.backToWorkspace}
             >
-              <div className="w-8.5 h-8.5 sm:w-9.5 sm:h-9.5 rounded-xl bg-neutral-900 dark:bg-black flex items-center justify-center border border-neutral-800/80 dark:border-neutral-800 shadow-2xs group-hover:scale-105 transition-transform shrink-0 p-1.5">
+              <div className="w-9.5 h-9.5 sm:w-10.5 sm:h-10.5 rounded-xl bg-emerald-50 dark:bg-neutral-900 flex items-center justify-center border border-emerald-200/90 dark:border-neutral-800 shadow-2xs group-hover:scale-105 group-hover:border-emerald-300 dark:group-hover:border-neutral-700 transition-all shrink-0 p-1.5">
                 <AppLogo className="w-full h-full" />
               </div>
               <div className="min-w-0">
