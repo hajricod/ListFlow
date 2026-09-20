@@ -80,7 +80,9 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
   ];
 
   const activeFiltersCount =
-    (filterState.hideCompleted ? 1 : 0) + (filterState.sortBy !== 'manual' ? 1 : 0);
+    (filterState.hideCompleted ? 1 : 0) +
+    (filterState.sortBy !== 'manual' ? 1 : 0) +
+    (filterState.countHighlightedOnly ? 1 : 0);
 
   // Quick keyboard shortcuts
   useEffect(() => {
@@ -262,9 +264,30 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                 </div>
               )}
 
+              {filterState.countHighlightedOnly && (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700/80 text-emerald-800 dark:text-emerald-200 text-xs shadow-2xs">
+                  <Highlighter className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>{t.countHighlightedOnlyActive}</span>
+                  <button
+                    type="button"
+                    onClick={() => onFilterChange({ countHighlightedOnly: false })}
+                    className="ms-1 hover:text-emerald-950 dark:hover:text-emerald-100 cursor-pointer"
+                    title="Remove filter"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+
               <button
                 type="button"
-                onClick={() => onFilterChange({ hideCompleted: false, sortBy: 'manual' })}
+                onClick={() =>
+                  onFilterChange({
+                    hideCompleted: false,
+                    sortBy: 'manual',
+                    countHighlightedOnly: false,
+                  })
+                }
                 className="text-[11px] text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 underline underline-offset-2 px-1 cursor-pointer"
               >
                 {t.resetFilters || 'Reset all'}
@@ -362,6 +385,57 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                   className={`w-11 h-6 rounded-full transition-colors p-0.5 flex items-center shrink-0 ${
                     filterState.hideCompleted
                       ? 'bg-amber-500 justify-end'
+                      : 'bg-neutral-300 dark:bg-neutral-600 justify-start'
+                  }`}
+                >
+                  <div className="w-5 h-5 rounded-full bg-white shadow-xs" />
+                </div>
+              </button>
+
+              {/* Toggle: Count highlighted and checked as completed */}
+              <button
+                type="button"
+                id="filter-toggle-count-highlighted-btn"
+                onClick={() => {
+                  onFilterChange({
+                    countHighlightedOnly: !filterState.countHighlightedOnly,
+                  });
+                }}
+                className={`w-full p-3.5 rounded-2xl border transition-all text-start flex items-center justify-between gap-3 cursor-pointer shadow-2xs ${
+                  filterState.countHighlightedOnly
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700/70 ring-1 ring-emerald-500/20'
+                    : 'bg-neutral-50 dark:bg-neutral-800/50 border-neutral-200/80 dark:border-neutral-700/60 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                      filterState.countHighlightedOnly
+                        ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-neutral-200/60 dark:bg-neutral-700/60 text-neutral-600 dark:text-neutral-300'
+                    }`}
+                  >
+                    <Highlighter className="w-4.5 h-4.5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={`text-sm font-semibold truncate ${
+                        filterState.countHighlightedOnly
+                          ? 'text-emerald-950 dark:text-emerald-200'
+                          : 'text-neutral-900 dark:text-neutral-100'
+                      }`}
+                    >
+                      {t.countHighlightedOnly}
+                    </p>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 leading-relaxed">
+                      {t.countHighlightedOnlyDesc}
+                    </p>
+                  </div>
+                </div>
+                <div
+                  className={`w-11 h-6 rounded-full transition-colors p-0.5 flex items-center shrink-0 ${
+                    filterState.countHighlightedOnly
+                      ? 'bg-emerald-600 justify-end'
                       : 'bg-neutral-300 dark:bg-neutral-600 justify-start'
                   }`}
                 >
@@ -529,7 +603,19 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                 <button
                   type="button"
                   id="reset-filters-btn"
-                  onClick={() => onFilterChange({ hideCompleted: false, sortBy: 'manual' })}
+                  onClick={() =>
+                    onFilterChange({
+                      hideCompleted: false,
+                      sortBy: 'manual',
+                      sortDirection: 'asc',
+                      countHighlightedOnly: false,
+                      status: 'all',
+                      priority: 'all',
+                      tag: null,
+                      groupId: 'all',
+                      search: '',
+                    })
+                  }
                   className="text-xs font-semibold text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 transition-colors flex items-center gap-1.5 cursor-pointer py-1.5 px-2 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />

@@ -135,6 +135,7 @@ export interface FilterState {
   search: string;
   status: StatusFilter;
   hideCompleted?: boolean;
+  countHighlightedOnly?: boolean;
   priority?: 'all' | Priority;
   tag?: string | null;
   groupId?: string | 'all';

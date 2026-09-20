@@ -1,4 +1,4 @@
-import { AppList, ListGroup, ListItem, Language, Theme, ThemeColor, FontFamily, FontSize } from '../types';
+import { AppList, ListGroup, ListItem, Language, Theme, ThemeColor, FontFamily, FontSize, FilterState } from '../types';
 
 const STORAGE_KEYS = {
   LISTS: 'taskflow_app_lists_v3',
@@ -15,6 +15,8 @@ const STORAGE_KEYS = {
   ONBOARDING_SEEN: 'listflow_onboarding_seen_v1',
   COLLAPSED_GROUPS: 'listflow_collapsed_groups_v1',
   GROUP_ORDERS: 'listflow_group_orders_v1',
+  COUNT_HIGHLIGHTED_ONLY: 'listflow_count_highlighted_only_v1',
+  LIST_FILTERS: 'listflow_list_filters_v1',
 };
 
 export const SEED_LISTS: Record<Language, AppList[]> = {
@@ -1688,6 +1690,35 @@ export const saveStoredGridColumns = (cols: 1 | 2, userId?: string | null) => {
   } catch {}
 };
 
+export const loadStoredCountHighlightedOnly = (userId?: string | null): boolean => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.COUNT_HIGHLIGHTED_ONLY, userId);
+    const raw = localStorage.getItem(key);
+    if (raw !== null) return raw === 'true';
+
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.COUNT_HIGHLIGHTED_ONLY, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey);
+        if (lastRaw !== null) return lastRaw === 'true';
+      }
+    }
+  } catch {}
+  return false;
+};
+
+export const saveStoredCountHighlightedOnly = (enabled: boolean, userId?: string | null) => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.COUNT_HIGHLIGHTED_ONLY, userId);
+    localStorage.setItem(key, String(enabled));
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.COUNT_HIGHLIGHTED_ONLY, null), String(enabled));
+      setLastActiveUserId(userId);
+    }
+  } catch {}
+};
+
 export const loadStoredCollapsedGroups = (userId?: string | null): string[] => {
   try {
     const key = getUserStorageKey(STORAGE_KEYS.COLLAPSED_GROUPS, userId);
@@ -1754,6 +1785,62 @@ export const saveStoredGroupOrders = (
   } catch (err) {
     console.error('Failed to save group orders', err);
   }
+};
+
+export const DEFAULT_FILTER_STATE: FilterState = {
+  search: '',
+  status: 'all',
+  priority: 'all',
+  tag: null,
+  groupId: 'all',
+  sortBy: 'manual',
+  sortDirection: 'asc',
+  hideCompleted: false,
+  countHighlightedOnly: false,
+};
+
+export const loadStoredListFilters = (userId?: string | null): Record<string, FilterState> => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.LIST_FILTERS, userId);
+    const raw = localStorage.getItem(key);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, FilterState>;
+      }
+    }
+
+    if (!userId) {
+      const lastUid = getLastActiveUserId();
+      if (lastUid) {
+        const lastUserKey = getUserStorageKey(STORAGE_KEYS.LIST_FILTERS, lastUid);
+        const lastRaw = localStorage.getItem(lastUserKey);
+        if (lastRaw !== null) {
+          const lastParsed = JSON.parse(lastRaw);
+          if (lastParsed && typeof lastParsed === 'object' && !Array.isArray(lastParsed)) {
+            return lastParsed as Record<string, FilterState>;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load list filters from localStorage', err);
+  }
+  return {};
+};
+
+export const saveStoredListFilters = (
+  filters: Record<string, FilterState>,
+  userId?: string | null
+) => {
+  try {
+    const key = getUserStorageKey(STORAGE_KEYS.LIST_FILTERS, userId);
+    localStorage.setItem(key, JSON.stringify(filters));
+    if (userId) {
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.LIST_FILTERS, null), JSON.stringify(filters));
+      setLastActiveUserId(userId);
+    }
+  } catch {}
 };
 
 export const loadStoredOnboardingSeen = (userId?: string | null): boolean => {

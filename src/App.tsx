@@ -47,6 +47,11 @@ import {
   saveStoredSound,
   loadStoredGridColumns,
   saveStoredGridColumns,
+  loadStoredCountHighlightedOnly,
+  saveStoredCountHighlightedOnly,
+  DEFAULT_FILTER_STATE,
+  loadStoredListFilters,
+  saveStoredListFilters,
   loadStoredCollapsedGroups,
   saveStoredCollapsedGroups,
   loadStoredGroupOrders,
@@ -204,17 +209,62 @@ export default function App() {
   );
   const [items, setItems] = useState<ListItem[]>(() => loadStoredItems());
 
-  // 2. Filters & Search State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [gridColumns, setGridColumns] = useState<1 | 2>(() => loadStoredGridColumns());
-  const [filterState, setFilterState] = useState<FilterState>({
-    search: '',
-    status: 'all',
-    priority: 'all',
-    tag: null,
-    sortBy: 'manual',
-    sortDirection: 'asc',
+  // 2. Filters & Search State (Scoped per List)
+  const [listFilters, setListFilters] = useState<Record<string, FilterState>>(() => {
+    const stored = loadStoredListFilters();
+    const legacyCountHighlighted = loadStoredCountHighlightedOnly();
+    if (Object.keys(stored).length === 0 && legacyCountHighlighted) {
+      return {
+        'list-groceries': {
+          ...DEFAULT_FILTER_STATE,
+          countHighlightedOnly: true,
+        },
+      };
+    }
+    return stored;
   });
+  const [searchQueriesByList, setSearchQueriesByList] = useState<Record<string, string>>({});
+  const [gridColumns, setGridColumns] = useState<1 | 2>(() => loadStoredGridColumns());
+
+  // Derive filter state and search query for the active list
+  const filterState = useMemo<FilterState>(() => {
+    return listFilters[activeListId] || DEFAULT_FILTER_STATE;
+  }, [listFilters, activeListId]);
+
+  const searchQuery = searchQueriesByList[activeListId] || '';
+
+  const handleSearchChange = useCallback(
+    (query: string) => {
+      setSearchQueriesByList((prev) => ({
+        ...prev,
+        [activeListId || 'default']: query,
+      }));
+    },
+    [activeListId]
+  );
+
+  const handleFilterChange = useCallback(
+    (newFilters: Partial<FilterState>) => {
+      const targetKey = activeListId || 'default';
+      setListFilters((prev) => {
+        const current = prev[targetKey] || DEFAULT_FILTER_STATE;
+        return {
+          ...prev,
+          [targetKey]: {
+            ...current,
+            ...newFilters,
+          },
+        };
+      });
+    },
+    [activeListId]
+  );
+
+  // Persist list filters whenever they change
+  useEffect(() => {
+    saveStoredListFilters(listFilters, user?.uid);
+    saveStoredCountHighlightedOnly(Boolean(filterState.countHighlightedOnly), user?.uid);
+  }, [listFilters, filterState.countHighlightedOnly, user?.uid]);
 
   // Persist locally collapsed groups whenever groups change
   useEffect(() => {
@@ -944,6 +994,8 @@ export default function App() {
       applyTypographyToDOM(initialFont, initialFontSize);
       setSoundEnabled(initialSound);
       setGridColumns(initialGrid);
+      setListFilters(loadStoredListFilters(currentUid));
+      setSearchQueriesByList({});
 
       // If already logged in on initial load, fetch remote preferences
       if (currentUid) {
@@ -1005,6 +1057,8 @@ export default function App() {
           applyTypographyToDOM(userFont, userFontSize);
           setSoundEnabled(userSound);
           setGridColumns(userGrid);
+          setListFilters(loadStoredListFilters(currentUid));
+          setSearchQueriesByList({});
         }
 
         setLastActiveUserId(currentUid);
@@ -1368,9 +1422,13 @@ export default function App() {
   }, [activeGroups, language, handleLanguageChange, cycleTheme]);
 
   // Derived Task Calculations for Active List
-  const totalItems = activeListItems.length;
-  const collectedItems = activeListItems.filter((i) => i.completed).length;
-  const remainingItems = totalItems - collectedItems;
+  const totalItems = filterState.countHighlightedOnly
+    ? activeListItems.filter((i) => i.isHighlighted).length
+    : activeListItems.length;
+  const collectedItems = filterState.countHighlightedOnly
+    ? activeListItems.filter((i) => i.isHighlighted && i.completed).length
+    : activeListItems.filter((i) => i.completed).length;
+  const remainingItems = Math.max(0, totalItems - collectedItems);
   const highlightedItemsCount = activeListItems.filter((i) => i.isHighlighted).length;
 
   const availableTags = useMemo(() => {
@@ -1614,6 +1672,17 @@ export default function App() {
         if (activeListId === listToDelete.id) {
           setActiveListId(remainingLists[0]?.id || '');
         }
+
+        setListFilters((prev) => {
+          const next = { ...prev };
+          delete next[listToDelete.id];
+          return next;
+        });
+        setSearchQueriesByList((prev) => {
+          const next = { ...prev };
+          delete next[listToDelete.id];
+          return next;
+        });
 
         showToast(t.listDeleted);
 
@@ -1899,6 +1968,12 @@ export default function App() {
     setLists((prev) => [...prev, duplicatedList]);
     setGroups((prev) => [...prev, ...newGroups]);
     setItems((prev) => [...prev, ...newItems]);
+    if (listFilters[listToDup.id]) {
+      setListFilters((prev) => ({
+        ...prev,
+        [newListId]: { ...listFilters[listToDup.id] },
+      }));
+    }
     setActiveListId(newListId);
 
     if (user) {
@@ -2098,15 +2173,21 @@ export default function App() {
   };
 
   const handleClearCompletedInGroup = async (groupId: string) => {
-    const completedInGroup = items.filter((i) => i.groupId === groupId && i.completed);
+    const completedInGroup = items.filter(
+      (i) =>
+        i.groupId === groupId &&
+        i.completed &&
+        (filterState.countHighlightedOnly ? i.isHighlighted : true)
+    );
     if (completedInGroup.length === 0) return;
 
     const targetGroup = groups.find((g) => g.id === groupId);
     const targetListId = targetGroup?.listId || activeListId || 'list-groceries';
     const itemIdsToDelete = completedInGroup.map((i) => i.id);
+    const deleteIdSet = new Set(itemIdsToDelete);
 
     sounds.playDelete();
-    setItems((prev) => prev.filter((i) => !(i.groupId === groupId && i.completed)));
+    setItems((prev) => prev.filter((i) => !deleteIdSet.has(i.id)));
 
     if (user) {
       try {
@@ -2125,11 +2206,16 @@ export default function App() {
   };
 
   const handleClearAllCompleted = async () => {
-    const completedList = items.filter((i) => i.completed);
+    const completedList = items.filter(
+      (i) =>
+        i.completed &&
+        (filterState.countHighlightedOnly ? i.isHighlighted : true)
+    );
     if (completedList.length === 0) return;
 
+    const deleteIdSet = new Set(completedList.map((i) => i.id));
     sounds.playDelete();
-    setItems((prev) => prev.filter((i) => !i.completed));
+    setItems((prev) => prev.filter((i) => !deleteIdSet.has(i.id)));
 
     if (user) {
       const listItemsMap = new Map<string, string[]>();
@@ -2172,7 +2258,11 @@ export default function App() {
 
   const handleUncheckAll = () => {
     const previousItems = [...items];
-    const uncheckedList = items.map((i) => ({ ...i, completed: false, completedAt: undefined }));
+    const uncheckedList = items.map((i) => {
+      if (!activeListGroupIds.has(i.groupId)) return i;
+      if (filterState.countHighlightedOnly && !i.isHighlighted) return i;
+      return { ...i, completed: false, completedAt: undefined };
+    });
     setItems(uncheckedList);
     sounds.playPop();
     if (user) {
@@ -2213,7 +2303,7 @@ export default function App() {
   };
 
   const handleSortGroupItems = (groupId: string, option: SortOption) => {
-    setFilterState((prev) => ({ ...prev, sortBy: option }));
+    handleFilterChange({ sortBy: option });
     showToast(language === 'ar' ? 'تم ترتيب الأصناف' : 'Items sorted');
   };
 
@@ -2353,7 +2443,12 @@ export default function App() {
 
     // Check if all items in the grocery list are completed -> trigger celebratory confetti
     if (!targetItem.completed) {
-      const allCompleted = items.length > 0 && items.every((i) => (i.id === itemId ? true : i.completed));
+      const relevantListItems = filterState.countHighlightedOnly
+        ? activeListItems.filter((i) => i.isHighlighted)
+        : activeListItems;
+      const allCompleted =
+        relevantListItems.length > 0 &&
+        relevantListItems.every((i) => (i.id === itemId ? true : i.completed));
       if (allCompleted) {
         try {
           confetti({
@@ -2700,7 +2795,7 @@ export default function App() {
     if (!item) return;
 
     if (filterState.sortBy !== 'manual') {
-      setFilterState((prev) => ({ ...prev, sortBy: 'manual' }));
+      handleFilterChange({ sortBy: 'manual' });
     }
 
     // Get current group items in their sorted order
@@ -2757,7 +2852,7 @@ export default function App() {
     }
 
     if (filterState.sortBy !== 'manual') {
-      setFilterState((prev) => ({ ...prev, sortBy: 'manual' }));
+      handleFilterChange({ sortBy: 'manual' });
     }
 
     const isSameGroup = sourceItem.groupId === targetGroupId;
@@ -2862,7 +2957,7 @@ export default function App() {
     }
 
     if (filterState.sortBy !== 'manual') {
-      setFilterState((prev) => ({ ...prev, sortBy: 'manual' }));
+      handleFilterChange({ sortBy: 'manual' });
     }
 
     // Get current items in target group
@@ -3310,7 +3405,7 @@ export default function App() {
                 language={language}
                 searchQuery={searchQuery}
                 onSearchChange={(q) => {
-                  setSearchQuery(q);
+                  handleSearchChange(q);
                   if (q.trim() && currentView === 'settings') {
                     setCurrentView('workspace');
                   }
@@ -3321,7 +3416,7 @@ export default function App() {
                 highlightedTasks={highlightedItemsCount}
                 groups={activeGroups}
                 filterState={filterState}
-                onFilterChange={(newFilters) => setFilterState((prev) => ({ ...prev, ...newFilters }))}
+                onFilterChange={handleFilterChange}
                 allCollapsed={allCollapsed}
                 onToggleCollapseAll={handleToggleCollapseAll}
                 onUncheckAll={handleUncheckAll}
@@ -3449,6 +3544,7 @@ export default function App() {
                         language={language}
                         searchQuery={searchQuery}
                         isReadOnly={isReadOnly}
+                        countHighlightedOnly={filterState.countHighlightedOnly}
                         onToggleCollapse={handleToggleCollapseGroup}
                         onEditGroup={(g) => {
                           setSelectedGroupForEdit(g);

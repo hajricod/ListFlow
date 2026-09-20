@@ -330,6 +330,35 @@ export const ItemRow: React.FC<ItemRowProps> = ({
               </div>
             )}
 
+            {/* Highlight Toggle (Trailing Edge - Distinct from Checkbox on the Leading Edge) */}
+            {onToggleHighlight && (
+              <button
+                id={`highlight-item-btn-${item.id}`}
+                type="button"
+                data-no-drag
+                onClick={(e) => {
+                  e.stopPropagation();
+                  sounds.playPop();
+                  onToggleHighlight(item.id);
+                }}
+                className={`p-1 rounded-md transition-all cursor-pointer ${
+                  item.isHighlighted
+                    ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-700/80 shadow-2xs'
+                    : 'text-neutral-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-transparent opacity-75 sm:opacity-40 group-hover/item:opacity-100'
+                }`}
+                title={item.isHighlighted ? t.unhighlightItem : t.highlightItem}
+                aria-label={item.isHighlighted ? t.unhighlightItem : t.highlightItem}
+              >
+                <Highlighter
+                  className={`w-3.5 h-3.5 transition-transform ${
+                    item.isHighlighted
+                      ? 'text-emerald-600 dark:text-emerald-400 fill-emerald-500/40'
+                      : ''
+                  }`}
+                />
+              </button>
+            )}
+
             <div className="relative" ref={menuRef}>
               <button
                 id={`menu-trigger-${item.id}`}
@@ -525,40 +554,6 @@ export const ItemRow: React.FC<ItemRowProps> = ({
             )}
           </div>
         )}
-      </div>
-
-      {/* Bottom Corner Actions / Highlight Toggle */}
-      <div className="flex items-center justify-between pt-0.5 -mb-0.5">
-        {/* Left Bottom Corner: Highlight Button */}
-        <button
-          id={`highlight-item-btn-${item.id}`}
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!isReadOnly && onToggleHighlight) {
-              sounds.playPop();
-              onToggleHighlight(item.id);
-            }
-          }}
-          disabled={isReadOnly}
-          className={`inline-flex items-center justify-center w-6 h-6 rounded-md transition-all ${
-            isReadOnly ? 'cursor-default opacity-80' : 'cursor-pointer active:scale-95'
-          } ${
-            item.isHighlighted
-              ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300/90 dark:border-emerald-700/80 shadow-2xs'
-              : 'text-neutral-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 border border-transparent'
-          }`}
-          title={item.isHighlighted ? t.unhighlightItem : t.highlightItem}
-          aria-label={item.isHighlighted ? t.unhighlightItem : t.highlightItem}
-        >
-          <Highlighter
-            className={`w-3.5 h-3.5 transition-transform ${
-              item.isHighlighted
-                ? 'text-emerald-600 dark:text-emerald-400 fill-emerald-500/40'
-                : 'text-neutral-400 group-hover/item:text-neutral-500'
-            }`}
-          />
-        </button>
       </div>
       </div>
     </div>

@@ -14,6 +14,7 @@ import {
   ArrowUp,
   ArrowDown,
   ListTodo,
+  Highlighter,
 } from 'lucide-react';
 import { ListGroup, ListItem, Language, Priority, SortOption } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -28,6 +29,7 @@ interface GroupCardProps {
   language: Language;
   searchQuery?: string;
   isReadOnly?: boolean;
+  countHighlightedOnly?: boolean;
   onToggleCollapse: (groupId: string) => void;
   onEditGroup: (group: ListGroup) => void;
   onDeleteGroup: (groupId: string) => void;
@@ -78,6 +80,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
   language,
   searchQuery,
   isReadOnly = false,
+  countHighlightedOnly = false,
   onToggleCollapse,
   onEditGroup,
   onDeleteGroup,
@@ -143,8 +146,11 @@ export const GroupCard: React.FC<GroupCardProps> = ({
     };
   }, [menuOpen]);
 
-  const completedCount = items.filter((i) => i.completed).length;
-  const totalCount = items.length;
+  const relevantItems = countHighlightedOnly ? items.filter((i) => i.isHighlighted) : items;
+  const completedCount = countHighlightedOnly
+    ? items.filter((i) => i.isHighlighted && i.completed).length
+    : items.filter((i) => i.completed).length;
+  const totalCount = relevantItems.length;
   const percentComplete = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   const handleQuickAdd = (e: React.FormEvent) => {
@@ -304,8 +310,26 @@ export const GroupCard: React.FC<GroupCardProps> = ({
             </button>
 
             {/* Completed / Total count pill */}
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 shrink-0">
-              {completedCount}/{totalCount}
+            <span
+              className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 ${
+                countHighlightedOnly
+                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300'
+              }`}
+              title={
+                countHighlightedOnly
+                  ? (language === 'ar'
+                      ? 'العناصر المظللة والمكتملة فقط'
+                      : 'Counted highlighted & completed items only')
+                  : undefined
+              }
+            >
+              {countHighlightedOnly && (
+                <Highlighter className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              )}
+              <span>
+                {completedCount}/{totalCount}
+              </span>
             </span>
           </div>
 
