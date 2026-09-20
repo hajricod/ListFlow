@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
   Check,
   Share2,
+  Highlighter,
 } from 'lucide-react';
 import { FilterState, Language, ListGroup, SortOption } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -26,12 +27,14 @@ interface StatsBannerProps {
   totalTasks: number;
   activeTasks: number;
   completedTasks: number;
+  highlightedTasks?: number;
   groups: ListGroup[];
   filterState: FilterState;
   onFilterChange: (filters: Partial<FilterState>) => void;
   allCollapsed: boolean;
   onToggleCollapseAll: () => void;
   onUncheckAll: () => void;
+  onUnhighlightAll?: () => void;
   onClearCart: () => void;
   onOpenNewGroupModal: () => void;
   onOpenNewItemModal?: () => void;
@@ -49,11 +52,13 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
   searchQuery,
   onSearchChange,
   completedTasks,
+  highlightedTasks = 0,
   filterState,
   onFilterChange,
   allCollapsed,
   onToggleCollapseAll,
   onUncheckAll,
+  onUnhighlightAll,
   onClearCart,
   onOpenNewGroupModal,
   onOpenNewItemModal,
@@ -457,7 +462,7 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
               <label className="text-xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
                 {t.bulkSection || 'Bulk Actions'}
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {/* Expand / Collapse */}
                 <button
                   type="button"
@@ -470,7 +475,7 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                   ) : (
                     <ChevronsDownUp className="w-4 h-4 text-neutral-500 shrink-0" />
                   )}
-                  <span className="text-xs font-semibold">
+                  <span className="text-xs font-semibold truncate">
                     {allCollapsed ? t.expand : t.collapse}
                   </span>
                 </button>
@@ -480,23 +485,40 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                   type="button"
                   id="uncheck-all-btn"
                   onClick={onUncheckAll}
-                  disabled={completedTasks === 0}
+                  disabled={completedTasks === 0 || isReadOnly}
                   className="p-3 rounded-2xl border border-neutral-200/80 dark:border-neutral-700/60 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 flex items-center gap-2.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
                 >
                   <RotateCcw className="w-4 h-4 text-neutral-500 shrink-0" />
-                  <span className="text-xs font-semibold">{t.uncheckAll}</span>
+                  <span className="text-xs font-semibold truncate">{t.uncheckAll}</span>
                 </button>
+
+                {/* Unhighlight All */}
+                {onUnhighlightAll && (
+                  <button
+                    type="button"
+                    id="unhighlight-all-btn"
+                    onClick={onUnhighlightAll}
+                    disabled={highlightedTasks === 0 || isReadOnly}
+                    className="p-3 rounded-2xl border border-neutral-200/80 dark:border-neutral-700/60 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 flex items-center gap-2.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                    title={t.unhighlightAll || 'Unhighlight All'}
+                  >
+                    <Highlighter className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="text-xs font-semibold truncate">
+                      {t.unhighlightAll || 'Unhighlight All'}
+                    </span>
+                  </button>
+                )}
 
                 {/* Clear Completed */}
                 <button
                   type="button"
                   id="clear-completed-btn"
                   onClick={onClearCart}
-                  disabled={completedTasks === 0}
+                  disabled={completedTasks === 0 || isReadOnly}
                   className="p-3 rounded-2xl border border-rose-200/80 dark:border-rose-800/60 bg-rose-50/70 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 flex items-center gap-2.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
                 >
                   <Trash2 className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span className="text-xs font-semibold">{t.clearCart}</span>
+                  <span className="text-xs font-semibold truncate">{t.clearCart}</span>
                 </button>
               </div>
             </div>

@@ -1371,6 +1371,7 @@ export default function App() {
   const totalItems = activeListItems.length;
   const collectedItems = activeListItems.filter((i) => i.completed).length;
   const remainingItems = totalItems - collectedItems;
+  const highlightedItemsCount = activeListItems.filter((i) => i.isHighlighted).length;
 
   const availableTags = useMemo(() => {
     const set = new Set<string>();
@@ -2179,6 +2180,30 @@ export default function App() {
       saveItemsBatchToFirestore(activeListId, activeListItemsToSync);
     }
     showToast(language === 'ar' ? 'تمت إعادة تعيين جميع الأصناف إلى السلة' : 'All items unchecked', () => {
+      setItems(previousItems);
+      if (user) {
+        const prevListItemsToSync = previousItems.filter((i) => activeListGroupIds.has(i.groupId));
+        saveItemsBatchToFirestore(activeListId, prevListItemsToSync);
+      }
+    });
+  };
+
+  const handleUnhighlightAll = () => {
+    if (isReadOnly) return;
+    const highlightedCount = activeListItems.filter((i) => i.isHighlighted).length;
+    if (highlightedCount === 0) return;
+
+    const previousItems = [...items];
+    const unhighlightedList = items.map((i) =>
+      activeListGroupIds.has(i.groupId) ? { ...i, isHighlighted: false } : i
+    );
+    setItems(unhighlightedList);
+    sounds.playPop();
+    if (user) {
+      const activeListItemsToSync = unhighlightedList.filter((i) => activeListGroupIds.has(i.groupId));
+      saveItemsBatchToFirestore(activeListId, activeListItemsToSync);
+    }
+    showToast(t.unhighlightAllSuccess || (language === 'ar' ? 'تمت إزالة تمييز جميع العناصر' : 'All highlights removed'), () => {
       setItems(previousItems);
       if (user) {
         const prevListItemsToSync = previousItems.filter((i) => activeListGroupIds.has(i.groupId));
@@ -3293,12 +3318,14 @@ export default function App() {
                 totalTasks={totalItems}
                 activeTasks={remainingItems}
                 completedTasks={collectedItems}
+                highlightedTasks={highlightedItemsCount}
                 groups={activeGroups}
                 filterState={filterState}
                 onFilterChange={(newFilters) => setFilterState((prev) => ({ ...prev, ...newFilters }))}
                 allCollapsed={allCollapsed}
                 onToggleCollapseAll={handleToggleCollapseAll}
                 onUncheckAll={handleUncheckAll}
+                onUnhighlightAll={handleUnhighlightAll}
                 onClearCart={handleClearAllCompleted}
                 onOpenNewGroupModal={() => {
                   if (lists.length === 0) {
