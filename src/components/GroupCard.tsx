@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   GripHorizontal,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   Plus,
   MoreHorizontal,
@@ -122,6 +123,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [isOverEmptyZone, setIsOverEmptyZone] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   // Close menu on click outside
   useEffect(() => {
@@ -176,9 +178,18 @@ export const GroupCard: React.FC<GroupCardProps> = ({
     onItemDropInEmptyGroup(e, group.id);
   };
 
+  const handleBottomCollapse = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleCollapse(group.id);
+    requestAnimationFrame(() => {
+      cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  };
+
   return (
     <div
       id={`group-card-${group.id}`}
+      ref={cardRef}
       onDragOver={(e) => {
         if (draggingGroupId) {
           onGroupDragOver(e, group.id);
@@ -538,6 +549,22 @@ export const GroupCard: React.FC<GroupCardProps> = ({
               ))
             )}
           </div>
+
+          {/* Bottom Collapse Button for Long Groups */}
+          {items.length >= 3 && (
+            <div className="pt-1.5 flex items-center justify-center">
+              <button
+                type="button"
+                id={`collapse-group-bottom-${group.id}`}
+                onClick={handleBottomCollapse}
+                className="inline-flex items-center justify-center p-1 rounded-lg text-neutral-400 hover:text-neutral-700 dark:text-neutral-500 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer"
+                title={t.collapse}
+                aria-label={t.collapse}
+              >
+                <ChevronUp className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       )}
       </div>
