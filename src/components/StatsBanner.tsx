@@ -74,6 +74,7 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
 
   const sortOptions: { value: SortOption; label: string }[] = [
     { value: 'manual', label: t.sortManual },
+    { value: 'highlighted', label: t.sortHighlighted },
     { value: 'alphabetical', label: t.sortAlpha },
     { value: 'createdAt', label: t.sortCreated },
     { value: 'quantity', label: t.sortQuantity },
@@ -250,6 +251,9 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
 
               {filterState.sortBy !== 'manual' && activeSortLabel && (
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-200 text-xs shadow-2xs">
+                  {filterState.sortBy === 'highlighted' && (
+                    <Highlighter className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                  )}
                   <span>
                     {language === 'ar' ? 'الترتيب:' : 'Sort:'} {activeSortLabel}
                   </span>
@@ -463,7 +467,12 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                           : 'bg-neutral-50 dark:bg-neutral-800/50 border-neutral-200/80 dark:border-neutral-700/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 font-medium'
                       }`}
                     >
-                      <span className="text-xs">{opt.label}</span>
+                      <span className="text-xs flex items-center gap-1.5">
+                        {opt.value === 'highlighted' && (
+                          <Highlighter className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                        )}
+                        <span>{opt.label}</span>
+                      </span>
                       {isSelected && (
                         <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                       )}

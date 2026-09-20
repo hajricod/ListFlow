@@ -430,6 +430,15 @@ export const GroupCard: React.FC<GroupCardProps> = ({
                         <div className="ps-4 pe-2 py-1 bg-neutral-50 dark:bg-neutral-900 border-y border-neutral-200 dark:border-neutral-700 space-y-1">
                           <button
                             onClick={() => {
+                              onSortGroupItems(group.id, 'highlighted');
+                              setMenuOpen(false);
+                            }}
+                            className="w-full text-start px-2 py-1 rounded text-[11px] hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                          >
+                            {t.sortHighlighted}
+                          </button>
+                          <button
+                            onClick={() => {
                               onSortGroupItems(group.id, 'alphabetical');
                               setMenuOpen(false);
                             }}

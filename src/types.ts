@@ -127,7 +127,7 @@ export type FontFamily =
 export type FontSize = 'small' | 'medium' | 'large' | 'xlarge';
 
 export type AppView = 'workspace' | 'settings';
-export type SortOption = 'manual' | 'alphabetical' | 'createdAt' | 'quantity';
+export type SortOption = 'manual' | 'highlighted' | 'alphabetical' | 'createdAt' | 'quantity';
 export type SortDirection = 'asc' | 'desc';
 export type StatusFilter = 'all' | 'active' | 'completed';
 

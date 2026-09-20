@@ -1510,7 +1510,13 @@ export default function App() {
           return a.completed ? 1 : -1;
         }
 
-        if (filterState.sortBy === 'alphabetical') {
+        if (filterState.sortBy === 'highlighted') {
+          const highA = a.isHighlighted ? 1 : 0;
+          const highB = b.isHighlighted ? 1 : 0;
+          if (highA !== highB) {
+            return highB - highA;
+          }
+        } else if (filterState.sortBy === 'alphabetical') {
           return a.title.localeCompare(b.title);
         } else if (filterState.sortBy === 'quantity') {
           return (b.quantity || 1) - (a.quantity || 1);
