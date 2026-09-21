@@ -312,11 +312,11 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
         >
           <div
             id="toolbar-utilities-card"
-            className="relative w-full max-w-lg bg-white dark:bg-neutral-900 border border-neutral-200/90 dark:border-neutral-800 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto"
+            className="relative w-full max-w-lg bg-white dark:bg-neutral-900 border border-neutral-200/90 dark:border-neutral-800 rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-neutral-100 dark:border-neutral-800">
+            {/* Fixed Header */}
+            <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-neutral-100 dark:border-neutral-800 shrink-0 bg-white dark:bg-neutral-900">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-center shrink-0 shadow-2xs">
                   <SlidersHorizontal className="w-5 h-5 stroke-[2.2]" />
@@ -340,8 +340,10 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
               </button>
             </div>
 
-            {/* Section 1: Item Visibility & Completed Filter */}
-            <div className="space-y-2">
+            {/* Scrollable Main Content */}
+            <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-5 overscroll-contain">
+              {/* Section 1: Item Visibility & Completed Filter */}
+              <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
                 {t.visibilitySection || 'Item Visibility'}
               </label>
@@ -605,46 +607,47 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                 </button>
               </div>
             </div>
+          </div>
 
-            {/* Footer */}
-            <div className="pt-4 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between gap-3">
-              {activeFiltersCount > 0 ? (
-                <button
-                  type="button"
-                  id="reset-filters-btn"
-                  onClick={() =>
-                    onFilterChange({
-                      hideCompleted: false,
-                      sortBy: 'manual',
-                      sortDirection: 'asc',
-                      countHighlightedOnly: false,
-                      status: 'all',
-                      priority: 'all',
-                      tag: null,
-                      groupId: 'all',
-                      search: '',
-                    })
-                  }
-                  className="text-xs font-semibold text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 transition-colors flex items-center gap-1.5 cursor-pointer py-1.5 px-2 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>{t.resetFilters || 'Reset to Defaults'}</span>
-                </button>
-              ) : (
-                <div />
-              )}
-
+          {/* Fixed Footer */}
+          <div className="px-5 sm:px-6 py-4 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between gap-3 shrink-0 bg-white dark:bg-neutral-900">
+            {activeFiltersCount > 0 ? (
               <button
                 type="button"
-                onClick={() => setIsFilterModalOpen(false)}
-                className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all shadow-md shadow-emerald-600/20 cursor-pointer flex items-center gap-2 ms-auto"
+                id="reset-filters-btn"
+                onClick={() =>
+                  onFilterChange({
+                    hideCompleted: false,
+                    sortBy: 'manual',
+                    sortDirection: 'asc',
+                    countHighlightedOnly: false,
+                    status: 'all',
+                    priority: 'all',
+                    tag: null,
+                    groupId: 'all',
+                    search: '',
+                  })
+                }
+                className="text-xs font-semibold text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 transition-colors flex items-center gap-1.5 cursor-pointer py-1.5 px-2 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800"
               >
-                <Check className="w-4 h-4" />
-                <span>{t.done || 'Done'}</span>
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>{t.resetFilters || 'Reset to Defaults'}</span>
               </button>
-            </div>
+            ) : (
+              <div />
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsFilterModalOpen(false)}
+              className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all shadow-md shadow-emerald-600/20 cursor-pointer flex items-center gap-2 ms-auto"
+            >
+              <Check className="w-4 h-4" />
+              <span>{t.done || 'Done'}</span>
+            </button>
           </div>
         </div>
+      </div>
       )}
     </div>
   );
