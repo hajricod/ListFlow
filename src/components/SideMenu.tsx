@@ -250,7 +250,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
       {/* Fixed Full-Height Side Menu from Top (0) to Bottom (0) */}
       <aside
         id="app-side-menu"
-        className={`fixed top-0 bottom-0 start-0 z-50 h-screen w-72 sm:w-80 bg-white dark:bg-neutral-900 border-e border-neutral-200/90 dark:border-neutral-800/90 shadow-2xl flex flex-col select-none transition-transform duration-300 ease-in-out ${
+        className={`fixed inset-y-0 start-0 z-50 h-full h-dvh max-h-dvh w-72 sm:w-80 bg-white dark:bg-neutral-900 border-e border-neutral-200/90 dark:border-neutral-800/90 shadow-2xl flex flex-col select-none transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full rtl:translate-x-full'
         }`}
       >
@@ -314,7 +314,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
         </div>
 
         {/* Scrollable Lists Area */}
-        <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5 custom-scrollbar">
+        <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-1.5 custom-scrollbar overscroll-contain">
           {/* Pending Invitations Banner in Sidenav */}
           {pendingInvitations && pendingInvitations.length > 0 && (
             <div className="mb-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs space-y-2">
@@ -448,7 +448,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
         </div>
 
         {/* Bottom Section of Sidenav: User profile & Settings */}
-        <div className="p-3 bg-neutral-50/70 dark:bg-neutral-900/70 shrink-0 space-y-2.5">
+        <div className="p-3 pb-[max(0.75rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))] bg-neutral-50/70 dark:bg-neutral-900/70 border-t border-neutral-200/80 dark:border-neutral-800/80 shrink-0 space-y-2.5">
           {/* User Account / Sign In card in Sidenav */}
           {user ? (
             <div
