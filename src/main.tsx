@@ -28,6 +28,52 @@ try {
   applyTypographyToDOM(initialFont, initialFontSize);
 } catch {}
 
+// Disable zooming (pinch-to-zoom, gesture zoom, trackpad/wheel zoom, and keyboard zoom)
+if (typeof window !== 'undefined') {
+  // Prevent iOS Safari gesture zoom (pinch-to-zoom)
+  document.addEventListener('gesturestart', (e) => {
+    e.preventDefault();
+  });
+  document.addEventListener('gesturechange', (e) => {
+    e.preventDefault();
+  });
+  document.addEventListener('gestureend', (e) => {
+    e.preventDefault();
+  });
+
+  // Prevent multi-touch pinch zoom
+  document.addEventListener(
+    'touchmove',
+    (e) => {
+      if (e.touches && e.touches.length > 1) {
+        e.preventDefault();
+      }
+    },
+    { passive: false }
+  );
+
+  // Prevent Ctrl + Mouse wheel / trackpad pinch zoom
+  document.addEventListener(
+    'wheel',
+    (e) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+      }
+    },
+    { passive: false }
+  );
+
+  // Prevent keyboard zoom shortcuts (Ctrl/Cmd + '+', '-', '=', '0')
+  document.addEventListener('keydown', (e) => {
+    if (
+      (e.ctrlKey || e.metaKey) &&
+      (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')
+    ) {
+      e.preventDefault();
+    }
+  });
+}
+
 // Manage Service Worker for PWA (Active in production, safely cleaned up in dev)
 if ('serviceWorker' in navigator) {
   if (import.meta.env.DEV) {
