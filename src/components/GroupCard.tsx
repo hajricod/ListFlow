@@ -218,20 +218,20 @@ export const GroupCard: React.FC<GroupCardProps> = ({
           onItemDropInEmptyGroup(e, group.id);
         }
       }}
-      className={`rounded-2xl relative transition-colors duration-150 border bg-white dark:bg-neutral-900/90 shadow-xs flex flex-col ${
+      className={`rounded-2xl relative transition-colors duration-150 border bg-white dark:bg-neutral-900/90 shadow-xs flex flex-col scroll-mt-20 ${
         menuOpen
-          ? 'z-40'
-          : 'hover:z-10 focus-within:z-30 [&:has([data-menu-open=true])]:z-40 [&:has(.item-menu-dropdown)]:z-40'
+          ? 'z-20'
+          : 'hover:z-10 focus-within:z-10 [&:has([data-menu-open=true])]:z-20 [&:has(.item-menu-dropdown)]:z-20'
       } ${
         isDraggingGroup ? 'opacity-30' : 'opacity-100'
       } border-neutral-200/90 dark:border-neutral-800`}
     >
       {/* Drop position indicator lines (Zero Layout Shift) */}
       {groupDropPosition === 'above' && (
-        <div className="absolute -top-1.5 inset-x-2 h-1 bg-emerald-500 dark:bg-emerald-400 rounded-full shadow-xs z-30 pointer-events-none" />
+        <div className="absolute -top-1.5 inset-x-2 h-1 bg-emerald-500 dark:bg-emerald-400 rounded-full shadow-xs z-20 pointer-events-none" />
       )}
       {groupDropPosition === 'below' && (
-        <div className="absolute -bottom-1.5 inset-x-2 h-1 bg-emerald-500 dark:bg-emerald-400 rounded-full shadow-xs z-30 pointer-events-none" />
+        <div className="absolute -bottom-1.5 inset-x-2 h-1 bg-emerald-500 dark:bg-emerald-400 rounded-full shadow-xs z-20 pointer-events-none" />
       )}
 
       {/* Inner contents wrapped with pointer-events-none while another group is dragged so group drop target is continuous and doesn't flicker */}

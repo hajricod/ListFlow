@@ -241,7 +241,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
       {/* Mobile Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-neutral-900/60 backdrop-blur-xs transition-opacity lg:hidden animate-in fade-in duration-200"
+          className="fixed inset-0 z-45 bg-neutral-900/60 backdrop-blur-xs transition-opacity lg:hidden animate-in fade-in duration-200"
           onClick={onClose}
           aria-hidden="true"
         />
@@ -448,7 +448,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
         </div>
 
         {/* Bottom Section of Sidenav: User profile & Settings */}
-        <div className="p-3 pb-[max(0.75rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))] bg-neutral-100 dark:bg-neutral-950 border-t border-neutral-200 dark:border-neutral-800 shrink-0 space-y-2.5">
+        <div className="p-3 pb-[max(0.75rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))] bg-neutral-50/70 dark:bg-neutral-900/70 border-t border-neutral-200/80 dark:border-neutral-800/80 shrink-0 space-y-2.5">
           {/* User Account / Sign In card in Sidenav */}
           {user ? (
             <div

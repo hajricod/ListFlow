@@ -183,7 +183,7 @@ export const ItemRow: React.FC<ItemRowProps> = ({
       className={`group/item relative flex flex-col gap-1.5 p-3 rounded-xl transition-colors duration-150 border select-none ${
         !isReadOnly ? 'cursor-grab active:cursor-grabbing' : ''
       } ${
-        menuOpen ? 'z-40' : 'z-1 hover:z-10'
+        menuOpen ? 'z-20' : 'z-1 hover:z-10'
       } ${
         isDragging ? 'opacity-30' : 'opacity-100'
       } ${
@@ -198,10 +198,10 @@ export const ItemRow: React.FC<ItemRowProps> = ({
     >
       {/* Drop position indicator lines (Zero Layout Shift) */}
       {dropPosition === 'above' && (
-        <div className="absolute -top-1 inset-x-2 h-0.5 bg-emerald-500 dark:bg-emerald-400 rounded-full shadow-xs z-30 pointer-events-none" />
+        <div className="absolute -top-1 inset-x-2 h-0.5 bg-emerald-500 dark:bg-emerald-400 rounded-full shadow-xs z-20 pointer-events-none" />
       )}
       {dropPosition === 'below' && (
-        <div className="absolute -bottom-1 inset-x-2 h-0.5 bg-emerald-500 dark:bg-emerald-400 rounded-full shadow-xs z-30 pointer-events-none" />
+        <div className="absolute -bottom-1 inset-x-2 h-0.5 bg-emerald-500 dark:bg-emerald-400 rounded-full shadow-xs z-20 pointer-events-none" />
       )}
 
       {/* Inner contents wrapped with pointer-events-none while another item is dragged so drop target doesn't flicker */}
