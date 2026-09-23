@@ -509,7 +509,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
 
       {/* Group Body (Collapsible) */}
       {!group.isCollapsed && (
-        <div className="p-3 sm:p-4 flex-1 flex flex-col space-y-2.5">
+        <div className="p-2 sm:p-2.5 flex-1 flex flex-col space-y-2">
           {/* Quick Add Inline Form */}
           {!isReadOnly && (
             <form onSubmit={handleQuickAdd} className="relative">
