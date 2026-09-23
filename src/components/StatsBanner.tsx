@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Plus,
   PlusCircle,
@@ -304,10 +305,12 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
         </div>
       </div>
 
-      {/* Filter & View Options Modal (replaces inline toolbar-utilities-card) */}
-      {isFilterModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      {/* Filter & View Options Modal (rendered via portal so it floats over header, FAB, and content) */}
+      {isFilterModalOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
           onClick={() => setIsFilterModalOpen(false)}
           role="dialog"
           aria-modal="true"
@@ -670,8 +673,9 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
             </button>
           </div>
         </div>
-      </div>
-      )}
+      </div>,
+      document.body
+    )}
     </div>
   );
 };

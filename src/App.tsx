@@ -3240,7 +3240,7 @@ export default function App() {
       />
 
       {/* 3. Main Content Workspace or Settings Page */}
-      <div className="flex-1 flex w-full overflow-x-hidden relative z-0">
+      <div className="flex-1 flex w-full overflow-x-hidden">
         <main className="flex-1 min-w-0 px-3 sm:px-6 lg:px-8 pt-6 pb-28 sm:pb-8 space-y-6">
           {currentView === 'settings' ? (
             <SettingsPage
