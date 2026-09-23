@@ -151,6 +151,8 @@
   html, body {
     touch-action: pan-x pan-y;
     -webkit-text-size-adjust: 100%;
+    overscroll-behavior-y: none;
+    overscroll-behavior: none;
   }
 
   /* Prevent automatic mobile browser zooming on input focus */
@@ -242,4 +244,12 @@ select:focus-visible {
 .dark select:focus-visible {
   outline-color: var(--primary-color, #34d399);
   outline-offset: 2px;
+}
+
+/* Filter Modal: Large text setting stacking for display layout & bulk list actions */
+html[data-font-size="large"] #grid-column-toggle-group,
+html[data-font-size="xlarge"] #grid-column-toggle-group,
+html[data-font-size="large"] #filter-bulk-actions-group,
+html[data-font-size="xlarge"] #filter-bulk-actions-group {
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
 }

@@ -17,11 +17,12 @@ import {
   Share2,
   Highlighter,
 } from 'lucide-react';
-import { FilterState, Language, ListGroup, SortOption } from '../types';
+import { FilterState, FontSize, Language, ListGroup, SortOption } from '../types';
 import { getTranslation } from '../locales/translations';
 
 interface StatsBannerProps {
   language: Language;
+  fontSize?: FontSize;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   totalTasks: number;
@@ -49,6 +50,7 @@ interface StatsBannerProps {
 
 export const StatsBanner: React.FC<StatsBannerProps> = ({
   language,
+  fontSize,
   searchQuery,
   onSearchChange,
   completedTasks,
@@ -71,6 +73,7 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
   const t = getTranslation(language);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const isLargeFont = fontSize === 'large' || fontSize === 'xlarge';
 
   const sortOptions: { value: SortOption; label: string }[] = [
     { value: 'manual', label: t.sortManual },
@@ -490,53 +493,68 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                 <label className="text-xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
                   {t.layoutSection || 'Display Layout'}
                 </label>
-                <div className="grid grid-cols-2 gap-2" id="grid-column-toggle-group">
+                <div
+                  id="grid-column-toggle-group"
+                  className={`grid gap-2 ${
+                    isLargeFont ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'
+                  } [html[data-font-size='large']_&]:!grid-cols-1 [html[data-font-size='xlarge']_&]:!grid-cols-1`}
+                >
                   <button
                     type="button"
                     id="grid-cols-2-btn"
                     onClick={() => onGridColumnsChange(2)}
-                    className={`p-3 rounded-2xl border text-start transition-all flex items-center gap-3 cursor-pointer shadow-2xs ${
+                    className={`p-3 rounded-2xl border text-start transition-all flex items-center justify-between gap-3 cursor-pointer shadow-2xs ${
                       gridColumns === 2
                         ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700/80 ring-1 ring-emerald-500/20 text-emerald-950 dark:text-emerald-200 font-semibold'
                         : 'bg-neutral-50 dark:bg-neutral-800/50 border-neutral-200/80 dark:border-neutral-700/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
                     }`}
                   >
-                    <div
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                        gridColumns === 2
-                          ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-neutral-200/60 dark:bg-neutral-700 text-neutral-500'
-                      }`}
-                    >
-                      <Columns2 className="w-4 h-4" />
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                          gridColumns === 2
+                            ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-neutral-200/60 dark:bg-neutral-700 text-neutral-500'
+                        }`}
+                      >
+                        <Columns2 className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-semibold">{t.twoColumns}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold">{t.twoColumns}</p>
-                    </div>
+                    {gridColumns === 2 && (
+                      <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    )}
                   </button>
 
                   <button
                     type="button"
                     id="grid-cols-1-btn"
                     onClick={() => onGridColumnsChange(1)}
-                    className={`p-3 rounded-2xl border text-start transition-all flex items-center gap-3 cursor-pointer shadow-2xs ${
+                    className={`p-3 rounded-2xl border text-start transition-all flex items-center justify-between gap-3 cursor-pointer shadow-2xs ${
                       gridColumns === 1
                         ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700/80 ring-1 ring-emerald-500/20 text-emerald-950 dark:text-emerald-200 font-semibold'
                         : 'bg-neutral-50 dark:bg-neutral-800/50 border-neutral-200/80 dark:border-neutral-700/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
                     }`}
                   >
-                    <div
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                        gridColumns === 1
-                          ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-neutral-200/60 dark:bg-neutral-700 text-neutral-500'
-                      }`}
-                    >
-                      <Square className="w-4 h-4" />
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                          gridColumns === 1
+                            ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-neutral-200/60 dark:bg-neutral-700 text-neutral-500'
+                        }`}
+                      >
+                        <Square className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-semibold">{t.oneColumn}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold">{t.oneColumn}</p>
-                    </div>
+                    {gridColumns === 1 && (
+                      <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -547,20 +565,25 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
               <label className="text-xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
                 {t.bulkSection || 'Bulk Actions'}
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div
+                id="filter-bulk-actions-group"
+                className={`grid gap-2 ${
+                  isLargeFont ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'
+                } [html[data-font-size='large']_&]:!grid-cols-1 [html[data-font-size='xlarge']_&]:!grid-cols-1`}
+              >
                 {/* Expand / Collapse */}
                 <button
                   type="button"
                   id="collapse-all-btn"
                   onClick={onToggleCollapseAll}
-                  className="p-3 rounded-2xl border border-neutral-200/80 dark:border-neutral-700/60 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 flex items-center gap-2.5 transition-colors cursor-pointer shadow-2xs"
+                  className="p-3 rounded-2xl border border-neutral-200/80 dark:border-neutral-700/60 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 flex items-center gap-3 transition-colors cursor-pointer shadow-2xs"
                 >
                   {allCollapsed ? (
                     <ChevronsUpDown className="w-4 h-4 text-neutral-500 shrink-0" />
                   ) : (
                     <ChevronsDownUp className="w-4 h-4 text-neutral-500 shrink-0" />
                   )}
-                  <span className="text-xs font-semibold truncate">
+                  <span className="text-xs sm:text-sm font-semibold truncate">
                     {allCollapsed ? t.expand : t.collapse}
                   </span>
                 </button>
@@ -571,10 +594,10 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                   id="uncheck-all-btn"
                   onClick={onUncheckAll}
                   disabled={completedTasks === 0 || isReadOnly}
-                  className="p-3 rounded-2xl border border-neutral-200/80 dark:border-neutral-700/60 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 flex items-center gap-2.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                  className="p-3 rounded-2xl border border-neutral-200/80 dark:border-neutral-700/60 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 flex items-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
                 >
                   <RotateCcw className="w-4 h-4 text-neutral-500 shrink-0" />
-                  <span className="text-xs font-semibold truncate">{t.uncheckAll}</span>
+                  <span className="text-xs sm:text-sm font-semibold truncate">{t.uncheckAll}</span>
                 </button>
 
                 {/* Unhighlight All */}
@@ -584,11 +607,11 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                     id="unhighlight-all-btn"
                     onClick={onUnhighlightAll}
                     disabled={highlightedTasks === 0 || isReadOnly}
-                    className="p-3 rounded-2xl border border-neutral-200/80 dark:border-neutral-700/60 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 flex items-center gap-2.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                    className="p-3 rounded-2xl border border-neutral-200/80 dark:border-neutral-700/60 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 flex items-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
                     title={t.unhighlightAll || 'Unhighlight All'}
                   >
                     <Highlighter className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span className="text-xs font-semibold truncate">
+                    <span className="text-xs sm:text-sm font-semibold truncate">
                       {t.unhighlightAll || 'Unhighlight All'}
                     </span>
                   </button>
@@ -600,10 +623,10 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
                   id="clear-completed-btn"
                   onClick={onClearCart}
                   disabled={completedTasks === 0 || isReadOnly}
-                  className="p-3 rounded-2xl border border-rose-200/80 dark:border-rose-800/60 bg-rose-50/70 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 flex items-center gap-2.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
+                  className="p-3 rounded-2xl border border-rose-200/80 dark:border-rose-800/60 bg-rose-50/70 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 flex items-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
                 >
                   <Trash2 className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span className="text-xs font-semibold truncate">{t.clearCart}</span>
+                  <span className="text-xs sm:text-sm font-semibold truncate">{t.clearCart}</span>
                 </button>
               </div>
             </div>

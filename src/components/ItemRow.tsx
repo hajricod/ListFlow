@@ -252,11 +252,22 @@ export const ItemRow: React.FC<ItemRowProps> = ({
                 <button
                   id={`qty-minus-${item.id}`}
                   type="button"
-                  onClick={(e) => handleQuickQuantity(e, -1)}
-                  className="w-5 h-5 rounded-md flex items-center justify-center text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 opacity-0 group-hover/item:opacity-100 transition-opacity cursor-pointer"
-                  title="Decrease quantity"
+                  data-no-drag
+                  disabled={item.quantity <= 1}
+                  onClick={(e) => {
+                    if (item.quantity !== undefined && item.quantity > 1) {
+                      handleQuickQuantity(e, -1);
+                    }
+                  }}
+                  className={`w-6 h-6 sm:w-5 sm:h-5 rounded-md flex items-center justify-center transition-all ${
+                    item.quantity <= 1
+                      ? 'text-neutral-300 dark:text-neutral-600 cursor-not-allowed opacity-25 sm:opacity-0 sm:group-hover/item:opacity-25 pointer-events-none'
+                      : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer active:scale-95 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100'
+                  }`}
+                  title={t.decreaseQuantity || 'Decrease quantity'}
+                  aria-label={t.decreaseQuantity || 'Decrease quantity'}
                 >
-                  <Minus className="w-3 h-3" />
+                  <Minus className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                 </button>
               )}
 
@@ -280,11 +291,13 @@ export const ItemRow: React.FC<ItemRowProps> = ({
                 <button
                   id={`qty-plus-${item.id}`}
                   type="button"
+                  data-no-drag
                   onClick={(e) => handleQuickQuantity(e, 1)}
-                  className="w-5 h-5 rounded-md flex items-center justify-center text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 opacity-0 group-hover/item:opacity-100 transition-opacity cursor-pointer"
-                  title="Increase quantity"
+                  className="w-6 h-6 sm:w-5 sm:h-5 rounded-md flex items-center justify-center text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 transition-all cursor-pointer active:scale-95"
+                  title={t.increaseQuantity || 'Increase quantity'}
+                  aria-label={t.increaseQuantity || 'Increase quantity'}
                 >
-                  <Plus className="w-3 h-3" />
+                  <Plus className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                 </button>
               )}
             </div>
@@ -294,69 +307,52 @@ export const ItemRow: React.FC<ItemRowProps> = ({
         {/* Right: Quick Reorder buttons & More Options Menu */}
         {!isReadOnly && (
           <div className="flex items-center gap-0.5 shrink-0">
-            {/* Quick Move Up/Down buttons (visible on hover) */}
+            {/* Quick Move Up/Down buttons (visible on mobile, and on hover on desktop) */}
             {(canMoveUp || canMoveDown) && (
-              <div className="flex items-center opacity-0 group-hover/item:opacity-100 transition-opacity">
-                {canMoveUp && onMoveItemUp && (
+              <div className="flex items-center opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity">
+                {onMoveItemUp && (
                   <button
                     id={`item-move-up-${item.id}`}
                     type="button"
                     data-no-drag
+                    disabled={!canMoveUp}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onMoveItemUp(item.id);
+                      if (canMoveUp) onMoveItemUp(item.id);
                     }}
-                    className="p-1 rounded-md text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                    className={`p-1.5 sm:p-1 rounded-md transition-all ${
+                      canMoveUp
+                        ? 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer active:scale-95'
+                        : 'text-neutral-200 dark:text-neutral-700 cursor-not-allowed opacity-20 pointer-events-none'
+                    }`}
                     title={t.moveUp}
+                    aria-label={t.moveUp}
                   >
                     <ArrowUp className="w-3.5 h-3.5" />
                   </button>
                 )}
-                {canMoveDown && onMoveItemDown && (
+                {onMoveItemDown && (
                   <button
                     id={`item-move-down-${item.id}`}
                     type="button"
                     data-no-drag
+                    disabled={!canMoveDown}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onMoveItemDown(item.id);
+                      if (canMoveDown) onMoveItemDown(item.id);
                     }}
-                    className="p-1 rounded-md text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                    className={`p-1.5 sm:p-1 rounded-md transition-all ${
+                      canMoveDown
+                        ? 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer active:scale-95'
+                        : 'text-neutral-200 dark:text-neutral-700 cursor-not-allowed opacity-20 pointer-events-none'
+                    }`}
                     title={t.moveDown}
+                    aria-label={t.moveDown}
                   >
                     <ArrowDown className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
-            )}
-
-            {/* Highlight Toggle (Trailing Edge - Distinct from Checkbox on the Leading Edge) */}
-            {onToggleHighlight && (
-              <button
-                id={`highlight-item-btn-${item.id}`}
-                type="button"
-                data-no-drag
-                onClick={(e) => {
-                  e.stopPropagation();
-                  sounds.playPop();
-                  onToggleHighlight(item.id);
-                }}
-                className={`p-1 rounded-md transition-all cursor-pointer ${
-                  item.isHighlighted
-                    ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-700/80 shadow-2xs'
-                    : 'text-neutral-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-transparent opacity-75 sm:opacity-40 group-hover/item:opacity-100'
-                }`}
-                title={item.isHighlighted ? t.unhighlightItem : t.highlightItem}
-                aria-label={item.isHighlighted ? t.unhighlightItem : t.highlightItem}
-              >
-                <Highlighter
-                  className={`w-3.5 h-3.5 transition-transform ${
-                    item.isHighlighted
-                      ? 'text-emerald-600 dark:text-emerald-400 fill-emerald-500/40'
-                      : ''
-                  }`}
-                />
-              </button>
             )}
 
             <div className="relative" ref={menuRef}>
@@ -519,8 +515,8 @@ export const ItemRow: React.FC<ItemRowProps> = ({
         )}
       </div>
 
-      {/* Dedicated Separate Row for Item Title & Notes: Maximizes Text Space */}
-      <div className="w-full min-w-0 pt-0.5">
+      {/* Item Title, Notes & Bottom-End Highlight Button */}
+      <div className="flex items-end justify-between gap-2 w-full min-w-0 pt-0.5">
         {isEditingInline ? (
           <input
             type="text"
@@ -534,7 +530,7 @@ export const ItemRow: React.FC<ItemRowProps> = ({
         ) : (
           <div
             onClick={() => onEditItem(item)}
-            className="cursor-pointer group/title w-full"
+            className="cursor-pointer group/title flex-1 min-w-0"
           >
             <p
               className={`text-sm font-medium transition-all break-words leading-relaxed ${
@@ -553,6 +549,35 @@ export const ItemRow: React.FC<ItemRowProps> = ({
               </p>
             )}
           </div>
+        )}
+
+        {/* Highlight Button at bottom end of the item */}
+        {!isReadOnly && onToggleHighlight && !isEditingInline && (
+          <button
+            id={`highlight-item-btn-${item.id}`}
+            type="button"
+            data-no-drag
+            onClick={(e) => {
+              e.stopPropagation();
+              sounds.playPop();
+              onToggleHighlight(item.id);
+            }}
+            className={`p-1.5 sm:p-1 rounded-md transition-all cursor-pointer shrink-0 self-end ${
+              item.isHighlighted
+                ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-700/80 shadow-2xs'
+                : 'text-neutral-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-transparent opacity-100 sm:opacity-40 sm:group-hover/item:opacity-100'
+            }`}
+            title={item.isHighlighted ? t.unhighlightItem : t.highlightItem}
+            aria-label={item.isHighlighted ? t.unhighlightItem : t.highlightItem}
+          >
+            <Highlighter
+              className={`w-3.5 h-3.5 transition-transform ${
+                item.isHighlighted
+                  ? 'text-emerald-600 dark:text-emerald-400 fill-emerald-500/40'
+                  : ''
+              }`}
+            />
+          </button>
         )}
       </div>
       </div>

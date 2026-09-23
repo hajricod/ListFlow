@@ -60,6 +60,17 @@ export const ItemModal: React.FC<ItemModalProps> = ({
     }
   }, [item, defaultGroupId, groups, isOpen, language]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -130,13 +141,16 @@ export const ItemModal: React.FC<ItemModalProps> = ({
         ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/60 backdrop-blur-xs animate-in fade-in duration-150">
+    <div
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/60 backdrop-blur-xs animate-in fade-in duration-150"
+    >
       <div
         id="item-modal-dialog"
         className="w-full max-w-md bg-white dark:bg-neutral-900 rounded-2xl shadow-xl border border-neutral-200 dark:border-neutral-800 overflow-hidden flex flex-col max-h-[90vh]"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 dark:border-neutral-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 dark:border-neutral-800 shrink-0">
           <h2 className="text-base font-bold text-neutral-900 dark:text-neutral-100">
             {item ? t.editItem : t.newItem}
           </h2>
@@ -150,7 +164,8 @@ export const ItemModal: React.FC<ItemModalProps> = ({
         </div>
 
         {/* Modal Form Content */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="p-5 space-y-4 overflow-y-auto flex-1 overscroll-contain">
           {/* Grocery Item Name */}
           <div>
             <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
@@ -332,13 +347,15 @@ export const ItemModal: React.FC<ItemModalProps> = ({
             </button>
           </div>
 
-          {/* Footer Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-neutral-100 dark:border-neutral-800">
+          </div>
+
+          {/* Fixed Footer Actions */}
+          <div className="flex items-center justify-end gap-2.5 px-5 py-3.5 border-t border-neutral-100 dark:border-neutral-800 bg-neutral-50/80 dark:bg-neutral-900/90 backdrop-blur-xs shrink-0">
             <button
               type="button"
               id="cancel-modal-btn"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+              className="px-4 py-2 rounded-xl text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer active:scale-95"
             >
               {t.cancel}
             </button>

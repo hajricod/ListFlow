@@ -398,11 +398,11 @@ export async function syncAllToFirestore(
       }
 
       const groupRef = doc(db, 'lists', listId, 'groups', group.id);
+      const { isCollapsed: _unusedCollapsed, ...groupDataToSync } = group;
       currentBatch.set(
         groupRef,
         sanitizeForFirestore({
-          ...group,
-          isCollapsed: Boolean(group.isCollapsed),
+          ...groupDataToSync,
           listId,
           order: group.order !== undefined ? group.order : i,
           updatedAt: new Date().toISOString(),
@@ -676,7 +676,9 @@ export function subscribeToUserCloudData(
         (snap) => {
           const listGroups = new Map<string, ListGroup>();
           snap.forEach((docSnap) => {
-            listGroups.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as ListGroup);
+            const rawData = docSnap.data();
+            const { isCollapsed: _c, ...groupData } = rawData;
+            listGroups.set(docSnap.id, { id: docSnap.id, ...groupData } as ListGroup);
           });
           allListsGroupsMap.set(targetListId, listGroups);
           scheduleEmit();
@@ -1492,11 +1494,11 @@ export async function saveGroupToFirestore(
   if (!listId || !group || !group.id) return false;
   try {
     const groupRef = doc(db, 'lists', listId, 'groups', group.id);
+    const { isCollapsed: _unusedCollapsed, ...groupDataToSync } = group;
     await setDoc(
       groupRef,
       sanitizeForFirestore({
-        ...group,
-        isCollapsed: Boolean(group.isCollapsed),
+        ...groupDataToSync,
         listId,
         updatedAt: new Date().toISOString(),
       }),
@@ -1521,10 +1523,12 @@ export async function updateGroupFieldsInFirestore(
   if (!listId || !groupId || !fields) return false;
   try {
     const groupRef = doc(db, 'lists', listId, 'groups', groupId);
+    const { isCollapsed: _unusedCollapsed, ...cleanFields } = fields;
+    if (Object.keys(cleanFields).length === 0) return true;
     await setDoc(
       groupRef,
       sanitizeForFirestore({
-        ...fields,
+        ...cleanFields,
         updatedAt: new Date().toISOString(),
       }),
       { merge: true }
@@ -1551,11 +1555,11 @@ export async function saveGroupsBatchToFirestore(
     groups.forEach((group) => {
       if (group && group.id) {
         const groupRef = doc(db, 'lists', listId, 'groups', group.id);
+        const { isCollapsed: _unusedCollapsed, ...groupDataToSync } = group;
         batch.set(
           groupRef,
           sanitizeForFirestore({
-            ...group,
-            isCollapsed: Boolean(group.isCollapsed),
+            ...groupDataToSync,
             listId,
             updatedAt: now,
           }),

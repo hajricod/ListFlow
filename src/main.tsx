@@ -72,6 +72,50 @@ if (typeof window !== 'undefined') {
       e.preventDefault();
     }
   });
+
+  // Disable pull-down-to-refresh on mobile browsers
+  let startTouchY = 0;
+  window.addEventListener(
+    'touchstart',
+    (e) => {
+      if (e.touches.length === 1) {
+        startTouchY = e.touches[0].clientY;
+      }
+    },
+    { passive: true }
+  );
+
+  window.addEventListener(
+    'touchmove',
+    (e) => {
+      if (e.touches.length === 1) {
+        const currentY = e.touches[0].clientY;
+        // When pulling downward
+        if (currentY > startTouchY) {
+          const isAtTop =
+            (window.scrollY ||
+              document.documentElement.scrollTop ||
+              document.body.scrollTop ||
+              0) <= 0;
+          if (isAtTop) {
+            let el = e.target as HTMLElement | null;
+            let canScrollUp = false;
+            while (el && el !== document.body && el !== document.documentElement) {
+              if (el.scrollTop > 0) {
+                canScrollUp = true;
+                break;
+              }
+              el = el.parentElement;
+            }
+            if (!canScrollUp && e.cancelable) {
+              e.preventDefault();
+            }
+          }
+        }
+      }
+    },
+    { passive: false }
+  );
 }
 
 // Manage Service Worker for PWA (Active in production, safely cleaned up in dev)
