@@ -13,6 +13,10 @@ import {
   Layers,
   Check,
   X,
+  ExternalLink,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { Language, ShoppingList, ListGroup, ListItem } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -59,6 +63,7 @@ export const GoogleDriveBackupCard: React.FC<GoogleDriveBackupCardProps> = ({
   const [lastBackupTime, setLastBackupTime] = useState<string | null>(() => {
     return localStorage.getItem('listflow_last_drive_backup');
   });
+  const [showVerificationHelp, setShowVerificationHelp] = useState(false);
 
   // Modal states for destructive actions (MANDATORY per Workspace skill)
   const [restoreTarget, setRestoreTarget] = useState<DriveBackupFile | null>(null);
@@ -113,14 +118,29 @@ export const GoogleDriveBackupCard: React.FC<GoogleDriveBackupCardProps> = ({
       );
       await fetchBackups(res.accessToken);
     } catch (err: any) {
-      console.error('Failed to connect Google Drive:', err);
-      showToast(
-        language === 'ar'
-          ? 'فشل الاتصال بـ Google Drive. يرجى المحاولة ثانية.'
-          : 'Failed to connect Google Drive. Please try again.',
-        4000,
-        'error'
-      );
+      const isPopupClosed =
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        (typeof err?.message === 'string' &&
+          (err.message.includes('popup-closed-by-user') || err.message.includes('cancelled-popup-request')));
+
+      if (isPopupClosed) {
+        showToast(
+          language === 'ar' ? 'تم إلغاء الاتصال بـ Google Drive' : 'Google Drive connection cancelled',
+          2500,
+          'info'
+        );
+      } else {
+        console.warn('Failed to connect Google Drive:', err);
+        setShowVerificationHelp(true);
+        showToast(
+          language === 'ar'
+            ? 'خطأ 403: يتطلب Google إضافة بريدك كمستخدم تجريبي في Google Cloud Console'
+            : 'Error 403: Add your email to Google Cloud Console Test Users',
+          5000,
+          'error'
+        );
+      }
     } finally {
       setIsConnecting(false);
     }
@@ -145,8 +165,23 @@ export const GoogleDriveBackupCard: React.FC<GoogleDriveBackupCardProps> = ({
         const res = await connectGoogleDrive();
         activeToken = res.accessToken;
         setToken(activeToken);
-      } catch (err) {
+      } catch (err: any) {
         setIsConnecting(false);
+        const isPopupClosed =
+          err?.code === 'auth/popup-closed-by-user' ||
+          err?.code === 'auth/cancelled-popup-request' ||
+          (typeof err?.message === 'string' &&
+            (err.message.includes('popup-closed-by-user') || err.message.includes('cancelled-popup-request')));
+
+        if (isPopupClosed) {
+          showToast(
+            language === 'ar' ? 'تم إلغاء الاتصال بـ Google Drive' : 'Google Drive connection cancelled',
+            2500,
+            'info'
+          );
+          return;
+        }
+
         showToast(
           language === 'ar'
             ? 'يرجى تسجيل الدخول وإعطاء الإذن لـ Google Drive'
@@ -351,6 +386,83 @@ export const GoogleDriveBackupCard: React.FC<GoogleDriveBackupCardProps> = ({
 
       {/* Main Content Body */}
       <div className="p-4 sm:p-5 space-y-4">
+        {/* Google OAuth Verification Help Banner */}
+        {(!token || showVerificationHelp) && (
+          <div className="rounded-xl border border-amber-200/90 dark:border-amber-800/80 bg-amber-50/80 dark:bg-amber-950/40 p-3.5 sm:p-4 space-y-2.5 transition-all text-xs">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-bold text-xs sm:text-sm">
+                <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>
+                  {language === 'ar'
+                    ? 'حل خطأ Google (Access blocked: Error 403: access_denied)'
+                    : 'Google Verification Notice (Error 403: access_denied)'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVerificationHelp((prev) => !prev)}
+                className="text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-200 p-1 rounded-md transition-colors cursor-pointer"
+                title={language === 'ar' ? 'إظهار / إخفاء التفاصيل' : 'Toggle details'}
+              >
+                {showVerificationHelp ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <p className="text-amber-800/90 dark:text-amber-300/90 text-[11px] sm:text-xs leading-relaxed">
+              {language === 'ar'
+                ? 'لأن Google Drive يتطلب أذونات ملفات خاصة، يضع Google المشاريع الجديدة في وضع الاختبار (Testing Mode). يجب إضافة بريدك الإلكتروني كمستخدم تجريبي (Test User) أو نشر شاشة الموافقة.'
+                : 'Google places newly configured Google Drive OAuth apps in "Testing" mode by default. Google requires adding your account to the Test Users list in your Google Cloud Console.'}
+            </p>
+
+            {showVerificationHelp && (
+              <div className="pt-2 border-t border-amber-200/60 dark:border-amber-800/60 space-y-2 text-[11px] sm:text-xs text-amber-950 dark:text-amber-200">
+                <p className="font-semibold">
+                  {language === 'ar' ? 'خطوات التفعيل الفوري (دقيقة واحدة):' : 'How to resolve in 30 seconds:'}
+                </p>
+                <ol className="list-decimal list-inside space-y-1 text-neutral-700 dark:text-neutral-300">
+                  <li>
+                    {language === 'ar' ? 'افتح ' : 'Open '}
+                    <a
+                      href="https://console.cloud.google.com/apis/credentials/consent"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 dark:text-blue-400 underline font-medium inline-flex items-center gap-0.5"
+                    >
+                      <span>Google Cloud Console (OAuth consent screen)</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </li>
+                  <li>
+                    {language === 'ar'
+                      ? 'تأكد من اختيار مشروع gen-lang-client-0284690034 من أعلى الصفحة.'
+                      : 'Ensure project "gen-lang-client-0284690034" is selected in the top bar.'}
+                  </li>
+                  <li>
+                    {language === 'ar'
+                      ? 'انزل إلى قسم Test users واضغط "+ ADD USERS".'
+                      : 'Scroll to "Test users" and click "+ ADD USERS".'}
+                  </li>
+                  <li>
+                    {language === 'ar'
+                      ? 'أضف بريدك الإلكتروني (مثل a.hajri89@gmail.com) واضغط SAVE.'
+                      : 'Add your email (e.g. a.hajri89@gmail.com) and click SAVE.'}
+                  </li>
+                  <li>
+                    {language === 'ar'
+                      ? 'ارجع إلى التطبيق واضغط "ربط Google Drive" وسيعمل الاتصال مباشرة!'
+                      : 'Return here and click "Connect Google Drive" — it will connect immediately!'}
+                  </li>
+                </ol>
+                <p className="text-[10px] text-neutral-500 dark:text-neutral-400 pt-1">
+                  {language === 'ar'
+                    ? 'بدلاً من ذلك، يمكنك الضغط على "PUBLISH APP" في شاشة OAuth consent screen لجعل التطبيق متاحاً لجميع الحسابات.'
+                    : 'Alternatively, you can click "PUBLISH APP" in the OAuth consent screen to allow all Google accounts to authorize.'}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Quick Action: Backup Now */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200/70 dark:border-neutral-800">
           <div className="space-y-0.5">

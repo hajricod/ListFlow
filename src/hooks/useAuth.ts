@@ -90,9 +90,16 @@ export function useAuth() {
       return loggedUser;
     } catch (err: unknown) {
       setIsLoggingIn(false);
-      const errorMsg = formatAuthError(err, lang);
-      setError(errorMsg);
-      console.error('Google Sign in error:', err);
+      const isClosed =
+        (err as { code?: string })?.code === 'auth/popup-closed-by-user' ||
+        (err as { code?: string })?.code === 'auth/cancelled-popup-request' ||
+        (err instanceof Error && err.message.includes('popup-closed-by-user'));
+
+      if (!isClosed) {
+        const errorMsg = formatAuthError(err, lang);
+        setError(errorMsg);
+        console.warn('Google Sign in warning:', err);
+      }
       return null;
     }
   }, []);
