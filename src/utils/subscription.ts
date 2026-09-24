@@ -90,12 +90,13 @@ export function createTrialSubscription(): UserSubscription {
 }
 
 /**
- * Cancellation helper (sets status to canceled and turns off auto-renewal).
+ * Cancellation helper (cancels Pro subscription and sets tier to free).
  */
 export function cancelSubscription(sub: UserSubscription): UserSubscription {
   return {
     ...sub,
-    status: 'canceled',
+    tier: 'free',
+    status: 'free',
     autoRenew: false,
     canceledAt: new Date().toISOString(),
   };
@@ -108,5 +109,17 @@ export function downgradeToFreeSubscription(): UserSubscription {
   return {
     tier: 'free',
     status: 'free',
+    autoRenew: false,
+    canceledAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Disable auto-renew while retaining active Pro status until expiration.
+ */
+export function disableAutoRenew(sub: UserSubscription): UserSubscription {
+  return {
+    ...sub,
+    autoRenew: false,
   };
 }

@@ -20,6 +20,7 @@ import {
   isProUser,
   createProSubscription,
   createTrialSubscription,
+  downgradeToFreeSubscription,
   DEFAULT_FREE_SUBSCRIPTION,
   setLocalSubscription,
 } from '../utils/subscription';
@@ -57,6 +58,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPromoInput, setShowPromoInput] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const applySubscriptionChange = async (newSub: UserSubscription) => {
     const handler = onUpdateSubscription || onSelectPlan;
@@ -64,6 +66,31 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
       await handler(newSub);
     } else {
       setLocalSubscription(newSub);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    setIsProcessing(true);
+    try {
+      const freeSub = downgradeToFreeSubscription();
+      await applySubscriptionChange(freeSub);
+      showToast(
+        language === 'ar'
+          ? 'تم إلغاء الاشتراك. تم إلغاء مشاركة القوائم المشتركة وحفظها محلياً فقط على جهازك.'
+          : 'Subscription cancelled. Shared lists were unshared and are now stored locally only.',
+        5000,
+        'info'
+      );
+      setShowCancelConfirm(false);
+      onClose();
+    } catch {
+      showToast(
+        language === 'ar' ? 'حدث خطأ أثناء إلغاء الاشتراك' : 'Failed to cancel subscription',
+        3000,
+        'error'
+      );
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -317,9 +344,49 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
               <div className="pt-2 space-y-2">
                 {isPro ? (
-                  <div className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 text-white text-center text-xs font-bold shadow-xs flex items-center justify-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>{language === 'ar' ? 'أنت مشترك بالفعل في برو' : 'Active Pro Member'}</span>
+                  <div className="space-y-2.5">
+                    <div className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 text-white text-center text-xs font-bold shadow-xs flex items-center justify-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>{language === 'ar' ? 'أنت مشترك بالفعل في برو' : 'Active Pro Member'}</span>
+                    </div>
+
+                    {!showCancelConfirm ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowCancelConfirm(true)}
+                        disabled={isProcessing}
+                        className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-red-200 dark:border-red-900/40 transition-colors text-center cursor-pointer disabled:opacity-50"
+                      >
+                        {language === 'ar' ? 'إلغاء الاشتراك (العودة للوضع المحلي)' : 'Cancel Subscription (Switch to Free Local)'}
+                      </button>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 space-y-2">
+                        <p className="text-[11px] text-red-700 dark:text-red-300 leading-snug">
+                          {language === 'ar'
+                            ? 'سيتم إلغاء مشاركة أي قوائم مشتركة مع الأعضاء الآخرين والاحتفاظ بها محلياً فقط على جهازك بدون مزامنة سحابية.'
+                            : 'Shared lists with other members will be unshared and will only be stored locally on your device.'}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleCancelSubscription}
+                            disabled={isProcessing}
+                            className="flex-1 py-1.5 px-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                          >
+                            {isProcessing && <RefreshCw className="w-3 h-3 animate-spin" />}
+                            <span>{language === 'ar' ? 'تأكيد الإلغاء' : 'Confirm Cancel'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowCancelConfirm(false)}
+                            disabled={isProcessing}
+                            className="py-1.5 px-3 rounded-lg text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                          >
+                            {language === 'ar' ? 'تراجع' : 'Keep Pro'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <>

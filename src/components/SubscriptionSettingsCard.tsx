@@ -11,7 +11,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { Language, UserSubscription } from '../types';
-import { isProUser, cancelSubscription, downgradeToFreeSubscription } from '../utils/subscription';
+import { isProUser, disableAutoRenew, downgradeToFreeSubscription } from '../utils/subscription';
 import { User } from 'firebase/auth';
 
 interface SubscriptionSettingsCardProps {
@@ -35,11 +35,12 @@ export const SubscriptionSettingsCard: React.FC<SubscriptionSettingsCardProps> =
   const isRTL = language === 'ar';
   const ArrowIcon = isRTL ? ArrowLeft : ArrowRight;
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const handleCancelAutoRenew = async () => {
     setIsProcessing(true);
     try {
-      const updated = cancelSubscription(subscription);
+      const updated = disableAutoRenew(subscription);
       if (typeof onUpdateSubscription === 'function') {
         await onUpdateSubscription(updated);
       }
@@ -63,6 +64,7 @@ export const SubscriptionSettingsCard: React.FC<SubscriptionSettingsCardProps> =
 
   const handleDowngradeToFree = async () => {
     setIsProcessing(true);
+    setShowCancelConfirm(false);
     try {
       const freeSub = downgradeToFreeSubscription();
       if (typeof onUpdateSubscription === 'function') {
@@ -70,14 +72,14 @@ export const SubscriptionSettingsCard: React.FC<SubscriptionSettingsCardProps> =
       }
       showToast(
         language === 'ar'
-          ? 'تم إلغاء الاشتراك والعودة للخطة المجانية المحلية. تم إيقاف المزامنة السحابية.'
-          : 'Subscription cancelled. Downgraded to Free Local Plan. Cloud sync paused.',
-        4500,
+          ? 'تم إلغاء الاشتراك. تم إلغاء مشاركة القوائم المشتركة وحفظها محلياً فقط على جهازك.'
+          : 'Subscription cancelled. Shared lists were unshared and are now stored locally only.',
+        5000,
         'info'
       );
     } catch {
       showToast(
-        language === 'ar' ? 'حدث خطأ أثناء إلغاء الاشتراك' : 'Failed to downgrade subscription',
+        language === 'ar' ? 'حدث خطأ أثناء إلغاء الاشتراك' : 'Failed to cancel subscription',
         3000,
         'error'
       );
@@ -168,10 +170,10 @@ export const SubscriptionSettingsCard: React.FC<SubscriptionSettingsCardProps> =
               <button
                 type="button"
                 disabled={isProcessing}
-                onClick={handleDowngradeToFree}
+                onClick={() => setShowCancelConfirm(true)}
                 className="px-3 py-1.5 rounded-xl text-xs font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer disabled:opacity-50"
               >
-                {language === 'ar' ? 'إلغاء الاشتراك' : 'Unsubscribe'}
+                {language === 'ar' ? 'إلغاء الاشتراك' : 'Cancel Subscription'}
               </button>
               {subscription.autoRenew && (
                 <button
@@ -204,6 +206,48 @@ export const SubscriptionSettingsCard: React.FC<SubscriptionSettingsCardProps> =
           )}
         </div>
       </div>
+
+      {/* Inline Confirmation when canceling subscription */}
+      {isPro && showCancelConfirm && (
+        <div className="border-t border-red-200 dark:border-red-900/40 bg-red-50/60 dark:bg-red-950/30 p-3.5 sm:p-4 transition-all">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-red-900 dark:text-red-200">
+                {language === 'ar' ? 'تأكيد إلغاء الاشتراك في برو' : 'Confirm Pro Subscription Cancellation'}
+              </p>
+              <p className="text-xs text-red-700 dark:text-red-300/90 leading-relaxed">
+                {language === 'ar'
+                  ? 'هل أنت متأكد؟ سيتم إلغاء مشاركة أي قوائم مشتركة مع الأعضاء الآخرين، والاحتفاظ بها محلياً فقط على جهازك بدون مزامنة سحابية.'
+                  : 'Are you sure? Shared lists with other members will be unshared and will only be stored locally on your device without cloud sync.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={handleDowngradeToFree}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 active:scale-[0.98] transition-all cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                {isProcessing ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : language === 'ar' ? (
+                  'تأكيد الإلغاء'
+                ) : (
+                  'Confirm Cancel'
+                )}
+              </button>
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={() => setShowCancelConfirm(false)}
+                className="px-3 py-1.5 rounded-xl text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+              >
+                {language === 'ar' ? 'تراجع' : 'Keep Pro'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

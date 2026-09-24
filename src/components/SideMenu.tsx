@@ -455,35 +455,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({
 
         {/* Bottom Section of Sidenav: User profile & Settings */}
         <div className="p-3 pb-[max(0.75rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))] bg-neutral-50/70 dark:bg-neutral-900/70 border-t border-neutral-200/80 dark:border-neutral-800/80 shrink-0 space-y-2.5">
-          {/* Subscription Upgrade Promo Card for Free Tier */}
-          {!isPro && onOpenUpgradeModal && (
-            <button
-              type="button"
-              onClick={() => {
-                onOpenUpgradeModal();
-                if (window.innerWidth < 1024) onClose();
-              }}
-              className="w-full p-2.5 rounded-xl bg-linear-to-r from-emerald-500/10 via-teal-500/10 to-sky-500/10 hover:from-emerald-500/20 hover:via-teal-500/20 hover:to-sky-500/20 border border-emerald-500/30 dark:border-emerald-500/20 flex items-center justify-between gap-2 transition-all cursor-pointer group text-start shadow-2xs"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1">
-                    <span>{language === 'ar' ? 'الترقية إلى برو' : 'Upgrade to Pro'}</span>
-                  </div>
-                  <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
-                    {language === 'ar' ? 'مزامنة ومشاركة مباشرة' : 'Real-time sync & sharing'}
-                  </div>
-                </div>
-              </div>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-600 text-white shrink-0 group-hover:scale-105 transition-transform">
-                PRO
-              </span>
-            </button>
-          )}
-
           {/* User Account / Sign In card in Sidenav */}
           {user ? (
             <div

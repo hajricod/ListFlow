@@ -1930,6 +1930,182 @@ export async function deleteListFromFirestore(
   }
 }
 
+// 12b. Unshare Lists On Subscription Cancel
+// When a subscribed user cancels their subscription, lists that were shared with other members
+// are unshared from all collaborators in Firestore, removed from the shared Firestore collection,
+// and strictly retained locally in the owner's local storage.
+export async function unshareUserListsOnSubscriptionCancel(
+  userId: string,
+  userLists: AppList[]
+): Promise<string[]> {
+  if (!userId || !userLists || userLists.length === 0) return [];
+  const unsharedListIds: string[] = [];
+
+  const listsToUnshare = userLists.filter((l) => {
+    const isOwner = !l.ownerId || l.ownerId === userId || l.ownerId === 'local-user' || l.ownerId === 'guest';
+    if (!isOwner) return false;
+    return Boolean(
+      l.isShared ||
+      l.shareLinkEnabled ||
+      (l.invitedEmails && l.invitedEmails.length > 0) ||
+      (l.collaboratorUids && l.collaboratorUids.some((uid) => uid && uid !== userId && uid !== 'guest' && uid !== 'local-user')) ||
+      (l.collaborators && Object.keys(l.collaborators).some((k) => k !== userId))
+    );
+  });
+
+  if (listsToUnshare.length === 0) return [];
+
+  for (const list of listsToUnshare) {
+    unsharedListIds.push(list.id);
+    try {
+      const listRef = doc(db, 'lists', list.id);
+      const listSnap = await getDoc(listRef).catch(() => null);
+
+      if (listSnap && listSnap.exists()) {
+        const listData = listSnap.data() as AppList;
+
+        // Gather all other member UIDs
+        const otherMemberUids = new Set<string>();
+        if (listData.collaboratorUids) {
+          listData.collaboratorUids.forEach((uid) => {
+            if (uid && uid !== userId && uid !== 'guest' && uid !== 'local-user') {
+              otherMemberUids.add(uid);
+            }
+          });
+        }
+        if (listData.collaborators) {
+          Object.entries(listData.collaborators).forEach(([k, m]) => {
+            if (k !== userId && m.role !== 'owner') {
+              otherMemberUids.add(m.uid || k);
+            }
+          });
+        }
+
+        // Notify member clients by updating removedCollaboratorUids first
+        if (otherMemberUids.size > 0) {
+          try {
+            await updateDoc(listRef, {
+              collaboratorUids: [userId],
+              collaborators: {
+                [userId]: {
+                  uid: userId,
+                  email: auth.currentUser?.email || listData.ownerEmail || '',
+                  displayName: auth.currentUser?.displayName || listData.ownerName || 'Owner',
+                  photoURL: auth.currentUser?.photoURL || '',
+                  role: 'owner',
+                  status: 'active',
+                },
+              },
+              removedCollaboratorUids: arrayUnion(...Array.from(otherMemberUids)),
+              invitedEmails: [],
+              shareLinkEnabled: false,
+              shareLinkToken: '',
+              isShared: false,
+              updatedAt: new Date().toISOString(),
+            });
+          } catch (e) {
+            console.warn('Could not update removedCollaborators prior to delete:', e);
+          }
+        }
+
+        // Delete subcollections and the shared list document from Firestore
+        try {
+          const [groupsSnap, itemsSnap] = await Promise.all([
+            getDocs(collection(db, 'lists', list.id, 'groups')).catch(() => null),
+            getDocs(collection(db, 'lists', list.id, 'items')).catch(() => null),
+          ]);
+
+          const batch = writeBatch(db);
+          if (groupsSnap) {
+            groupsSnap.forEach((d) => batch.delete(d.ref));
+          }
+          if (itemsSnap) {
+            itemsSnap.forEach((d) => batch.delete(d.ref));
+          }
+          batch.delete(listRef);
+
+          // Also remove from private backup users/{userId}/lists/{listId}
+          try {
+            const userListRef = doc(db, 'users', userId, 'lists', list.id);
+            batch.delete(userListRef);
+          } catch {}
+
+          await batch.commit();
+        } catch (delErr) {
+          console.warn(`Error deleting shared list doc ${list.id} from Firestore:`, delErr);
+        }
+      }
+    } catch (err) {
+      console.warn(`Error unsharing list ${list.id} on subscription cancel:`, err);
+    }
+  }
+
+  return unsharedListIds;
+}
+
+// 12c. Sync All Local Lists To Firestore On Pro Upgrade
+// When a user was on the free tier and subscribes to Pro, all local lists, groups, and items
+// are preserved, assigned to the user as owner, and synchronized to Firestore.
+export async function syncAllLocalListsToFirestoreOnProUpgrade(
+  userId: string,
+  localLists: AppList[],
+  localGroups: ListGroup[],
+  localItems: ListItem[]
+): Promise<boolean> {
+  if (!userId || !localLists || localLists.length === 0) return true;
+  if (!auth.currentUser) return false;
+
+  try {
+    for (const list of localLists) {
+      // Retain and sync lists owned by user or created locally
+      const isMyList =
+        !list.ownerId ||
+        list.ownerId === userId ||
+        list.ownerId === 'local-user' ||
+        list.ownerId === 'guest';
+      if (!isMyList) continue;
+
+      const updatedList: AppList = {
+        ...list,
+        ownerId: userId,
+        ownerEmail: auth.currentUser.email || list.ownerEmail || '',
+        ownerName: auth.currentUser.displayName || list.ownerName || 'User',
+        collaboratorUids: Array.from(
+          new Set([userId, ...(list.collaboratorUids || []).filter((id) => id && id !== 'guest' && id !== 'local-user')])
+        ),
+        myRole: 'owner',
+        updatedAt: new Date().toISOString(),
+      };
+
+      // 1. Save list document to Firestore
+      await saveListToFirestore(updatedList, userId);
+
+      // 2. Save groups belonging to this list
+      const listGroups = localGroups.filter(
+        (g) => g.listId === list.id || (!g.listId && list.id === 'list-groceries')
+      );
+      if (listGroups.length > 0) {
+        await saveGroupsBatchToFirestore(list.id, listGroups);
+      }
+
+      // 3. Save items belonging to this list
+      const listGroupIds = new Set(listGroups.map((g) => g.id));
+      const listItems = localItems.filter((item) => {
+        const itemExplicitListId = (item as unknown as { listId?: string }).listId;
+        if (itemExplicitListId) return itemExplicitListId === list.id;
+        return listGroupIds.has(item.groupId);
+      });
+      if (listItems.length > 0) {
+        await saveItemsBatchToFirestore(list.id, listItems);
+      }
+    }
+    return true;
+  } catch (err) {
+    console.error('Error syncing local lists to Firestore on Pro upgrade:', err);
+    return false;
+  }
+}
+
 // 13. Fetch User Cloud Data (Single-shot)
 export async function fetchUserCloudData(userId: string): Promise<UserCloudData | null> {
   try {

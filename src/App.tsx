@@ -129,6 +129,8 @@ import {
   deleteItemsFromFirestore,
   deleteGroupFromFirestore,
   deleteListFromFirestore,
+  unshareUserListsOnSubscriptionCancel,
+  syncAllLocalListsToFirestoreOnProUpgrade,
 } from './utils/firestoreSync';
 import { Plus, ListTodo, Layers, Users, Check, Pencil } from 'lucide-react';
 import { IconRenderer } from './components/IconRenderer';
@@ -248,6 +250,10 @@ export default function App() {
     loadStoredGroupOrders()
   );
   const [items, setItems] = useState<ListItem[]>(() => loadStoredItems());
+  const groupsRef = React.useRef(groups);
+  groupsRef.current = groups;
+  const itemsRef = React.useRef(items);
+  itemsRef.current = items;
 
   // 2. Filters & Search State (Scoped per List)
   const [listFilters, setListFilters] = useState<Record<string, FilterState>>(() => {
@@ -991,8 +997,144 @@ export default function App() {
     []
   );
 
+  const handleUnshareListsOnSubscriptionCancel = useCallback(
+    async (currentUserId: string) => {
+      // 1. Identify shared lists owned by user
+      const listsToUnshare = listsRef.current.filter((l) => {
+        const isOwner = !l.ownerId || l.ownerId === currentUserId || l.ownerId === 'local-user' || l.ownerId === 'guest';
+        if (!isOwner) return false;
+        return Boolean(
+          l.isShared ||
+          l.shareLinkEnabled ||
+          (l.invitedEmails && l.invitedEmails.length > 0) ||
+          (l.collaboratorUids && l.collaboratorUids.some((uid) => uid && uid !== currentUserId && uid !== 'guest' && uid !== 'local-user')) ||
+          (l.collaborators && Object.keys(l.collaborators).some((k) => k !== currentUserId))
+        );
+      });
+
+      if (listsToUnshare.length === 0) return;
+
+      const unsharedListIdSet = new Set(listsToUnshare.map((l) => l.id));
+
+      // 2. Unshare from cloud and notify collaborators in Firestore
+      try {
+        await unshareUserListsOnSubscriptionCancel(currentUserId, listsToUnshare);
+      } catch (err) {
+        console.warn('Error unsharing lists in Firestore:', err);
+      }
+
+      // 3. Mark lists unshared locally, reset collaboration settings, retain user as local owner
+      setLists((prevLists) => {
+        const updated = prevLists.map((l) => {
+          if (!unsharedListIdSet.has(l.id)) return l;
+          return {
+            ...l,
+            isShared: false,
+            shareLinkEnabled: false,
+            shareLinkToken: undefined,
+            invitedEmails: [],
+            collaboratorUids: [currentUserId],
+            collaborators: {
+              [currentUserId]: {
+                uid: currentUserId,
+                email: user?.email || l.ownerEmail || '',
+                displayName: user?.displayName || l.ownerName || 'You',
+                photoURL: user?.photoURL || '',
+                role: 'owner',
+                status: 'active',
+                joinedAt: l.createdAt || new Date().toISOString(),
+              },
+            },
+            removedCollaboratorUids: [],
+            myRole: 'owner' as const,
+            updatedAt: new Date().toISOString(),
+          };
+        });
+        saveStoredLists(updated, currentUserId);
+        return updated;
+      });
+
+      // 4. Retain all groups and items locally in storage
+      saveStoredGroups(groupsRef.current, currentUserId);
+      saveStoredItems(itemsRef.current, currentUserId);
+
+      // 5. Close share modal if open for an unshared list
+      setSelectedListForShare((curr) => {
+        if (curr && unsharedListIdSet.has(curr.id)) {
+          setIsShareModalOpen(false);
+          return null;
+        }
+        return curr;
+      });
+
+      showToast(
+        language === 'ar'
+          ? 'تم إلغاء الاشتراك. تم إلغاء مشاركة القوائم وحفظها محلياً فقط على جهازك'
+          : 'Subscription cancelled. Shared lists were unshared with other members and are now stored locally only on your device',
+        5000,
+        'info'
+      );
+    },
+    [user?.email, user?.displayName, user?.photoURL, language, showToast]
+  );
+
+  const handleSyncLocalListsOnProUpgrade = useCallback(
+    async (currentUserId: string) => {
+      // 1. Claim all local lists as owned by the upgraded user
+      setLists((prevLists) => {
+        const updated = prevLists.map((l) => {
+          const isMyList =
+            !l.ownerId ||
+            l.ownerId === currentUserId ||
+            l.ownerId === 'local-user' ||
+            l.ownerId === 'guest';
+          if (!isMyList) return l;
+          return {
+            ...l,
+            ownerId: currentUserId,
+            ownerEmail: user?.email || l.ownerEmail || '',
+            ownerName: user?.displayName || l.ownerName || 'User',
+            collaboratorUids: Array.from(
+              new Set([currentUserId, ...(l.collaboratorUids || []).filter((id) => id && id !== 'guest' && id !== 'local-user')])
+            ),
+            myRole: 'owner' as const,
+            updatedAt: new Date().toISOString(),
+          };
+        });
+        saveStoredLists(updated, currentUserId);
+        return updated;
+      });
+
+      // 2. Upload all local lists, groups, and items to Firestore
+      try {
+        setSyncStatus('syncing');
+        await syncAllLocalListsToFirestoreOnProUpgrade(
+          currentUserId,
+          listsRef.current,
+          groupsRef.current,
+          itemsRef.current
+        );
+        setSyncStatus('synced');
+        showToast(
+          language === 'ar'
+            ? 'تم حفظ ومزامنة جميع قوائمك المحلية مع السحابة بنجاح!'
+            : 'All your local lists have been saved and synced to the cloud successfully!',
+          4500,
+          'success'
+        );
+      } catch (err) {
+        console.warn('Error syncing local lists to Firestore on Pro upgrade:', err);
+        setSyncStatus('error');
+      }
+    },
+    [user?.email, user?.displayName, language, showToast]
+  );
+
   const handleUpdateSubscription = useCallback(
     async (newSub: UserSubscription) => {
+      const prevIsPro = isProUser(subscription);
+      const nextIsPro = isProUser(newSub);
+
       setSubscription(newSub);
       setLocalSubscription(newSub);
       if (user?.uid) {
@@ -1001,10 +1143,26 @@ export default function App() {
         } catch (err) {
           console.warn('Could not sync subscription to Firestore:', err);
         }
+
+        if (prevIsPro && !nextIsPro) {
+          await handleUnshareListsOnSubscriptionCancel(user.uid);
+        } else if (!prevIsPro && nextIsPro) {
+          await handleSyncLocalListsOnProUpgrade(user.uid);
+        }
       }
     },
-    [user?.uid]
+    [subscription, user?.uid, handleUnshareListsOnSubscriptionCancel, handleSyncLocalListsOnProUpgrade]
   );
+
+  const prevIsProRef = React.useRef(isPro);
+  useEffect(() => {
+    if (prevIsProRef.current && !isPro && user?.uid) {
+      handleUnshareListsOnSubscriptionCancel(user.uid);
+    } else if (!prevIsProRef.current && isPro && user?.uid) {
+      handleSyncLocalListsOnProUpgrade(user.uid);
+    }
+    prevIsProRef.current = isPro;
+  }, [isPro, user?.uid, handleUnshareListsOnSubscriptionCancel, handleSyncLocalListsOnProUpgrade]);
 
   // Switch Data & Preferences Context based on Auth User Login / Logout
   useEffect(() => {
@@ -1187,34 +1345,30 @@ export default function App() {
           const sanitizedCloudLists = incomingLists.filter((l) => !removedSharedListIds.has(l.id));
 
           let nextLists: AppList[] = [];
-          if (isPro) {
-            nextLists = sanitizedCloudLists;
-          } else {
-            // For Free users: retain local private lists, merge incoming shared cloud lists,
-            // and strictly exclude any list from which the member was removed
-            const localPrivateLists = listsRef.current.filter((l) => {
-              if (removedSharedListIds.has(l.id)) return false;
-              const isExternal = Boolean(
-                (l.ownerId && l.ownerId !== user.uid && l.ownerId !== 'guest' && l.ownerId !== 'local-user') ||
-                (l.myRole && l.myRole !== 'owner')
-              );
-              // External lists are only kept if present in cloud lists
-              if (isExternal) {
-                return cloudListIds.has(l.id);
-              }
-              // User's own local lists are preserved
-              return true;
-            });
+          const cloudMap = new Map(sanitizedCloudLists.map((l) => [l.id, l]));
 
-            const cloudMap = new Map(sanitizedCloudLists.map((l) => [l.id, l]));
-            const merged = localPrivateLists.map((l) => cloudMap.get(l.id) || l);
-            sanitizedCloudLists.forEach((cl) => {
-              if (!merged.some((m) => m.id === cl.id)) {
-                merged.push(cl);
-              }
-            });
-            nextLists = merged;
-          }
+          // Retain local lists, strictly excluding any external list from which the member was removed
+          const localPrivateLists = listsRef.current.filter((l) => {
+            if (removedSharedListIds.has(l.id)) return false;
+            const isExternal = Boolean(
+              (l.ownerId && l.ownerId !== user.uid && l.ownerId !== 'guest' && l.ownerId !== 'local-user') ||
+              (l.myRole && l.myRole !== 'owner')
+            );
+            // External lists are only kept if present in cloud lists
+            if (isExternal) {
+              return cloudListIds.has(l.id);
+            }
+            // User's own local lists are strictly preserved
+            return true;
+          });
+
+          const merged = localPrivateLists.map((l) => cloudMap.get(l.id) || l);
+          sanitizedCloudLists.forEach((cl) => {
+            if (!merged.some((m) => m.id === cl.id)) {
+              merged.push(cl);
+            }
+          });
+          nextLists = merged;
 
           // If no lists remain at all, restore default seed lists
           if (nextLists.length === 0) {
@@ -1229,67 +1383,43 @@ export default function App() {
           setGroups((prevGroups) => {
             const currentCollapsedMap = new Map(prevGroups.map((g) => [g.id, Boolean(g.isCollapsed)]));
             const localStoredCollapsed = new Set(loadStoredCollapsedGroups(user.uid));
+            const cloudGroupIds = new Set((cloudData.groups || []).map((g) => g.id));
 
-            let nextGroups: ListGroup[] = [];
-            if (isPro && cloudData.groups) {
-              nextGroups = cloudData.groups
-                .filter((cg) => {
-                  if (cg.listId && removedSharedListIds.has(cg.listId)) return false;
-                  return true;
-                })
-                .map((cg) => ({
-                  ...cg,
-                  isCollapsed: currentCollapsedMap.has(cg.id)
-                    ? Boolean(currentCollapsedMap.get(cg.id))
-                    : localStoredCollapsed.has(cg.id),
-                }));
-            } else {
-              const cloudGroupIds = new Set((cloudData.groups || []).map((g) => g.id));
-              // Retain local groups for valid lists only
-              const localGroups = prevGroups.filter((g) => {
-                if (g.listId && removedSharedListIds.has(g.listId)) return false;
-                if (g.listId && !nextLists.some((l) => l.id === g.listId)) return false;
-                return !cloudGroupIds.has(g.id);
-              });
-              const syncedCloudGroups = (cloudData.groups || [])
-                .filter((cg) => !cg.listId || (!removedSharedListIds.has(cg.listId) && nextLists.some((l) => l.id === cg.listId)))
-                .map((cg) => ({
-                  ...cg,
-                  isCollapsed: currentCollapsedMap.has(cg.id)
-                    ? Boolean(currentCollapsedMap.get(cg.id))
-                    : localStoredCollapsed.has(cg.id),
-                }));
-              nextGroups = [...localGroups, ...syncedCloudGroups];
-            }
+            // Retain local groups for valid lists only
+            const localGroups = prevGroups.filter((g) => {
+              if (g.listId && removedSharedListIds.has(g.listId)) return false;
+              if (g.listId && !nextLists.some((l) => l.id === g.listId)) return false;
+              return !cloudGroupIds.has(g.id);
+            });
+            const syncedCloudGroups = (cloudData.groups || [])
+              .filter((cg) => !cg.listId || (!removedSharedListIds.has(cg.listId) && nextLists.some((l) => l.id === cg.listId)))
+              .map((cg) => ({
+                ...cg,
+                isCollapsed: currentCollapsedMap.has(cg.id)
+                  ? Boolean(currentCollapsedMap.get(cg.id))
+                  : localStoredCollapsed.has(cg.id),
+              }));
+            const nextGroups = [...localGroups, ...syncedCloudGroups];
             saveStoredGroups(nextGroups, user.uid);
             return nextGroups;
           });
 
           // Synchronize and filter items: completely discard items belonging to removed lists
           setItems((prevItems) => {
-            let nextItems: ListItem[] = [];
-            if (isPro && cloudData.items) {
-              nextItems = cloudData.items.filter((i) => {
-                const itemExplicitListId = (i as unknown as { listId?: string }).listId;
-                if (itemExplicitListId && removedSharedListIds.has(itemExplicitListId)) return false;
-                return true;
-              });
-            } else {
-              const cloudItemIds = new Set((cloudData.items || []).map((i) => i.id));
-              const localItems = prevItems.filter((i) => {
-                const itemExplicitListId = (i as unknown as { listId?: string }).listId;
-                if (itemExplicitListId && (removedSharedListIds.has(itemExplicitListId) || !nextLists.some((l) => l.id === itemExplicitListId))) {
-                  return false;
-                }
-                return !cloudItemIds.has(i.id);
-              });
-              const validCloudItems = (cloudData.items || []).filter((i) => {
-                const itemExplicitListId = (i as unknown as { listId?: string }).listId;
-                if (itemExplicitListId && removedSharedListIds.has(itemExplicitListId)) return false;
-                return true;
-              });
-              nextItems = [...localItems, ...validCloudItems];
-            }
+            const cloudItemIds = new Set((cloudData.items || []).map((i) => i.id));
+            const localItems = prevItems.filter((i) => {
+              const itemExplicitListId = (i as unknown as { listId?: string }).listId;
+              if (itemExplicitListId && (removedSharedListIds.has(itemExplicitListId) || !nextLists.some((l) => l.id === itemExplicitListId))) {
+                return false;
+              }
+              return !cloudItemIds.has(i.id);
+            });
+            const validCloudItems = (cloudData.items || []).filter((i) => {
+              const itemExplicitListId = (i as unknown as { listId?: string }).listId;
+              if (itemExplicitListId && removedSharedListIds.has(itemExplicitListId)) return false;
+              return true;
+            });
+            const nextItems = [...localItems, ...validCloudItems];
             saveStoredItems(nextItems, user.uid);
             return nextItems;
           });

@@ -2,7 +2,6 @@ import React from 'react';
 import {
   Menu,
   Settings,
-  Sparkles,
 } from 'lucide-react';
 import { Language, Theme, SyncStatus, UserSubscription } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -107,17 +106,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right: Actions */}
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-            {!isPro && onOpenUpgradeModal && (
-              <button
-                type="button"
-                onClick={onOpenUpgradeModal}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-2xs hover:shadow-xs transition-all cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>{language === 'ar' ? 'الترقية لبرو' : 'Upgrade to Pro'}</span>
-              </button>
-            )}
-
             {onOpenSettings && (
               <button
                 id="nav-settings-btn"
