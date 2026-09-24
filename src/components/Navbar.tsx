@@ -2,11 +2,13 @@ import React from 'react';
 import {
   Menu,
   Settings,
+  Sparkles,
 } from 'lucide-react';
-import { Language, Theme, SyncStatus } from '../types';
+import { Language, Theme, SyncStatus, UserSubscription } from '../types';
 import { getTranslation } from '../locales/translations';
 import { User } from 'firebase/auth';
 import { AppLogo } from './AppLogo';
+import { isProUser } from '../utils/subscription';
 
 interface NavbarProps {
   language: Language;
@@ -30,6 +32,8 @@ interface NavbarProps {
   user?: User | null;
   onOpenAuthModal?: () => void;
   onSignOut?: () => void;
+  subscription?: UserSubscription;
+  onOpenUpgradeModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -54,8 +58,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   user,
   onOpenAuthModal,
   onSignOut,
+  subscription,
+  onOpenUpgradeModal,
 }) => {
   const t = getTranslation(language);
+  const isPro = isProUser(subscription);
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-neutral-200/80 dark:border-neutral-800/80 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md transition-colors duration-200 pt-[env(safe-area-inset-top,0px)]">
@@ -85,16 +92,32 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="w-9.5 h-9.5 sm:w-10.5 sm:h-10.5 rounded-xl bg-emerald-50 dark:bg-neutral-900 flex items-center justify-center border border-emerald-200/90 dark:border-neutral-800 shadow-2xs group-hover:scale-105 group-hover:border-emerald-300 dark:group-hover:border-neutral-700 transition-all shrink-0 p-1.5">
                 <AppLogo className="w-full h-full" />
               </div>
-              <div className="min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
                 <span className="font-bold text-base sm:text-lg tracking-tight text-neutral-900 dark:text-neutral-50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors block truncate">
                   {t.appName}
                 </span>
+                {isPro && (
+                  <span className="px-1.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[9px] font-extrabold tracking-wider shrink-0">
+                    PRO
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Right: Settings Action */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          {/* Right: Actions */}
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            {!isPro && onOpenUpgradeModal && (
+              <button
+                type="button"
+                onClick={onOpenUpgradeModal}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-2xs hover:shadow-xs transition-all cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>{language === 'ar' ? 'الترقية لبرو' : 'Upgrade to Pro'}</span>
+              </button>
+            )}
+
             {onOpenSettings && (
               <button
                 id="nav-settings-btn"

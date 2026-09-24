@@ -65,6 +65,7 @@ import {
   getLocalizedTemplate,
   TemplateKey,
   SEED_TEMPLATES,
+  SEED_LISTS,
 } from './utils/storage';
 import { getTranslation } from './locales/translations';
 import { sounds } from './utils/audio';
@@ -87,10 +88,19 @@ import { AuthModal } from './components/AuthModal';
 import { ShareListModal } from './components/ShareListModal';
 import { JoinListModal } from './components/JoinListModal';
 import { OnboardingModal } from './components/OnboardingModal';
+import { SubscriptionModal } from './components/SubscriptionModal';
 import { ToastContainer } from './components/Toast';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import { useAuth } from './hooks/useAuth';
+import { WorkspaceBackupData } from './lib/googleDrive';
+import { UserSubscription } from './types';
 import {
+  getLocalSubscription,
+  setLocalSubscription,
+  isProUser,
+} from './utils/subscription';
+import {
+  saveUserSubscription,
   fetchUserCloudData,
   fetchUserProfilePreferences,
   subscribeToUserCloudData,
@@ -149,6 +159,33 @@ export default function App() {
     clearError: clearAuthError,
   } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [subscription, setSubscription] = useState<UserSubscription>(getLocalSubscription);
+  const isPro = isProUser(subscription);
+
+  const [lists, setLists] = useState<AppList[]>(() => loadStoredLists());
+  const [activeListId, setActiveListId] = useState<string>(() => loadActiveListId(lists));
+
+  const listsRef = React.useRef(lists);
+  listsRef.current = lists;
+  const activeListIdRef = React.useRef(activeListId);
+  activeListIdRef.current = activeListId;
+
+  // Checks whether a list should sync to Firestore:
+  // - Pro users sync all lists to cloud
+  // - Free users sync shared lists they participate in
+  const canSyncTargetList = (targetListId?: string): boolean => {
+    if (!user) return false;
+    if (isPro) return true;
+    const targetId = targetListId || activeListIdRef.current;
+    const target = listsRef.current.find((l) => l.id === targetId);
+    if (!target) return false;
+    return Boolean(
+      target.isShared ||
+      (target.collaboratorUids && target.collaboratorUids.length > 1) ||
+      (target.ownerId && target.ownerId !== user.uid)
+    );
+  };
+
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const prevUserRef = React.useRef<string | null | undefined>(undefined);
   const currentActiveUserIdRef = React.useRef<string | null | undefined>(undefined);
@@ -164,7 +201,7 @@ export default function App() {
     fields: Partial<ListItem>,
     delayMs = 500
   ) => {
-    if (!user) return;
+    if (!canSyncTargetList(listId)) return;
     const existingTimer = debouncedItemUpdatesRef.current.get(itemId);
     if (existingTimer) {
       clearTimeout(existingTimer);
@@ -177,6 +214,11 @@ export default function App() {
       } catch (err) {
         if (isQuotaExceededError(err)) {
           setSyncStatus('quota-exceeded');
+        } else if (
+          (err as { code?: string })?.code === 'permission-denied' ||
+          String(err).includes('insufficient permissions')
+        ) {
+          setSyncStatus('synced');
         } else {
           setSyncStatus('error');
         }
@@ -185,8 +227,6 @@ export default function App() {
     debouncedItemUpdatesRef.current.set(itemId, timer);
   };
 
-  const [lists, setLists] = useState<AppList[]>(() => loadStoredLists());
-  const [activeListId, setActiveListId] = useState<string>(() => loadActiveListId(lists));
   const [currentView, setCurrentView] = useState<AppView>('workspace');
 
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => {
@@ -298,6 +338,7 @@ export default function App() {
   const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
 
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
 
   const [confirmModalState, setConfirmModalState] = useState<{
     isOpen: boolean;
@@ -887,9 +928,14 @@ export default function App() {
         activeListId?: string;
         onboardingSeen?: boolean;
         userGroupOrders?: Record<string, string[]>;
+        subscription?: UserSubscription;
       },
       uid?: string | null
     ) => {
+      if (prefs.subscription) {
+        setSubscription(prefs.subscription);
+        setLocalSubscription(prefs.subscription);
+      }
       if (prefs.language && (prefs.language === 'en' || prefs.language === 'ar')) {
         setLanguage(prefs.language);
         saveStoredLanguage(prefs.language, uid);
@@ -943,6 +989,21 @@ export default function App() {
       }
     },
     []
+  );
+
+  const handleUpdateSubscription = useCallback(
+    async (newSub: UserSubscription) => {
+      setSubscription(newSub);
+      setLocalSubscription(newSub);
+      if (user?.uid) {
+        try {
+          await saveUserSubscription(user.uid, newSub);
+        } catch (err) {
+          console.warn('Could not sync subscription to Firestore:', err);
+        }
+      }
+    },
+    [user?.uid]
   );
 
   // Switch Data & Preferences Context based on Auth User Login / Logout
@@ -1075,9 +1136,10 @@ export default function App() {
     }
   }, [authLoading, user?.uid, showToast, t.logoutSuccess, applyUserPreferences]);
 
-  // Auth User Cloud Sync & Real-Time Multi-Device / Multi-Browser Subscription
+  // Auth User Cloud Sync & Real-Time Multi-Device / Shared List Subscription
   useEffect(() => {
     if (!user?.uid || authLoading) {
+      setSyncStatus('idle');
       return;
     }
 
@@ -1087,45 +1149,195 @@ export default function App() {
     const subscription = subscribeToUserCloudData(
       user.uid,
       (cloudData) => {
-        if (cloudData.lists && cloudData.lists.length > 0) {
-          isRemoteSyncRef.current = true;
-          setLists(cloudData.lists);
-          saveStoredLists(cloudData.lists, user.uid);
-          if (cloudData.groups) {
-            setGroups((prevGroups) => {
-              const currentCollapsedMap = new Map(prevGroups.map((g) => [g.id, Boolean(g.isCollapsed)]));
-              const localStoredCollapsed = new Set(loadStoredCollapsedGroups(user.uid));
+        if (cloudData.pendingInvitations) {
+          setPendingInvitations(cloudData.pendingInvitations);
+        }
 
-              const syncedGroups = cloudData.groups.map((cg) => {
-                const isCollapsed = currentCollapsedMap.has(cg.id)
-                  ? Boolean(currentCollapsedMap.get(cg.id))
-                  : localStoredCollapsed.has(cg.id);
-                return {
+        if (cloudData.lists !== undefined) {
+          isRemoteSyncRef.current = true;
+          const incomingLists = cloudData.lists || [];
+          const cloudListIds = new Set(incomingLists.map((l) => l.id));
+
+          // Detect any shared list that was present locally, but the current user has been removed from
+          // (or the list was deleted / unshared)
+          const removedSharedListIds = new Set<string>();
+          listsRef.current.forEach((localList) => {
+            const isExplicitlyRemoved = Boolean(
+              localList.removedCollaboratorUids && localList.removedCollaboratorUids.includes(user.uid)
+            );
+            const isExternalShared = Boolean(
+              (localList.ownerId && localList.ownerId !== user.uid && localList.ownerId !== 'guest' && localList.ownerId !== 'local-user') ||
+              (localList.myRole && localList.myRole !== 'owner') ||
+              (localList.isShared && localList.ownerId && localList.ownerId !== user.uid)
+            );
+
+            if (isExplicitlyRemoved || (isExternalShared && !cloudListIds.has(localList.id))) {
+              removedSharedListIds.add(localList.id);
+            }
+          });
+
+          // Check if any incoming list has the user in removedCollaboratorUids
+          incomingLists.forEach((cl) => {
+            if (cl.removedCollaboratorUids && cl.removedCollaboratorUids.includes(user.uid)) {
+              removedSharedListIds.add(cl.id);
+            }
+          });
+
+          // Filter out removed lists from incoming lists
+          const sanitizedCloudLists = incomingLists.filter((l) => !removedSharedListIds.has(l.id));
+
+          let nextLists: AppList[] = [];
+          if (isPro) {
+            nextLists = sanitizedCloudLists;
+          } else {
+            // For Free users: retain local private lists, merge incoming shared cloud lists,
+            // and strictly exclude any list from which the member was removed
+            const localPrivateLists = listsRef.current.filter((l) => {
+              if (removedSharedListIds.has(l.id)) return false;
+              const isExternal = Boolean(
+                (l.ownerId && l.ownerId !== user.uid && l.ownerId !== 'guest' && l.ownerId !== 'local-user') ||
+                (l.myRole && l.myRole !== 'owner')
+              );
+              // External lists are only kept if present in cloud lists
+              if (isExternal) {
+                return cloudListIds.has(l.id);
+              }
+              // User's own local lists are preserved
+              return true;
+            });
+
+            const cloudMap = new Map(sanitizedCloudLists.map((l) => [l.id, l]));
+            const merged = localPrivateLists.map((l) => cloudMap.get(l.id) || l);
+            sanitizedCloudLists.forEach((cl) => {
+              if (!merged.some((m) => m.id === cl.id)) {
+                merged.push(cl);
+              }
+            });
+            nextLists = merged;
+          }
+
+          // If no lists remain at all, restore default seed lists
+          if (nextLists.length === 0) {
+            const seed = SEED_LISTS[language] || SEED_LISTS.en;
+            nextLists = seed;
+          }
+
+          setLists(nextLists);
+          saveStoredLists(nextLists, user.uid);
+
+          // Synchronize and filter groups: completely discard groups belonging to removed lists
+          setGroups((prevGroups) => {
+            const currentCollapsedMap = new Map(prevGroups.map((g) => [g.id, Boolean(g.isCollapsed)]));
+            const localStoredCollapsed = new Set(loadStoredCollapsedGroups(user.uid));
+
+            let nextGroups: ListGroup[] = [];
+            if (isPro && cloudData.groups) {
+              nextGroups = cloudData.groups
+                .filter((cg) => {
+                  if (cg.listId && removedSharedListIds.has(cg.listId)) return false;
+                  return true;
+                })
+                .map((cg) => ({
                   ...cg,
-                  isCollapsed,
-                };
+                  isCollapsed: currentCollapsedMap.has(cg.id)
+                    ? Boolean(currentCollapsedMap.get(cg.id))
+                    : localStoredCollapsed.has(cg.id),
+                }));
+            } else {
+              const cloudGroupIds = new Set((cloudData.groups || []).map((g) => g.id));
+              // Retain local groups for valid lists only
+              const localGroups = prevGroups.filter((g) => {
+                if (g.listId && removedSharedListIds.has(g.listId)) return false;
+                if (g.listId && !nextLists.some((l) => l.id === g.listId)) return false;
+                return !cloudGroupIds.has(g.id);
               });
-              saveStoredGroups(syncedGroups, user.uid);
-              return syncedGroups;
+              const syncedCloudGroups = (cloudData.groups || [])
+                .filter((cg) => !cg.listId || (!removedSharedListIds.has(cg.listId) && nextLists.some((l) => l.id === cg.listId)))
+                .map((cg) => ({
+                  ...cg,
+                  isCollapsed: currentCollapsedMap.has(cg.id)
+                    ? Boolean(currentCollapsedMap.get(cg.id))
+                    : localStoredCollapsed.has(cg.id),
+                }));
+              nextGroups = [...localGroups, ...syncedCloudGroups];
+            }
+            saveStoredGroups(nextGroups, user.uid);
+            return nextGroups;
+          });
+
+          // Synchronize and filter items: completely discard items belonging to removed lists
+          setItems((prevItems) => {
+            let nextItems: ListItem[] = [];
+            if (isPro && cloudData.items) {
+              nextItems = cloudData.items.filter((i) => {
+                const itemExplicitListId = (i as unknown as { listId?: string }).listId;
+                if (itemExplicitListId && removedSharedListIds.has(itemExplicitListId)) return false;
+                return true;
+              });
+            } else {
+              const cloudItemIds = new Set((cloudData.items || []).map((i) => i.id));
+              const localItems = prevItems.filter((i) => {
+                const itemExplicitListId = (i as unknown as { listId?: string }).listId;
+                if (itemExplicitListId && (removedSharedListIds.has(itemExplicitListId) || !nextLists.some((l) => l.id === itemExplicitListId))) {
+                  return false;
+                }
+                return !cloudItemIds.has(i.id);
+              });
+              const validCloudItems = (cloudData.items || []).filter((i) => {
+                const itemExplicitListId = (i as unknown as { listId?: string }).listId;
+                if (itemExplicitListId && removedSharedListIds.has(itemExplicitListId)) return false;
+                return true;
+              });
+              nextItems = [...localItems, ...validCloudItems];
+            }
+            saveStoredItems(nextItems, user.uid);
+            return nextItems;
+          });
+
+          // Handle active list and share modal if active list was removed
+          if (removedSharedListIds.size > 0) {
+            setActiveListId((curr) => {
+              if (removedSharedListIds.has(curr) || !nextLists.some((l) => l.id === curr)) {
+                const validId = nextLists[0]?.id || 'list-groceries';
+                saveActiveListId(validId, user.uid);
+                return validId;
+              }
+              return curr;
+            });
+
+            setSelectedListForShare((curr) => {
+              if (curr && (removedSharedListIds.has(curr.id) || !nextLists.some((l) => l.id === curr.id))) {
+                setIsShareModalOpen(false);
+                return null;
+              }
+              return curr ? nextLists.find((l) => l.id === curr.id) || null : null;
+            });
+
+            showToast(
+              language === 'ar'
+                ? 'تمت إزالتك من قائمة مشتركة وحذفها من مساحة عملك'
+                : 'You were removed from a shared list and it has been removed from your workspace',
+              undefined,
+              'info'
+            );
+          } else {
+            // Keep selectedListForShare synchronized with incoming cloud updates
+            setSelectedListForShare((curr) =>
+              curr ? nextLists.find((l) => l.id === curr.id) || null : null
+            );
+
+            // Ensure activeListId points to a valid list
+            setActiveListId((curr) => {
+              const listExists = nextLists.some((l) => l.id === curr);
+              const validId = listExists ? curr : nextLists[0]?.id || curr;
+              saveActiveListId(validId, user.uid);
+              return validId;
             });
           }
-          if (cloudData.items) {
-            setItems(cloudData.items);
-            saveStoredItems(cloudData.items, user.uid);
-          }
-
-          // Keep selectedListForShare synchronized with incoming cloud updates
-          setSelectedListForShare((curr) =>
-            curr ? cloudData.lists.find((l) => l.id === curr.id) || null : null
-          );
 
           // Apply cloud preferences from Firestore on initial cloud load ONLY
           if (cloudData.preferences && isInitialCloudLoadRef.current) {
             applyUserPreferences(cloudData.preferences, user.uid);
-          }
-
-          if (cloudData.pendingInvitations) {
-            setPendingInvitations(cloudData.pendingInvitations);
           }
 
           if (isInitialCloudLoadRef.current) {
@@ -1133,32 +1345,26 @@ export default function App() {
             isInitialCloudLoadRef.current = false;
           }
 
-          // Ensure activeListId points to a valid list
-          setActiveListId((curr) => {
-            const listExists = cloudData.lists.some((l) => l.id === curr);
-            const validId = listExists ? curr : cloudData.lists[0]?.id || curr;
-            saveActiveListId(validId, user.uid);
-            return validId;
-          });
-
           setSyncStatus('synced');
         } else if (isInitialCloudLoadRef.current) {
-          // New user initial database seed with user's local items - executes at most once
           isInitialCloudLoadRef.current = false;
-          const currentLocalLists = loadStoredLists(user.uid);
-          const currentLocalGroups = loadStoredGroups(user.uid);
-          const currentLocalItems = loadStoredItems(user.uid);
+          // Seed cloud only if user is Pro
+          if (isPro) {
+            const currentLocalLists = loadStoredLists(user.uid);
+            const currentLocalGroups = loadStoredGroups(user.uid);
+            const currentLocalItems = loadStoredItems(user.uid);
 
-          if (currentLocalLists.length > 0) {
-            syncAllToFirestore(user.uid, currentLocalLists, currentLocalGroups, currentLocalItems);
-            syncUserProfile(user, {
-              language,
-              theme,
-              themeColor,
-              soundEnabled,
-              gridColumns,
-              activeListId,
-            });
+            if (currentLocalLists.length > 0) {
+              syncAllToFirestore(user.uid, currentLocalLists, currentLocalGroups, currentLocalItems);
+              syncUserProfile(user, {
+                language,
+                theme,
+                themeColor,
+                soundEnabled,
+                gridColumns,
+                activeListId,
+              });
+            }
           }
           showToast(t.loginSuccess, undefined, 'success');
           setSyncStatus('synced');
@@ -1168,6 +1374,12 @@ export default function App() {
         if (isQuotaExceededError(err)) {
           console.warn('Real-time subscription quota exceeded. Seamlessly operating in offline local mode.');
           setSyncStatus('quota-exceeded');
+        } else if (
+          (err as { code?: string })?.code === 'permission-denied' ||
+          String(err).includes('insufficient permissions')
+        ) {
+          console.warn('Firestore subscription permissions pending or updating. Using local offline mode.');
+          setSyncStatus('offline');
         } else {
           console.error('Real-time subscription error:', err);
           setSyncStatus('error');
@@ -1186,7 +1398,7 @@ export default function App() {
       subscription();
       cloudSubscriptionRef.current = null;
     };
-  }, [user?.uid, authLoading, showToast, t.loginSuccess, applyUserPreferences]);
+  }, [user?.uid, authLoading, isPro, showToast, t.loginSuccess, applyUserPreferences]);
 
   // Active-List optimization: dynamically switch real-time listener when user selects another list
   useEffect(() => {
@@ -1602,7 +1814,7 @@ export default function App() {
       setLists((prev) =>
         prev.map((l) => (l.id === selectedListForEdit.id ? updatedList : l))
       );
-      if (user) {
+      if (canSyncTargetList(updatedList.id)) {
         saveListToFirestore(updatedList, user.uid);
       }
       showToast(t.listUpdated);
@@ -1638,7 +1850,7 @@ export default function App() {
       };
       setLists((prev) => [...prev, newList]);
       setActiveListId(newListId);
-      if (user) {
+      if (canSyncTargetList(newList.id)) {
         saveListToFirestore(newList, user.uid);
       }
       showToast(t.listCreated);
@@ -1690,7 +1902,7 @@ export default function App() {
 
         showToast(t.listDeleted);
 
-        if (user) {
+        if (canSyncTargetList(listToDelete.id)) {
           try {
             await deleteListFromFirestore(listToDelete.id, user);
           } catch (err) {
@@ -1707,6 +1919,17 @@ export default function App() {
     if (!target) return;
     if (!user) {
       setIsAuthModalOpen(true);
+      return;
+    }
+    if (!isProUser(subscription)) {
+      setIsSubscriptionModalOpen(true);
+      showToast(
+        language === 'ar'
+          ? 'مشاركة القوائم والتعاون المباشر تتطلب الاشتراك في باقة برو'
+          : 'List sharing & live collaboration require List Flow Pro subscription',
+        4000,
+        'info'
+      );
       return;
     }
     setSelectedListForShare(target);
@@ -1832,11 +2055,37 @@ export default function App() {
         try {
           const ok = await leaveSharedList(listToLeave.id, user.uid);
           if (ok) {
-            setLists((prev) => prev.filter((l) => l.id !== listToLeave.id));
+            const remaining = lists.filter((l) => l.id !== listToLeave.id);
+            const nextLists = remaining.length > 0 ? remaining : (SEED_LISTS[language] || SEED_LISTS.en);
+            setLists(nextLists);
+            saveStoredLists(nextLists, user.uid);
+
+            setGroups((prev) => {
+              const updated = prev.filter((g) => g.listId !== listToLeave.id);
+              saveStoredGroups(updated, user.uid);
+              return updated;
+            });
+
+            setItems((prev) => {
+              const updated = prev.filter((i) => {
+                const itemLid = (i as unknown as { listId?: string }).listId;
+                return itemLid !== listToLeave.id;
+              });
+              saveStoredItems(updated, user.uid);
+              return updated;
+            });
+
             if (activeListId === listToLeave.id) {
-              const remaining = lists.filter((l) => l.id !== listToLeave.id);
-              setActiveListId(remaining[0]?.id || '');
+              const validId = nextLists[0]?.id || 'list-groceries';
+              setActiveListId(validId);
+              saveActiveListId(validId, user.uid);
             }
+
+            if (selectedListForShare?.id === listToLeave.id) {
+              setIsShareModalOpen(false);
+              setSelectedListForShare(null);
+            }
+
             showToast(
               language === 'ar'
                 ? 'تمت مغادرة القائمة المشتركة بنجاح'
@@ -1980,7 +2229,7 @@ export default function App() {
     }
     setActiveListId(newListId);
 
-    if (user) {
+    if (canSyncTargetList(duplicatedList.id)) {
       saveListToFirestore(duplicatedList, user.uid);
       saveGroupsBatchToFirestore(newListId, newGroups);
       saveItemsBatchToFirestore(newListId, newItems);
@@ -2004,7 +2253,7 @@ export default function App() {
           g.id === groupData.id ? updatedGroup : g
         )
       );
-      if (user) {
+      if (canSyncTargetList(updatedGroup.listId || activeListId)) {
         saveGroupToFirestore(updatedGroup.listId || activeListId, updatedGroup);
       }
     } else {
@@ -2032,7 +2281,7 @@ export default function App() {
         }
         return updated;
       });
-      if (user) {
+      if (canSyncTargetList(activeListId)) {
         saveGroupToFirestore(activeListId, newGroup);
       }
     }
@@ -2075,7 +2324,7 @@ export default function App() {
       return updated;
     });
 
-    if (user) {
+    if (canSyncTargetList(groupToDup.listId || activeListId)) {
       saveGroupToFirestore(groupToDup.listId || activeListId, newGroup);
       saveItemsBatchToFirestore(groupToDup.listId || activeListId, newItems);
     }
@@ -2110,7 +2359,7 @@ export default function App() {
           return updated;
         });
 
-        if (user) {
+        if (canSyncTargetList(targetListId)) {
           try {
             await deleteGroupFromFirestore(targetListId, groupId, itemIdsToDelete);
           } catch (err) {
@@ -2122,7 +2371,7 @@ export default function App() {
         showToast(t.groupDeleted, () => {
           setGroups((prev) => [...prev, groupToDelete]);
           setItems((prev) => [...prev, ...itemsToDelete]);
-          if (user) {
+          if (canSyncTargetList(targetListId)) {
             saveGroupToFirestore(targetListId, groupToDelete);
             saveItemsBatchToFirestore(targetListId, itemsToDelete);
           }
@@ -2346,9 +2595,9 @@ export default function App() {
       return updated;
     });
 
-    if (user) {
-      const parentGroup = groups.find((g) => g.id === groupId);
-      const targetListId = parentGroup?.listId || activeListId || 'list-groceries';
+    const parentGroup = groups.find((g) => g.id === groupId);
+    const targetListId = parentGroup?.listId || activeListId || 'list-groceries';
+    if (canSyncTargetList(targetListId)) {
       saveItemToFirestore(targetListId, newItem);
     }
   };
@@ -2362,9 +2611,9 @@ export default function App() {
       setItems((prev) =>
         prev.map((item) => (item.id === itemData.id ? updatedItem : item))
       );
-      if (user) {
-        const parentGroup = groups.find((g) => g.id === updatedItem.groupId);
-        const targetListId = (updatedItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+      const parentGroup = groups.find((g) => g.id === updatedItem.groupId);
+      const targetListId = (updatedItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+      if (canSyncTargetList(targetListId)) {
         saveItemToFirestore(targetListId, updatedItem);
       }
     } else {
@@ -2405,9 +2654,9 @@ export default function App() {
         return updated;
       });
 
-      if (user) {
-        const parentGroup = groups.find((g) => g.id === targetGroupId);
-        const targetListId = parentGroup?.listId || activeListId || 'list-groceries';
+      const parentGroup = groups.find((g) => g.id === targetGroupId);
+      const targetListId = parentGroup?.listId || activeListId || 'list-groceries';
+      if (canSyncTargetList(targetListId)) {
         saveItemToFirestore(targetListId, newItem);
       }
     }
@@ -2424,9 +2673,9 @@ export default function App() {
     };
     setItems((prev) => prev.map((item) => (item.id === itemId ? updated : item)));
 
-    if (user) {
-      const parentGroup = groups.find((g) => g.id === targetItem.groupId);
-      const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+    const parentGroup = groups.find((g) => g.id === targetItem.groupId);
+    const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+    if (canSyncTargetList(targetListId)) {
       updateItemFieldsInFirestore(targetListId, itemId, {
         completed: nextCompleted,
         completedAt: nextCompleted ? new Date().toISOString() : undefined,
@@ -2462,9 +2711,9 @@ export default function App() {
     setItems((prev) =>
       prev.map((item) => (item.id === itemId ? { ...item, quantity: nextQty } : item))
     );
-    if (user) {
-      const parentGroup = groups.find((g) => g.id === targetItem.groupId);
-      const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+    const parentGroup = groups.find((g) => g.id === targetItem.groupId);
+    const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+    if (canSyncTargetList(targetListId)) {
       queueDebouncedItemFieldUpdate(targetListId, itemId, { quantity: nextQty }, 500);
     }
   };
@@ -2475,9 +2724,9 @@ export default function App() {
     setItems((prev) =>
       prev.map((i) => (i.id === itemId ? { ...i, title: newTitle } : i))
     );
-    if (user) {
-      const parentGroup = groups.find((g) => g.id === targetItem.groupId);
-      const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+    const parentGroup = groups.find((g) => g.id === targetItem.groupId);
+    const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+    if (canSyncTargetList(targetListId)) {
       queueDebouncedItemFieldUpdate(targetListId, itemId, { title: newTitle }, 600);
     }
   };
@@ -2490,9 +2739,9 @@ export default function App() {
     setItems((prev) =>
       prev.map((i) => (i.id === itemId ? { ...i, isPinned: nextPinned } : i))
     );
-    if (user) {
-      const parentGroup = groups.find((g) => g.id === targetItem.groupId);
-      const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+    const parentGroup = groups.find((g) => g.id === targetItem.groupId);
+    const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+    if (canSyncTargetList(targetListId)) {
       updateItemFieldsInFirestore(targetListId, itemId, { isPinned: nextPinned });
     }
   };
@@ -2505,9 +2754,9 @@ export default function App() {
     setItems((prev) =>
       prev.map((i) => (i.id === itemId ? { ...i, isHighlighted: nextHighlighted } : i))
     );
-    if (user) {
-      const parentGroup = groups.find((g) => g.id === targetItem.groupId);
-      const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+    const parentGroup = groups.find((g) => g.id === targetItem.groupId);
+    const targetListId = (targetItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+    if (canSyncTargetList(targetListId)) {
       updateItemFieldsInFirestore(targetListId, itemId, { isHighlighted: nextHighlighted });
     }
   };
@@ -2524,9 +2773,9 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
     setItems((prev) => [newItem, ...prev]);
-    if (user) {
-      const parentGroup = groups.find((g) => g.id === newItem.groupId);
-      const targetListId = (newItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+    const parentGroup = groups.find((g) => g.id === newItem.groupId);
+    const targetListId = (newItem as unknown as { listId?: string }).listId || parentGroup?.listId || activeListId || 'list-groceries';
+    if (canSyncTargetList(targetListId)) {
       saveItemToFirestore(targetListId, newItem);
     }
     showToast(language === 'ar' ? 'تم نسخ الصنف' : 'Item duplicated');
@@ -2537,9 +2786,9 @@ export default function App() {
     setItems((prev) =>
       prev.map((i) => (i.id === itemId ? { ...i, groupId: targetGroupId } : i))
     );
-    if (user) {
-      const parentGroup = groups.find((g) => g.id === targetGroupId);
-      const targetListId = parentGroup?.listId || activeListId || 'list-groceries';
+    const parentGroup = groups.find((g) => g.id === targetGroupId);
+    const targetListId = parentGroup?.listId || activeListId || 'list-groceries';
+    if (canSyncTargetList(targetListId)) {
       updateItemFieldsInFirestore(targetListId, itemId, { groupId: targetGroupId });
     }
     showToast(language === 'ar' ? 'تم نقل الصنف إلى الممر' : 'Item moved to aisle');
@@ -2556,7 +2805,7 @@ export default function App() {
     sounds.playDelete();
     setItems((prev) => prev.filter((i) => i.id !== itemId));
 
-    if (user) {
+    if (canSyncTargetList(targetListId)) {
       try {
         await deleteItemFromFirestore(targetListId, itemId);
       } catch (err) {
@@ -2567,7 +2816,7 @@ export default function App() {
     // Instant undo toast
     showToast(t.taskDeleted, () => {
       setItems((prev) => [itemToDelete, ...prev]);
-      if (user) {
+      if (canSyncTargetList(targetListId)) {
         saveItemToFirestore(targetListId, itemToDelete);
       }
     });
@@ -3068,7 +3317,7 @@ export default function App() {
         ...newItems,
       ]);
 
-      if (user) {
+      if (canSyncTargetList(targetListId)) {
         if (updatedTargetList) {
           saveListToFirestore(updatedTargetList, user.uid);
         }
@@ -3100,7 +3349,7 @@ export default function App() {
       setGroups((prev) => [...prev, ...newGroups]);
       setItems((prev) => [...prev, ...newItems]);
 
-      if (user) {
+      if (canSyncTargetList(targetListId)) {
         if (updatedTargetList) {
           saveListToFirestore(updatedTargetList, user.uid);
         }
@@ -3161,6 +3410,63 @@ export default function App() {
     reader.readAsText(file);
   };
 
+  const handleRestoreFromGoogleDrive = (backup: WorkspaceBackupData, mode: 'replace' | 'merge') => {
+    sounds.playComplete();
+    if (mode === 'replace') {
+      if (Array.isArray(backup.lists) && backup.lists.length > 0) {
+        setLists(backup.lists);
+        setActiveListId(backup.lists[0].id);
+      }
+      setGroups(backup.groups || []);
+      setItems(backup.items || []);
+      if (backup.language === 'en' || backup.language === 'ar') {
+        setLanguage(backup.language);
+      }
+
+      backup.lists?.forEach((l) => {
+        if (canSyncTargetList(l.id)) {
+          saveListToFirestore(l, user.uid);
+          const listGroups = (backup.groups || []).filter((g) => g.listId === l.id);
+          const listGroupIds = new Set(listGroups.map((g) => g.id));
+          const listItems = (backup.items || []).filter((i) => listGroupIds.has(i.groupId));
+          if (listGroups.length > 0) saveGroupsBatchToFirestore(l.id, listGroups);
+          if (listItems.length > 0) saveItemsBatchToFirestore(l.id, listItems);
+        }
+      });
+    } else {
+      // Merge mode: Add any non-duplicate items
+      const existingListIds = new Set(lists.map((l) => l.id));
+      const incomingLists = (backup.lists || []).filter((l) => !existingListIds.has(l.id));
+
+      const existingGroupIds = new Set(groups.map((g) => g.id));
+      const incomingGroups = (backup.groups || []).filter((g) => !existingGroupIds.has(g.id));
+
+      const existingItemIds = new Set(items.map((i) => i.id));
+      const incomingItems = (backup.items || []).filter((i) => !existingItemIds.has(i.id));
+
+      if (incomingLists.length > 0) {
+        setLists((prev) => [...prev, ...incomingLists]);
+      }
+      if (incomingGroups.length > 0) {
+        setGroups((prev) => [...prev, ...incomingGroups]);
+      }
+      if (incomingItems.length > 0) {
+        setItems((prev) => [...prev, ...incomingItems]);
+      }
+
+      incomingLists.forEach((l) => {
+        if (canSyncTargetList(l.id)) {
+          saveListToFirestore(l, user.uid);
+          const listGroups = incomingGroups.filter((g) => g.listId === l.id);
+          const listGroupIds = new Set(listGroups.map((g) => g.id));
+          const listItems = incomingItems.filter((i) => listGroupIds.has(i.groupId));
+          if (listGroups.length > 0) saveGroupsBatchToFirestore(l.id, listGroups);
+          if (listItems.length > 0) saveItemsBatchToFirestore(l.id, listItems);
+        }
+      });
+    }
+  };
+
   return (
     <div
       className={`min-h-screen flex flex-col bg-neutral-50/50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 selection:bg-emerald-500 selection:text-white transition-[padding] duration-300 ease-in-out ${
@@ -3210,6 +3516,8 @@ export default function App() {
         syncStatus={syncStatus}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onSignOut={authSignOut}
+        subscription={subscription}
+        onOpenUpgradeModal={() => setIsSubscriptionModalOpen(true)}
       />
 
       {/* 2. Top Navigation Bar */}
@@ -3237,6 +3545,8 @@ export default function App() {
         user={user}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onSignOut={authSignOut}
+        subscription={subscription}
+        onOpenUpgradeModal={() => setIsSubscriptionModalOpen(true)}
       />
 
       {/* 3. Main Content Workspace or Settings Page */}
@@ -3274,6 +3584,14 @@ export default function App() {
               totalGroups={groups.length}
               totalItems={totalItems}
               completedItems={collectedItems}
+              lists={lists}
+              groups={groups}
+              items={items}
+              onRestoreData={handleRestoreFromGoogleDrive}
+              showToast={showToast}
+              subscription={subscription}
+              onOpenUpgradeModal={() => setIsSubscriptionModalOpen(true)}
+              onUpdateSubscription={handleUpdateSubscription}
             />
           ) : (
             <div className="w-full max-w-7xl 2xl:max-w-[1600px] mx-auto space-y-6">
@@ -3768,6 +4086,20 @@ export default function App() {
         language={language}
         onLanguageChange={handleLanguageChange}
         theme={theme}
+      />
+
+      {/* Subscription Plans & Upgrade Modal */}
+      <SubscriptionModal
+        isOpen={isSubscriptionModalOpen}
+        onClose={() => setIsSubscriptionModalOpen(false)}
+        language={language}
+        subscription={subscription}
+        currentSubscription={subscription}
+        onUpdateSubscription={handleUpdateSubscription}
+        onSelectPlan={handleUpdateSubscription}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        showToast={showToast}
+        user={user}
       />
 
       {/* Toast Notifications */}

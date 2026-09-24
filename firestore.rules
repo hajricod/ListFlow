@@ -2,11 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Default deny all
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // Helper functions
     function isSignedIn() {
       return request.auth != null;
@@ -20,107 +15,10 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 128;
     }
 
-    function listDocExists(listId) {
-      return exists(/databases/$(database)/documents/lists/$(listId));
-    }
-
-    function listDocExistsAfter(listId) {
-      return existsAfter(/databases/$(database)/documents/lists/$(listId));
-    }
-
-    function getListData(listId) {
-      return get(/databases/$(database)/documents/lists/$(listId)).data;
-    }
-
-    function getListDataAfter(listId) {
-      return getAfter(/databases/$(database)/documents/lists/$(listId)).data;
-    }
-
-    function isParentListOwner(listId) {
-      return isSignedIn() && (
-        (listDocExists(listId) && ('ownerId' in getListData(listId)) && (getListData(listId).ownerId == request.auth.uid || getListData(listId).ownerId == 'guest' || getListData(listId).ownerId == 'local-user' || getListData(listId).ownerId == '')) ||
-        (listDocExistsAfter(listId) && ('ownerId' in getListDataAfter(listId)) && (getListDataAfter(listId).ownerId == request.auth.uid || getListDataAfter(listId).ownerId == 'guest' || getListDataAfter(listId).ownerId == 'local-user' || getListDataAfter(listId).ownerId == ''))
-      );
-    }
-
-    function isParentListMember(listId) {
-      return isSignedIn() && (
-        isParentListOwner(listId) ||
-        (listDocExists(listId) && ('collaboratorUids' in getListData(listId)) && (request.auth.uid in getListData(listId).collaboratorUids)) ||
-        (listDocExistsAfter(listId) && ('collaboratorUids' in getListDataAfter(listId)) && (request.auth.uid in getListDataAfter(listId).collaboratorUids)) ||
-        (listDocExists(listId) && ('shareLinkEnabled' in getListData(listId)) && getListData(listId).shareLinkEnabled == true) ||
-        (listDocExistsAfter(listId) && ('shareLinkEnabled' in getListDataAfter(listId)) && getListDataAfter(listId).shareLinkEnabled == true) ||
-        (request.auth.token.email != null && listDocExists(listId) && ('invitedEmails' in getListData(listId)) && (request.auth.token.email in getListData(listId).invitedEmails)) ||
-        (request.auth.token.email != null && listDocExistsAfter(listId) && ('invitedEmails' in getListDataAfter(listId)) && (request.auth.token.email in getListDataAfter(listId).invitedEmails))
-      );
-    }
-
-    function isParentListEditor(listId) {
-      return isSignedIn() && (
-        isParentListOwner(listId) ||
-        (
-          listDocExists(listId) && (
-            (
-              ('collaboratorUids' in getListData(listId)) &&
-              (request.auth.uid in getListData(listId).collaboratorUids) &&
-              (
-                !('collaborators' in getListData(listId)) ||
-                !(request.auth.uid in getListData(listId).collaborators) ||
-                !('role' in getListData(listId).collaborators[request.auth.uid]) ||
-                getListData(listId).collaborators[request.auth.uid].role != 'read'
-              )
-            ) ||
-            (
-              ('shareLinkEnabled' in getListData(listId)) &&
-              getListData(listId).shareLinkEnabled == true &&
-              (
-                !('shareLinkRole' in getListData(listId)) ||
-                getListData(listId).shareLinkRole != 'read'
-              )
-            ) ||
-            (
-              request.auth.token.email != null &&
-              ('invitedEmails' in getListData(listId)) &&
-              (request.auth.token.email in getListData(listId).invitedEmails)
-            )
-          )
-        ) ||
-        (
-          listDocExistsAfter(listId) && (
-            (
-              ('collaboratorUids' in getListDataAfter(listId)) &&
-              (request.auth.uid in getListDataAfter(listId).collaboratorUids) &&
-              (
-                !('collaborators' in getListDataAfter(listId)) ||
-                !(request.auth.uid in getListDataAfter(listId).collaborators) ||
-                !('role' in getListDataAfter(listId).collaborators[request.auth.uid]) ||
-                getListDataAfter(listId).collaborators[request.auth.uid].role != 'read'
-              )
-            ) ||
-            (
-              ('shareLinkEnabled' in getListDataAfter(listId)) &&
-              getListDataAfter(listId).shareLinkEnabled == true &&
-              (
-                !('shareLinkRole' in getListDataAfter(listId)) ||
-                getListDataAfter(listId).shareLinkRole != 'read'
-              )
-            ) ||
-            (
-              request.auth.token.email != null &&
-              ('invitedEmails' in getListDataAfter(listId)) &&
-              (request.auth.token.email in getListDataAfter(listId).invitedEmails)
-            )
-          )
-        )
-      );
-    }
-
     // User profile and synchronized personal settings
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isOwner(userId) && isValidId(userId);
-      allow update: if isOwner(userId);
+      allow read: if isSignedIn();
+      allow create, update: if isOwner(userId) && isValidId(userId);
       allow delete: if isOwner(userId);
 
       // User's private lists subcollection (backup)
@@ -146,52 +44,25 @@ service cloud.firestore {
 
     // Shared Workspace Lists Collection
     match /lists/{listId} {
-      // Read: Allowed for list owner, active collaborators, or user invited by email/link
-      allow get: if isSignedIn() && (
-        ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid) ||
-        ('collaboratorUids' in resource.data && (request.auth.uid in resource.data.collaboratorUids)) ||
-        ('shareLinkEnabled' in resource.data && resource.data.shareLinkEnabled == true) ||
-        (request.auth.token.email != null && ('invitedEmails' in resource.data) && (request.auth.token.email in resource.data.invitedEmails))
-      );
-
-      allow list: if isSignedIn() && (
-        ('ownerId' in resource.data && resource.data.ownerId == request.auth.uid) ||
-        ('collaboratorUids' in resource.data && (request.auth.uid in resource.data.collaboratorUids)) ||
-        (request.auth.token.email != null && ('invitedEmails' in resource.data) && (request.auth.token.email in resource.data.invitedEmails))
-      );
-
-      // Create: Authenticated users can create a list they own or participate in
-      allow create: if isSignedIn() && isValidId(listId) && (
-        ('ownerId' in request.resource.data && (request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerId == 'guest' || request.resource.data.ownerId == 'local-user' || request.resource.data.ownerId == '')) ||
-        ('collaboratorUids' in request.resource.data && (request.auth.uid in request.resource.data.collaboratorUids))
-      );
-
-      // Update: Owner can update everything; Collaborators can update metadata or accept invites
-      allow update: if isSignedIn() && (
-        ('ownerId' in resource.data && (resource.data.ownerId == request.auth.uid || resource.data.ownerId == 'guest' || resource.data.ownerId == 'local-user' || resource.data.ownerId == '')) ||
-        ('ownerId' in request.resource.data && (request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerId == 'guest' || request.resource.data.ownerId == 'local-user' || request.resource.data.ownerId == '')) ||
-        ('collaboratorUids' in resource.data && (request.auth.uid in resource.data.collaboratorUids)) ||
-        ('collaboratorUids' in request.resource.data && (request.auth.uid in request.resource.data.collaboratorUids)) ||
-        ('shareLinkEnabled' in resource.data && resource.data.shareLinkEnabled == true) ||
-        (request.auth.token.email != null && ('invitedEmails' in resource.data) && (request.auth.token.email in resource.data.invitedEmails))
-      );
-
-      // Delete: STRICT RULE - ONLY THE OWNER CAN DELETE THE LIST!
+      allow read, create, update: if isSignedIn();
       allow delete: if isSignedIn() && (
-        ('ownerId' in resource.data && (resource.data.ownerId == request.auth.uid || resource.data.ownerId == 'guest' || resource.data.ownerId == 'local-user' || resource.data.ownerId == ''))
+        !('ownerId' in resource.data) ||
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.ownerId == 'guest' ||
+        resource.data.ownerId == 'local-user' ||
+        resource.data.ownerId == ''
       );
 
       // Subcollection: Groups / Aisles of the list
       match /groups/{groupId} {
-        allow read: if isParentListMember(listId);
-        allow create, update, delete: if isParentListEditor(listId) && isValidId(groupId);
+        allow read, write: if isSignedIn();
       }
 
       // Subcollection: Items / Tasks of the list
       match /items/{itemId} {
-        allow read: if isParentListMember(listId);
-        allow create, update, delete: if isParentListEditor(listId) && isValidId(itemId);
+        allow read, write: if isSignedIn();
       }
     }
   }
 }
+

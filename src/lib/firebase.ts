@@ -30,10 +30,28 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
+// Google Drive Provider & Scopes
+export const DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file'];
+export const googleDriveProvider = new GoogleAuthProvider();
+DRIVE_SCOPES.forEach((scope) => googleDriveProvider.addScope(scope));
+googleDriveProvider.setCustomParameters({ prompt: 'select_account' });
+
+// In-Memory Token Cache (MANDATORY: Never store access token in localStorage/sessionStorage)
+let cachedDriveAccessToken: string | null = null;
+
+export function getCachedDriveToken(): string | null {
+  return cachedDriveAccessToken;
+}
+
+export function setCachedDriveToken(token: string | null) {
+  cachedDriveAccessToken = token;
+}
+
 // Firestore Instance with offline persistence & multi-tab caching to minimize billable reads
 function initDb(): Firestore {
+  const databaseId = (firebaseConfig as { firestoreDatabaseId?: string }).firestoreDatabaseId;
   try {
-    if (firebaseConfig.firestoreDatabaseId) {
+    if (databaseId) {
       return initializeFirestore(
         app,
         {
@@ -41,7 +59,7 @@ function initDb(): Firestore {
             tabManager: persistentMultipleTabManager(),
           }),
         },
-        firebaseConfig.firestoreDatabaseId
+        databaseId
       );
     }
     return initializeFirestore(app, {
@@ -50,8 +68,8 @@ function initDb(): Firestore {
       }),
     });
   } catch {
-    return firebaseConfig.firestoreDatabaseId
-      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+    return databaseId
+      ? getFirestore(app, databaseId)
       : getFirestore(app);
   }
 }
@@ -92,13 +110,30 @@ export async function resetPassword(email: string): Promise<void> {
   await sendPasswordResetEmail(auth, email.trim());
 }
 
+// Connect to Google Drive (obtains OAuth access token with drive.file scope)
+export async function connectGoogleDrive(): Promise<{ user: User; accessToken: string }> {
+  const result = await signInWithPopup(auth, googleDriveProvider);
+  const credential = GoogleAuthProvider.credentialFromResult(result);
+  if (!credential?.accessToken) {
+    throw new Error('Failed to obtain Google Drive access token');
+  }
+  cachedDriveAccessToken = credential.accessToken;
+  return { user: result.user, accessToken: cachedDriveAccessToken };
+}
+
 // Sign Out
 export async function signOut(): Promise<void> {
+  cachedDriveAccessToken = null;
   await firebaseSignOut(auth);
 }
 
 // Auth State Listener
 export function subscribeToAuth(callback: (user: User | null) => void) {
-  return onAuthStateChanged(auth, callback);
+  return onAuthStateChanged(auth, (user) => {
+    if (!user) {
+      cachedDriveAccessToken = null;
+    }
+    callback(user);
+  });
 }
 

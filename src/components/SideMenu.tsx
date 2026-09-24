@@ -38,10 +38,11 @@ import {
   Crown,
   Languages,
 } from 'lucide-react';
-import { AppList, AppView, Language, ListGroup, ListItem, SyncStatus, PendingInvitation } from '../types';
+import { AppList, AppView, Language, ListGroup, ListItem, SyncStatus, PendingInvitation, UserSubscription } from '../types';
 import { getTranslation } from '../locales/translations';
 import { User } from 'firebase/auth';
 import { RefreshCw, CloudCheck, CloudOff, AlertCircle } from 'lucide-react';
+import { isProUser } from '../utils/subscription';
 
 interface SideMenuProps {
   isOpen: boolean;
@@ -69,6 +70,8 @@ interface SideMenuProps {
   syncStatus?: SyncStatus;
   onOpenAuthModal?: () => void;
   onSignOut?: () => void;
+  subscription?: UserSubscription;
+  onOpenUpgradeModal?: () => void;
 }
 
 const getListIconComponent = (iconName: string) => {
@@ -142,8 +145,11 @@ export const SideMenu: React.FC<SideMenuProps> = ({
   syncStatus = 'idle',
   onOpenAuthModal,
   onSignOut,
+  subscription,
+  onOpenUpgradeModal,
 }) => {
   const t = getTranslation(language);
+  const isPro = isProUser(subscription);
   const [listSearch, setListSearch] = useState('');
   const [menuAnchor, setMenuAnchor] = useState<{ list: AppList; rect: DOMRect } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -449,6 +455,35 @@ export const SideMenu: React.FC<SideMenuProps> = ({
 
         {/* Bottom Section of Sidenav: User profile & Settings */}
         <div className="p-3 pb-[max(0.75rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))] bg-neutral-50/70 dark:bg-neutral-900/70 border-t border-neutral-200/80 dark:border-neutral-800/80 shrink-0 space-y-2.5">
+          {/* Subscription Upgrade Promo Card for Free Tier */}
+          {!isPro && onOpenUpgradeModal && (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenUpgradeModal();
+                if (window.innerWidth < 1024) onClose();
+              }}
+              className="w-full p-2.5 rounded-xl bg-linear-to-r from-emerald-500/10 via-teal-500/10 to-sky-500/10 hover:from-emerald-500/20 hover:via-teal-500/20 hover:to-sky-500/20 border border-emerald-500/30 dark:border-emerald-500/20 flex items-center justify-between gap-2 transition-all cursor-pointer group text-start shadow-2xs"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1">
+                    <span>{language === 'ar' ? 'الترقية إلى برو' : 'Upgrade to Pro'}</span>
+                  </div>
+                  <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
+                    {language === 'ar' ? 'مزامنة ومشاركة مباشرة' : 'Real-time sync & sharing'}
+                  </div>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-600 text-white shrink-0 group-hover:scale-105 transition-transform">
+                PRO
+              </span>
+            </button>
+          )}
+
           {/* User Account / Sign In card in Sidenav */}
           {user ? (
             <div
@@ -504,12 +539,31 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                     <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                       {user.displayName || user.email?.split('@')[0]}
                     </span>
+                    {isPro ? (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[9px] font-extrabold tracking-wider">
+                        PRO
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 text-[9px] font-bold">
+                        {language === 'ar' ? 'مجاني' : 'FREE'}
+                      </span>
+                    )}
                     {syncStatus === 'syncing' && (
                       <RefreshCw className="w-2.5 h-2.5 text-amber-500 animate-spin shrink-0" />
                     )}
                   </div>
                   <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate flex items-center gap-1">
-                    <span>{syncStatus === 'syncing' ? t.syncingToCloud : syncStatus === 'offline' ? t.syncOffline : t.syncedToCloud}</span>
+                    <span>
+                      {isPro
+                        ? syncStatus === 'syncing'
+                          ? t.syncingToCloud
+                          : syncStatus === 'offline'
+                          ? t.syncOffline
+                          : t.syncedToCloud
+                        : language === 'ar'
+                        ? 'محلي + Google Drive'
+                        : 'Local + Google Drive'}
+                    </span>
                   </div>
                 </div>
               </button>
@@ -569,10 +623,17 @@ export const SideMenu: React.FC<SideMenuProps> = ({
               setMenuAnchor(null);
               if (onShareList) onShareList(currentList);
             }}
-            className="w-full px-3 py-2 text-start flex items-center gap-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer font-medium"
+            className="w-full px-3 py-2 text-start flex items-center justify-between gap-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer font-medium"
           >
-            <UserPlus className="w-3.5 h-3.5" />
-            <span>{t.shareList}</span>
+            <div className="flex items-center gap-2">
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>{t.shareList}</span>
+            </div>
+            {!isPro && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                PRO
+              </span>
+            )}
           </button>
 
           <button

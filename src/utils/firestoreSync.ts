@@ -13,6 +13,8 @@ import {
   query,
   where,
   Unsubscribe,
+  arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
@@ -28,6 +30,7 @@ import {
   ShareRole,
   ShareMember,
   PendingInvitation,
+  UserSubscription,
 } from '../types';
 
 export enum OperationType {
@@ -140,6 +143,7 @@ export interface UserCloudData {
   activeListId?: string;
   onboardingSeen?: boolean;
   userGroupOrders?: Record<string, string[]>;
+  subscription?: UserSubscription;
 }
 
 export interface UserPreferencesPayload {
@@ -153,6 +157,7 @@ export interface UserPreferencesPayload {
   activeListId?: string;
   onboardingSeen?: boolean;
   userGroupOrders?: Record<string, string[]>;
+  subscription?: UserSubscription;
 }
 
 // In-memory cache to prevent duplicate profile and preference sync writes
@@ -166,9 +171,16 @@ export async function syncUserProfile(
   const uid = typeof userOrUid === 'string' ? userOrUid : userOrUid?.uid || auth.currentUser?.uid;
   if (!uid) return false;
 
-  const email = (typeof userOrUid === 'object' && userOrUid !== null ? userOrUid.email : auth.currentUser?.email) || '';
-  const displayName = (typeof userOrUid === 'object' && userOrUid !== null ? userOrUid.displayName : auth.currentUser?.displayName) || '';
-  const photoURL = (typeof userOrUid === 'object' && userOrUid !== null ? userOrUid.photoURL : auth.currentUser?.photoURL) || '';
+  // Verify that an active Firebase authenticated session exists for this user before attempting cloud sync
+  const currentAuthUser = auth.currentUser;
+  if (!currentAuthUser || currentAuthUser.uid !== uid) {
+    // Unauthenticated or mismatched uid - skip Firestore write safely
+    return false;
+  }
+
+  const email = (typeof userOrUid === 'object' && userOrUid !== null ? userOrUid.email : currentAuthUser.email) || '';
+  const displayName = (typeof userOrUid === 'object' && userOrUid !== null ? userOrUid.displayName : currentAuthUser.displayName) || '';
+  const photoURL = (typeof userOrUid === 'object' && userOrUid !== null ? userOrUid.photoURL : currentAuthUser.photoURL) || '';
 
   const payload: Record<string, unknown> = {
     userId: uid,
@@ -189,6 +201,7 @@ export async function syncUserProfile(
     if (preferences.activeListId !== undefined) payload.activeListId = preferences.activeListId;
     if (preferences.onboardingSeen !== undefined) payload.onboardingSeen = preferences.onboardingSeen;
     if (preferences.userGroupOrders !== undefined) payload.userGroupOrders = preferences.userGroupOrders;
+    if (preferences.subscription !== undefined) payload.subscription = preferences.subscription;
   }
 
   // Deduplication check: compare serializable payload to avoid redundant Firestore network writes
@@ -207,6 +220,11 @@ export async function syncUserProfile(
   } catch (error) {
     if (isQuotaExceededError(error)) {
       console.warn('Firestore daily quota exceeded while syncing user profile. Falling back to local device storage.');
+    } else if (
+      (error as { code?: string })?.code === 'permission-denied' ||
+      String(error).includes('insufficient permissions')
+    ) {
+      console.warn('Firestore permission denied while syncing user profile. Falling back to local storage cache.', error);
     } else {
       console.error('Error syncing user profile to Firestore:', error);
     }
@@ -220,9 +238,19 @@ export async function saveUserOnboardingSeen(userId: string): Promise<boolean> {
   return syncUserProfile(userId, { onboardingSeen: true });
 }
 
+// Helper to save subscription to cloud
+export async function saveUserSubscription(userId: string, subscription: UserSubscription): Promise<boolean> {
+  if (!userId) return false;
+  return syncUserProfile(userId, { subscription });
+}
+
 // Helper to directly fetch saved user preferences from Firestore on login
 export async function fetchUserProfilePreferences(userId: string): Promise<UserPreferencesPayload | null> {
   if (!userId) return null;
+  const currentAuthUser = auth.currentUser;
+  if (!currentAuthUser || currentAuthUser.uid !== userId) {
+    return null;
+  }
   try {
     const userDocRef = doc(db, 'users', userId);
     const snap = await getDoc(userDocRef);
@@ -241,6 +269,7 @@ export async function fetchUserProfilePreferences(userId: string): Promise<UserP
       userGroupOrders: (u.userGroupOrders && typeof u.userGroupOrders === 'object' && !Array.isArray(u.userGroupOrders))
         ? (u.userGroupOrders as Record<string, string[]>)
         : undefined,
+      subscription: (u.subscription && typeof u.subscription === 'object') ? (u.subscription as UserSubscription) : undefined,
     };
   } catch (err) {
     console.warn('Error fetching user preferences from Firestore:', err);
@@ -613,18 +642,20 @@ export function subscribeToUserCloudData(
       }
     });
 
-    // Aggregate all groups across lists
+    // Aggregate all groups across lists - only for lists currently in combinedListsMap
     const allGroups: ListGroup[] = [];
-    for (const groupsMap of allListsGroupsMap.values()) {
+    for (const [listId, groupsMap] of allListsGroupsMap.entries()) {
+      if (!combinedListsMap.has(listId)) continue;
       for (const g of groupsMap.values()) {
         allGroups.push(g);
       }
     }
     const sortedGroups = allGroups.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-    // Aggregate all items across lists
+    // Aggregate all items across lists - only for lists currently in combinedListsMap
     const allItems: ListItem[] = [];
-    for (const itemsMap of allListsItemsMap.values()) {
+    for (const [listId, itemsMap] of allListsItemsMap.entries()) {
+      if (!combinedListsMap.has(listId)) continue;
       for (const it of itemsMap.values()) {
         allItems.push(it);
       }
@@ -647,7 +678,42 @@ export function subscribeToUserCloudData(
   };
 
   const updateSubcollectionsListeners = (listsList: AppList[]) => {
-    if (!listsList || listsList.length === 0) return;
+    if (!listsList || listsList.length === 0) {
+      currentActiveListId = '';
+      groupSubUnsubs.forEach((unsub) => unsub());
+      groupSubUnsubs.clear();
+      itemSubUnsubs.forEach((unsub) => unsub());
+      itemSubUnsubs.clear();
+      allListsGroupsMap.clear();
+      allListsItemsMap.clear();
+      return;
+    }
+
+    const validListIds = new Set(listsList.map((l) => l.id));
+
+    // Clean up listeners and memory caches for any list that is no longer valid
+    for (const [listId, unsub] of groupSubUnsubs.entries()) {
+      if (!validListIds.has(listId)) {
+        unsub();
+        groupSubUnsubs.delete(listId);
+      }
+    }
+    for (const [listId, unsub] of itemSubUnsubs.entries()) {
+      if (!validListIds.has(listId)) {
+        unsub();
+        itemSubUnsubs.delete(listId);
+      }
+    }
+    for (const listId of Array.from(allListsGroupsMap.keys())) {
+      if (!validListIds.has(listId)) {
+        allListsGroupsMap.delete(listId);
+      }
+    }
+    for (const listId of Array.from(allListsItemsMap.keys())) {
+      if (!validListIds.has(listId)) {
+        allListsItemsMap.delete(listId);
+      }
+    }
 
     // Determine target active list
     const targetList = (currentActiveListId && listsList.find((l) => l.id === currentActiveListId)) || listsList[0];
@@ -763,6 +829,11 @@ export function subscribeToUserCloudData(
     (err) => {
       if (isQuotaExceededError(err)) {
         console.warn('Firestore daily quota reached for real-time list subscriptions. Falling back to local data.');
+      } else if (
+        (err as { code?: string })?.code === 'permission-denied' ||
+        String(err).includes('insufficient permissions')
+      ) {
+        console.warn('Firestore subscription permissions pending or updating. Using local workspace state.');
       } else {
         console.error('Member lists query onSnapshot error:', err);
       }
@@ -965,22 +1036,32 @@ export async function removeCollaboratorFromList(
       ? targetKeyNorm.replace(/[\.\#\$\[\]]/g, '_')
       : '';
 
-    // Collect all matching collaborator map keys to remove
+    // Collect all matching collaborator map keys and UIDs to remove
     const keysToRemove = new Set<string>();
-    if (targetKey) keysToRemove.add(targetKey);
-    if (targetUid) keysToRemove.add(targetUid);
+    const uidsToRemove = new Set<string>();
+    if (targetUid) {
+      keysToRemove.add(targetUid);
+      uidsToRemove.add(targetUid);
+    }
+    if (targetKey) {
+      keysToRemove.add(targetKey);
+      if (!targetKey.includes('@')) {
+        uidsToRemove.add(targetKey);
+      }
+    }
     if (emailKey) keysToRemove.add(emailKey);
     if (targetKeyEmailKey) keysToRemove.add(targetKeyEmailKey);
 
     // Deep match by email and uid inside collaborator objects
     Object.entries(collaborators).forEach(([k, m]) => {
       if (
-        (targetUid && m.uid === targetUid) ||
-        (targetKey && m.uid === targetKey) ||
+        (targetUid && (m.uid === targetUid || k === targetUid)) ||
+        (targetKey && (m.uid === targetKey || k === targetKey)) ||
         (emailNorm && m.email?.toLowerCase() === emailNorm) ||
         (targetKeyNorm && m.email?.toLowerCase() === targetKeyNorm)
       ) {
         keysToRemove.add(k);
+        if (m.uid) uidsToRemove.add(m.uid);
       }
     });
 
@@ -990,7 +1071,7 @@ export async function removeCollaboratorFromList(
     });
 
     const collaboratorUids = (listData.collaboratorUids || []).filter(
-      (uid) => uid !== targetUid && uid !== targetKey && !keysToRemove.has(uid)
+      (uid) => !uidsToRemove.has(uid) && !keysToRemove.has(uid)
     );
 
     const invitedEmails = (listData.invitedEmails || []).filter((em) => {
@@ -1014,6 +1095,10 @@ export async function removeCollaboratorFromList(
       updatedAt: new Date().toISOString(),
     };
 
+    if (uidsToRemove.size > 0) {
+      updates.removedCollaboratorUids = arrayUnion(...Array.from(uidsToRemove));
+    }
+
     keysToRemove.forEach((k) => {
       updates[`collaborators.${k}`] = deleteField();
     });
@@ -1029,6 +1114,9 @@ export async function removeCollaboratorFromList(
           collaborators,
           collaboratorUids,
           invitedEmails,
+          removedCollaboratorUids: Array.from(
+            new Set([...(listData.removedCollaboratorUids || []), ...Array.from(uidsToRemove)])
+          ),
           updatedAt: new Date().toISOString(),
         })
       );
@@ -1187,6 +1275,7 @@ export async function acceptPendingInvitation(
       ownerId: listData.ownerId,
       collaboratorUids,
       invitedEmails,
+      removedCollaboratorUids: arrayRemove(currentUser.uid),
       [`collaborators.${currentUser.uid}`]: activeMember,
       updatedAt: new Date().toISOString(),
     };
@@ -1372,15 +1461,22 @@ export async function joinListViaShareLink(
       new Set([...(listData.collaboratorUids || []), currentUser.uid])
     );
 
-    await setDoc(
-      listRef,
-      sanitizeForFirestore({
-        collaborators,
-        collaboratorUids,
-        updatedAt: new Date().toISOString(),
-      }),
-      { merge: true }
-    );
+    await updateDoc(listRef, {
+      collaborators,
+      collaboratorUids,
+      removedCollaboratorUids: arrayRemove(currentUser.uid),
+      updatedAt: new Date().toISOString(),
+    }).catch(async () => {
+      await setDoc(
+        listRef,
+        sanitizeForFirestore({
+          collaborators,
+          collaboratorUids,
+          updatedAt: new Date().toISOString(),
+        }),
+        { merge: true }
+      );
+    });
 
     return {
       success: true,
@@ -1404,6 +1500,7 @@ export async function saveItemToFirestore(
   item: ListItem
 ): Promise<boolean> {
   if (!listId || !item || !item.id) return false;
+  if (!auth.currentUser) return false;
   try {
     const itemRef = doc(db, 'lists', listId, 'items', item.id);
     await setDoc(
@@ -1419,6 +1516,11 @@ export async function saveItemToFirestore(
   } catch (error) {
     if (isQuotaExceededError(error)) {
       console.warn(`Firestore quota reached saving item ${item.id}. Saved locally.`);
+    } else if (
+      (error as { code?: string })?.code === 'permission-denied' ||
+      String(error).includes('insufficient permissions')
+    ) {
+      console.warn(`Firestore permission not granted saving item ${item.id} to list ${listId}. Retaining local state.`);
     } else {
       console.error(`Error saving item ${item.id} to list ${listId}:`, error);
     }
@@ -1432,6 +1534,7 @@ export async function updateItemFieldsInFirestore(
   fields: Partial<ListItem>
 ): Promise<boolean> {
   if (!listId || !itemId || !fields) return false;
+  if (!auth.currentUser) return false;
   try {
     const itemRef = doc(db, 'lists', listId, 'items', itemId);
     await setDoc(
@@ -1446,6 +1549,11 @@ export async function updateItemFieldsInFirestore(
   } catch (error) {
     if (isQuotaExceededError(error)) {
       console.warn(`Firestore quota reached updating item ${itemId}. Saved locally.`);
+    } else if (
+      (error as { code?: string })?.code === 'permission-denied' ||
+      String(error).includes('insufficient permissions')
+    ) {
+      console.warn(`Firestore permission not granted updating item ${itemId} in list ${listId}. Retaining local state.`);
     } else {
       console.error(`Error updating item ${itemId} in list ${listId}:`, error);
     }
@@ -1458,6 +1566,7 @@ export async function saveItemsBatchToFirestore(
   items: ListItem[]
 ): Promise<boolean> {
   if (!listId || !items.length) return true;
+  if (!auth.currentUser) return false;
   try {
     const batch = writeBatch(db);
     const now = new Date().toISOString();
@@ -1480,6 +1589,11 @@ export async function saveItemsBatchToFirestore(
   } catch (error) {
     if (isQuotaExceededError(error)) {
       console.warn(`Firestore quota reached saving items batch for list ${listId}. Saved locally.`);
+    } else if (
+      (error as { code?: string })?.code === 'permission-denied' ||
+      String(error).includes('insufficient permissions')
+    ) {
+      console.warn(`Firestore permission not granted saving items batch for list ${listId}. Retaining local state.`);
     } else {
       console.error(`Error saving items batch for list ${listId}:`, error);
     }
@@ -1492,6 +1606,7 @@ export async function saveGroupToFirestore(
   group: ListGroup
 ): Promise<boolean> {
   if (!listId || !group || !group.id) return false;
+  if (!auth.currentUser) return false;
   try {
     const groupRef = doc(db, 'lists', listId, 'groups', group.id);
     const { isCollapsed: _unusedCollapsed, ...groupDataToSync } = group;
@@ -1508,6 +1623,11 @@ export async function saveGroupToFirestore(
   } catch (error) {
     if (isQuotaExceededError(error)) {
       console.warn(`Firestore quota reached saving group ${group.id}. Saved locally.`);
+    } else if (
+      (error as { code?: string })?.code === 'permission-denied' ||
+      String(error).includes('insufficient permissions')
+    ) {
+      console.warn(`Firestore permission not granted saving group ${group.id} in list ${listId}. Retaining local state.`);
     } else {
       console.error(`Error saving group ${group.id} in list ${listId}:`, error);
     }
@@ -1521,6 +1641,7 @@ export async function updateGroupFieldsInFirestore(
   fields: Partial<ListGroup>
 ): Promise<boolean> {
   if (!listId || !groupId || !fields) return false;
+  if (!auth.currentUser) return false;
   try {
     const groupRef = doc(db, 'lists', listId, 'groups', groupId);
     const { isCollapsed: _unusedCollapsed, ...cleanFields } = fields;
@@ -1537,6 +1658,11 @@ export async function updateGroupFieldsInFirestore(
   } catch (error) {
     if (isQuotaExceededError(error)) {
       console.warn(`Firestore quota reached updating group ${groupId}. Saved locally.`);
+    } else if (
+      (error as { code?: string })?.code === 'permission-denied' ||
+      String(error).includes('insufficient permissions')
+    ) {
+      console.warn(`Firestore permission not granted updating group ${groupId} in list ${listId}. Retaining local state.`);
     } else {
       console.error(`Error updating group ${groupId} in list ${listId}:`, error);
     }
@@ -1549,6 +1675,7 @@ export async function saveGroupsBatchToFirestore(
   groups: ListGroup[]
 ): Promise<boolean> {
   if (!listId || !groups.length) return true;
+  if (!auth.currentUser) return false;
   try {
     const batch = writeBatch(db);
     const now = new Date().toISOString();
@@ -1572,6 +1699,11 @@ export async function saveGroupsBatchToFirestore(
   } catch (error) {
     if (isQuotaExceededError(error)) {
       console.warn(`Firestore quota reached saving groups batch for list ${listId}. Saved locally.`);
+    } else if (
+      (error as { code?: string })?.code === 'permission-denied' ||
+      String(error).includes('insufficient permissions')
+    ) {
+      console.warn(`Firestore permission not granted saving groups batch for list ${listId}. Retaining local state.`);
     } else {
       console.error(`Error saving groups batch for list ${listId}:`, error);
     }
@@ -1585,6 +1717,7 @@ export async function saveListToFirestore(
 ): Promise<boolean> {
   if (!list || !list.id) return false;
   const uid = currentUserId || auth.currentUser?.uid;
+  if (!uid || !auth.currentUser) return false;
   try {
     const isMyOwnList = !list.ownerId || list.ownerId === 'local-user' || list.ownerId === 'guest' || (uid && list.ownerId === uid);
     const ownerId = isMyOwnList && uid ? uid : (list.ownerId || uid || 'owner');
@@ -1644,6 +1777,11 @@ export async function saveListToFirestore(
   } catch (error) {
     if (isQuotaExceededError(error)) {
       console.warn(`Firestore quota reached saving list ${list.id}. Saved locally.`);
+    } else if (
+      (error as { code?: string })?.code === 'permission-denied' ||
+      String(error).includes('insufficient permissions')
+    ) {
+      console.warn(`Firestore permission not granted saving list ${list.id}. Retaining local state.`);
     } else {
       console.error(`Error saving list ${list.id} to Firestore:`, error);
     }
@@ -1658,12 +1796,20 @@ export async function deleteItemFromFirestore(
   itemId: string
 ): Promise<boolean> {
   if (!listId || !itemId) return false;
+  if (!auth.currentUser) return false;
   try {
     const itemRef = doc(db, 'lists', listId, 'items', itemId);
     await deleteDoc(itemRef);
     return true;
   } catch (error) {
-    console.error(`Error deleting item ${itemId} from list ${listId}:`, error);
+    if (
+      (error as { code?: string })?.code === 'permission-denied' ||
+      String(error).includes('insufficient permissions')
+    ) {
+      console.warn(`Firestore permission not granted deleting item ${itemId} from list ${listId}.`);
+    } else {
+      console.error(`Error deleting item ${itemId} from list ${listId}:`, error);
+    }
     return false;
   }
 }
@@ -1673,6 +1819,7 @@ export async function deleteItemsFromFirestore(
   itemIds: string[]
 ): Promise<boolean> {
   if (!listId || !itemIds.length) return true;
+  if (!auth.currentUser) return false;
   try {
     const batch = writeBatch(db);
     itemIds.forEach((id) => {
@@ -1681,7 +1828,14 @@ export async function deleteItemsFromFirestore(
     await batch.commit();
     return true;
   } catch (error) {
-    console.error(`Error deleting items from list ${listId}:`, error);
+    if (
+      (error as { code?: string })?.code === 'permission-denied' ||
+      String(error).includes('insufficient permissions')
+    ) {
+      console.warn(`Firestore permission not granted deleting items batch from list ${listId}.`);
+    } else {
+      console.error(`Error deleting items from list ${listId}:`, error);
+    }
     return false;
   }
 }
@@ -1692,6 +1846,7 @@ export async function deleteGroupFromFirestore(
   itemIds: string[] = []
 ): Promise<boolean> {
   if (!listId || !groupId) return false;
+  if (!auth.currentUser) return false;
   try {
     const batch = writeBatch(db);
     const groupRef = doc(db, 'lists', listId, 'groups', groupId);
@@ -1705,7 +1860,14 @@ export async function deleteGroupFromFirestore(
     await batch.commit();
     return true;
   } catch (error) {
-    console.error(`Error deleting group ${groupId} from list ${listId}:`, error);
+    if (
+      (error as { code?: string })?.code === 'permission-denied' ||
+      String(error).includes('insufficient permissions')
+    ) {
+      console.warn(`Firestore permission not granted deleting group ${groupId} from list ${listId}.`);
+    } else {
+      console.error(`Error deleting group ${groupId} from list ${listId}:`, error);
+    }
     return false;
   }
 }
@@ -1716,6 +1878,7 @@ export async function deleteListFromFirestore(
   currentUser: User | { uid: string; email?: string | null; displayName?: string | null; photoURL?: string | null }
 ): Promise<boolean> {
   if (!currentUser?.uid || !listId) return false;
+  if (!auth.currentUser) return false;
   try {
     const listRef = doc(db, 'lists', listId);
     const listSnap = await getDoc(listRef);
@@ -1723,7 +1886,7 @@ export async function deleteListFromFirestore(
     if (listSnap.exists()) {
       const listData = listSnap.data() as AppList;
       // Strict client-side gate + rule enforcement
-      if (listData.ownerId && listData.ownerId !== currentUser.uid) {
+      if (listData.ownerId && listData.ownerId !== currentUser.uid && listData.ownerId !== 'guest' && listData.ownerId !== 'local-user') {
         throw new Error('Only the list owner can delete this list.');
       }
 
@@ -1755,7 +1918,14 @@ export async function deleteListFromFirestore(
       return true;
     }
   } catch (error) {
-    console.error('Error deleting list from Firestore:', error);
+    if (
+      (error as { code?: string })?.code === 'permission-denied' ||
+      String(error).includes('insufficient permissions')
+    ) {
+      console.warn(`Firestore permission not granted deleting list ${listId}.`);
+    } else {
+      console.error('Error deleting list from Firestore:', error);
+    }
     return false;
   }
 }

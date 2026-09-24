@@ -16,7 +16,7 @@ import {
   Type,
   ChevronDown,
 } from 'lucide-react';
-import { Language, SyncStatus, Theme, ThemeColor, FontFamily, FontSize } from '../types';
+import { Language, SyncStatus, Theme, ThemeColor, FontFamily, FontSize, ShoppingList, ListGroup, ListItem, UserSubscription } from '../types';
 import { getTranslation } from '../locales/translations';
 import { THEME_COLOR_OPTIONS } from '../utils/themeColors';
 import {
@@ -27,6 +27,10 @@ import {
 } from '../utils/typography';
 import { User } from 'firebase/auth';
 import { AppLogo } from './AppLogo';
+import { GoogleDriveBackupCard } from './GoogleDriveBackupCard';
+import { SubscriptionSettingsCard } from './SubscriptionSettingsCard';
+import { WorkspaceBackupData } from '../lib/googleDrive';
+import { DEFAULT_FREE_SUBSCRIPTION } from '../utils/subscription';
 
 interface SettingsPageProps {
   language: Language;
@@ -59,6 +63,14 @@ interface SettingsPageProps {
   totalGroups: number;
   totalItems: number;
   completedItems: number;
+  lists?: ShoppingList[];
+  groups?: ListGroup[];
+  items?: ListItem[];
+  onRestoreData?: (backup: WorkspaceBackupData, mode: 'replace' | 'merge') => void;
+  showToast?: (message: string, duration?: number, type?: 'info' | 'success' | 'warning' | 'error') => void;
+  subscription?: UserSubscription;
+  onOpenUpgradeModal?: () => void;
+  onUpdateSubscription?: (sub: UserSubscription) => Promise<void> | void;
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
@@ -88,6 +100,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onOpenAuthModal,
   onSignOut,
   onBackToWorkspace,
+  lists = [],
+  groups = [],
+  items = [],
+  onRestoreData,
+  showToast,
+  subscription = DEFAULT_FREE_SUBSCRIPTION,
+  onOpenUpgradeModal,
+  onUpdateSubscription,
 }) => {
   const t = getTranslation(language);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -269,6 +289,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           )}
         </div>
       </div>
+
+      {/* Subscription & Plan Card */}
+      {onOpenUpgradeModal && onUpdateSubscription && (
+        <SubscriptionSettingsCard
+          language={language}
+          user={user || null}
+          subscription={subscription}
+          onOpenUpgradeModal={onOpenUpgradeModal}
+          onUpdateSubscription={onUpdateSubscription}
+          showToast={showToast || (() => {})}
+        />
+      )}
 
       {/* 2. Preferences Section */}
       <div className="space-y-4">
@@ -711,7 +743,24 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           {t.dataManagement}
         </h2>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        {/* Google Drive Cloud Backup & Restore (Free Local & Cloud Users) */}
+        {onRestoreData && showToast && (
+          <GoogleDriveBackupCard
+            language={language}
+            user={user || null}
+            lists={lists}
+            groups={groups}
+            items={items}
+            onRestoreData={onRestoreData}
+            showToast={showToast}
+          />
+        )}
+
+        <div className="pt-1">
+          <span className="text-[11px] font-semibold text-neutral-400 dark:text-neutral-500 px-1 block mb-2">
+            {language === 'ar' ? 'أدوات التصدير المحلية والقوالب' : 'Offline Export & List Templates'}
+          </span>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <button
             type="button"
             onClick={onExportData}
@@ -757,6 +806,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </span>
             </button>
           )}
+          </div>
         </div>
       </div>
 

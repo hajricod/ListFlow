@@ -71,12 +71,29 @@ export interface AppList {
   collaborators?: Record<string, ShareMember>;
   collaboratorUids?: string[];
   invitedEmails?: string[];
+  removedCollaboratorUids?: string[];
   shareLinkEnabled?: boolean;
   shareLinkRole?: 'read' | 'edit';
   shareLinkToken?: string;
   // Computed / client-side properties
   myRole?: ShareRole;
   isShared?: boolean;
+}
+
+export type ShoppingList = AppList;
+
+export type SubscriptionTier = 'free' | 'pro';
+export type SubscriptionCycle = 'monthly' | 'yearly';
+export type SubscriptionStatus = 'free' | 'active' | 'trialing' | 'canceled';
+
+export interface UserSubscription {
+  tier: SubscriptionTier;
+  status: SubscriptionStatus;
+  cycle?: SubscriptionCycle;
+  expiresAt?: string; // ISO date string
+  startedAt?: string;
+  autoRenew?: boolean;
+  canceledAt?: string;
 }
 
 export interface PendingInvitation {
