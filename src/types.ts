@@ -143,7 +143,7 @@ export type FontFamily =
 
 export type FontSize = 'small' | 'medium' | 'large' | 'xlarge';
 
-export type AppView = 'workspace' | 'settings';
+export type AppView = 'workspace' | 'settings' | 'admin';
 export type SortOption = 'manual' | 'highlighted' | 'alphabetical' | 'createdAt' | 'quantity';
 export type SortDirection = 'asc' | 'desc';
 export type StatusFilter = 'all' | 'active' | 'completed';
@@ -182,4 +182,55 @@ export interface AppUser {
 }
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error' | 'idle' | 'quota-exceeded';
+
+export interface AdminUserRecord {
+  uid: string;
+  email: string;
+  displayName?: string;
+  photoURL?: string;
+  isAdmin?: boolean;
+  role?: 'admin' | 'user';
+  status?: 'active' | 'suspended';
+  subscription?: UserSubscription;
+  createdAt?: string;
+  updatedAt?: string;
+  lastActiveAt?: string;
+  notes?: string;
+  listsCount?: number;
+  groupsCount?: number;
+  itemsCount?: number;
+}
+
+export interface SystemAnnouncement {
+  id?: string;
+  enabled: boolean;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'success' | 'alert';
+  actionLabel?: string;
+  actionUrl?: string;
+  dismissible?: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface SystemConfig {
+  maintenanceMode: boolean;
+  maintenanceMessage?: string;
+  allowNewRegistrations: boolean;
+  freeTierListLimit: number;
+  enablePublicShareLinks: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface AdminAuditLog {
+  id: string;
+  action: string;
+  target?: string;
+  details?: string;
+  adminEmail: string;
+  timestamp: string;
+}
+
 

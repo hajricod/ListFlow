@@ -75,6 +75,8 @@ import { applyTypographyToDOM } from './utils/typography';
 import { Navbar } from './components/Navbar';
 import { SideMenu } from './components/SideMenu';
 import { SettingsPage } from './components/SettingsPage';
+import { AdminPage } from './components/AdminPage';
+import { SystemBroadcastBanner } from './components/SystemBroadcastBanner';
 import { ListModal } from './components/ListModal';
 import { StatsBanner } from './components/StatsBanner';
 import { GroupCard } from './components/GroupCard';
@@ -93,7 +95,13 @@ import { ToastContainer } from './components/Toast';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import { useAuth } from './hooks/useAuth';
 import { WorkspaceBackupData } from './lib/googleDrive';
-import { UserSubscription } from './types';
+import { UserSubscription, SystemAnnouncement, SystemConfig } from './types';
+import {
+  isUserAdmin,
+  subscribeToSystemAnnouncement,
+  subscribeToSystemConfig,
+  DEFAULT_SYSTEM_CONFIG,
+} from './utils/adminService';
 import {
   getLocalSubscription,
   setLocalSubscription,
@@ -230,6 +238,23 @@ export default function App() {
   };
 
   const [currentView, setCurrentView] = useState<AppView>('workspace');
+  const [announcement, setAnnouncement] = useState<SystemAnnouncement | null>(null);
+  const [systemConfig, setSystemConfig] = useState<SystemConfig>(DEFAULT_SYSTEM_CONFIG);
+  const isAdmin = useMemo(() => isUserAdmin(user), [user]);
+
+  // Subscribe to global system broadcast announcements and configurations
+  useEffect(() => {
+    const unsubAnnouncement = subscribeToSystemAnnouncement((data) => {
+      setAnnouncement(data);
+    });
+    const unsubConfig = subscribeToSystemConfig((data) => {
+      setSystemConfig(data);
+    });
+    return () => {
+      unsubAnnouncement();
+      unsubConfig();
+    };
+  }, []);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -3641,6 +3666,11 @@ export default function App() {
           sounds.playPop();
           setCurrentView('settings');
         }}
+        onOpenAdmin={() => {
+          sounds.playPop();
+          setCurrentView('admin');
+        }}
+        isAdmin={isAdmin}
         onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
         user={user}
         syncStatus={syncStatus}
@@ -3648,6 +3678,15 @@ export default function App() {
         onSignOut={authSignOut}
         subscription={subscription}
         onOpenUpgradeModal={() => setIsSubscriptionModalOpen(true)}
+      />
+
+      {/* Broadcast Announcement / Maintenance Notice Banner */}
+      <SystemBroadcastBanner
+        announcement={announcement}
+        maintenanceMode={systemConfig.maintenanceMode}
+        maintenanceMessage={systemConfig.maintenanceMessage}
+        isAdmin={isAdmin}
+        language={language}
       />
 
       {/* 2. Top Navigation Bar */}
@@ -3663,6 +3702,11 @@ export default function App() {
           sounds.playPop();
           setCurrentView('settings');
         }}
+        onOpenAdmin={() => {
+          sounds.playPop();
+          setCurrentView('admin');
+        }}
+        isAdmin={isAdmin}
         onOpenInstallModal={() => pwa.setIsModalOpen(true)}
         isAppInstalled={pwa.isInstalled}
         currentView={currentView}
@@ -3679,7 +3723,7 @@ export default function App() {
         onOpenUpgradeModal={() => setIsSubscriptionModalOpen(true)}
       />
 
-      {/* 3. Main Content Workspace or Settings Page */}
+      {/* 3. Main Content Workspace, Settings Page, or Admin Console */}
       <div className="flex-1 flex w-full overflow-x-hidden">
         <main className="flex-1 min-w-0 px-3 sm:px-6 lg:px-8 pt-6 pb-28 sm:pb-8 space-y-6">
           {currentView === 'settings' ? (
@@ -3722,6 +3766,18 @@ export default function App() {
               subscription={subscription}
               onOpenUpgradeModal={() => setIsSubscriptionModalOpen(true)}
               onUpdateSubscription={handleUpdateSubscription}
+              onOpenAdmin={() => {
+                sounds.playPop();
+                setCurrentView('admin');
+              }}
+              isAdmin={isAdmin}
+            />
+          ) : currentView === 'admin' ? (
+            <AdminPage
+              language={language}
+              currentUser={user}
+              onBackToWorkspace={() => setCurrentView('workspace')}
+              showToast={showToast}
             />
           ) : (
             <div className="w-full max-w-7xl 2xl:max-w-[1600px] mx-auto space-y-6">

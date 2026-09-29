@@ -37,6 +37,7 @@ import {
   Eye,
   Crown,
   Languages,
+  Shield,
 } from 'lucide-react';
 import { AppList, AppView, Language, ListGroup, ListItem, SyncStatus, PendingInvitation, UserSubscription } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -65,6 +66,8 @@ interface SideMenuProps {
   completedTasks: number;
   currentView?: AppView;
   onOpenSettings: () => void;
+  onOpenAdmin?: () => void;
+  isAdmin?: boolean;
   onOpenOnboarding?: () => void;
   user?: User | null;
   syncStatus?: SyncStatus;
@@ -140,6 +143,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({
   completedTasks,
   currentView = 'workspace',
   onOpenSettings,
+  onOpenAdmin,
+  isAdmin = false,
   onOpenOnboarding,
   user,
   syncStatus = 'idle',
@@ -454,7 +459,32 @@ export const SideMenu: React.FC<SideMenuProps> = ({
         </div>
 
         {/* Bottom Section of Sidenav: User profile & Settings */}
-        <div className="p-3 pb-[max(0.75rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))] bg-neutral-50/70 dark:bg-neutral-900/70 border-t border-neutral-200/80 dark:border-neutral-800/80 shrink-0 space-y-2.5">
+        <div className="p-3 pb-[max(0.75rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))] bg-neutral-50/70 dark:bg-neutral-900/70 border-t border-neutral-200/80 dark:border-neutral-800/80 shrink-0 space-y-2">
+          {/* Admin Console Shortcut */}
+          {isAdmin && onOpenAdmin && (
+            <button
+              type="button"
+              id="sidenav-admin-btn"
+              onClick={() => {
+                onOpenAdmin();
+                if (window.innerWidth < 1024) onClose();
+              }}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-2xs ${
+                currentView === 'admin'
+                  ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200 dark:border-purple-800/70'
+                  : 'bg-white dark:bg-neutral-800/90 text-neutral-700 dark:text-neutral-200 border-neutral-200/80 dark:border-neutral-700/70 hover:bg-purple-50/60 dark:hover:bg-purple-950/30 hover:text-purple-700 dark:hover:text-purple-300 hover:border-purple-200 dark:hover:border-purple-800/60'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                <span>{language === 'ar' ? 'لوحة تحكم المدير' : 'Admin Console'}</span>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200/70 dark:border-purple-800/60">
+                ADMIN
+              </span>
+            </button>
+          )}
+
           {/* User Account / Sign In card in Sidenav */}
           {user ? (
             <div

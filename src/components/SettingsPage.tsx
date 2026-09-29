@@ -15,6 +15,7 @@ import {
   Info,
   Type,
   ChevronDown,
+  Shield,
 } from 'lucide-react';
 import { Language, SyncStatus, Theme, ThemeColor, FontFamily, FontSize, ShoppingList, ListGroup, ListItem, UserSubscription } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -71,6 +72,8 @@ interface SettingsPageProps {
   subscription?: UserSubscription;
   onOpenUpgradeModal?: () => void;
   onUpdateSubscription?: (sub: UserSubscription) => Promise<void> | void;
+  onOpenAdmin?: () => void;
+  isAdmin?: boolean;
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
@@ -108,6 +111,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   subscription = DEFAULT_FREE_SUBSCRIPTION,
   onOpenUpgradeModal,
   onUpdateSubscription,
+  onOpenAdmin,
+  isAdmin = false,
 }) => {
   const t = getTranslation(language);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -289,6 +294,40 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           )}
         </div>
       </div>
+
+      {/* Admin Console Card (Visible only to authorized Administrators) */}
+      {isAdmin && onOpenAdmin && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-900/10 via-purple-800/5 to-purple-900/10 dark:from-purple-950/40 dark:via-purple-900/20 dark:to-purple-950/40 border border-purple-200/90 dark:border-purple-800/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-purple-100 dark:bg-purple-900/60 text-purple-600 dark:text-purple-300 flex items-center justify-center shrink-0 shadow-2xs">
+              <Shield className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm sm:text-base text-neutral-900 dark:text-neutral-100">
+                  {language === 'ar' ? 'لوحة تحكم المدير' : 'Admin Console'}
+                </h3>
+                <span className="px-2 py-0.2 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-200 dark:bg-purple-900/80 text-purple-800 dark:text-purple-200">
+                  Admin
+                </span>
+              </div>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                {language === 'ar'
+                  ? 'إدارة حسابات المستخدمين، الاشتراكات، الإعلانات العامة، وإعدادات النظام'
+                  : 'Manage users, pro subscriptions, broadcast announcements, and system policies'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenAdmin}
+            className="w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2 shrink-0"
+          >
+            <span>{language === 'ar' ? 'فتح لوحة التحكم' : 'Launch Console'}</span>
+            <ArrowLeft className="w-4 h-4 rtl:rotate-0 rotate-180" />
+          </button>
+        </div>
+      )}
 
       {/* Subscription & Plan Card */}
       {onOpenUpgradeModal && onUpdateSubscription && (

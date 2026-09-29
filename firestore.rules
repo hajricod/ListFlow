@@ -11,6 +11,22 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'a.hajri89@gmail.com' ||
+        request.auth.uid == 'admin'
+      );
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isSuperAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin'))
+      );
+    }
+
     function isValidId(id) {
       return id is string && id.size() > 0 && id.size() <= 128;
     }
@@ -18,27 +34,27 @@ service cloud.firestore {
     // User profile and synchronized personal settings
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create, update: if isOwner(userId) && isValidId(userId);
-      allow delete: if isOwner(userId);
+      allow create, update: if (isOwner(userId) || isAdmin()) && isValidId(userId);
+      allow delete: if isOwner(userId) || isAdmin();
 
       // User's private lists subcollection (backup)
       match /lists/{listId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isOwner(userId) || isAdmin();
       }
 
       // User's private groups subcollection
       match /groups/{groupId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isOwner(userId) || isAdmin();
       }
 
       // User's private items subcollection
       match /items/{itemId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isOwner(userId) || isAdmin();
       }
 
       // User's private activities
       match /activities/{activityId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isOwner(userId) || isAdmin();
       }
     }
 
@@ -46,6 +62,7 @@ service cloud.firestore {
     match /lists/{listId} {
       allow read, create, update: if isSignedIn();
       allow delete: if isSignedIn() && (
+        isAdmin() ||
         !('ownerId' in resource.data) ||
         resource.data.ownerId == request.auth.uid ||
         resource.data.ownerId == 'guest' ||
@@ -62,6 +79,17 @@ service cloud.firestore {
       match /items/{itemId} {
         allow read, write: if isSignedIn();
       }
+    }
+
+    // System configurations & broadcast announcements
+    match /system/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Admin audit trail logs
+    match /admin_audit_logs/{logId} {
+      allow read, write: if isAdmin();
     }
   }
 }

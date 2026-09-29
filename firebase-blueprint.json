@@ -16,10 +16,61 @@
         "gridColumns": { "type": "number", "description": "Grid layout columns preference (1 or 2)" },
         "activeListId": { "type": "string", "description": "Last active list ID" },
         "userGroupOrders": { "type": "object", "description": "User specific group ordering mapping per list" },
+        "isAdmin": { "type": "boolean", "description": "Whether user has administrator privileges" },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "User access role" },
+        "status": { "type": "string", "enum": ["active", "suspended"], "description": "Account status" },
+        "lastActiveAt": { "type": "string", "format": "date-time", "description": "Last active timestamp" },
+        "notes": { "type": "string", "description": "Administrator notes on the account" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
         "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
       },
       "required": ["userId", "email"]
+    },
+    "SystemAnnouncement": {
+      "title": "SystemAnnouncement",
+      "description": "Global announcement broadcasted to all users across the platform",
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Whether the announcement banner is live" },
+        "title": { "type": "string", "description": "Announcement headline" },
+        "message": { "type": "string", "description": "Announcement message body" },
+        "type": { "type": "string", "enum": ["info", "warning", "success", "alert"], "description": "Banner severity level" },
+        "actionLabel": { "type": "string", "description": "Call to action button label" },
+        "actionUrl": { "type": "string", "description": "Call to action target URL or action identifier" },
+        "dismissible": { "type": "boolean", "description": "Whether users can dismiss the banner" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last updated timestamp" },
+        "updatedBy": { "type": "string", "description": "Admin email who created or updated the announcement" }
+      },
+      "required": ["enabled", "title", "message"]
+    },
+    "SystemConfig": {
+      "title": "SystemConfig",
+      "description": "Global application configuration and feature flags managed by administrators",
+      "type": "object",
+      "properties": {
+        "maintenanceMode": { "type": "boolean", "description": "Whether maintenance mode is activated" },
+        "maintenanceMessage": { "type": "string", "description": "Notice displayed during maintenance" },
+        "allowNewRegistrations": { "type": "boolean", "description": "Whether new user signups are permitted" },
+        "freeTierListLimit": { "type": "number", "description": "Max workspace lists allowed for free tier" },
+        "enablePublicShareLinks": { "type": "boolean", "description": "Whether public workspace sharing is enabled" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last updated timestamp" },
+        "updatedBy": { "type": "string", "description": "Admin email who updated the configuration" }
+      },
+      "required": ["maintenanceMode", "allowNewRegistrations"]
+    },
+    "AdminAuditLog": {
+      "title": "AdminAuditLog",
+      "description": "Audit record of management actions performed by administrators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique audit log entry ID" },
+        "action": { "type": "string", "description": "Action performed (e.g. grant_pro, update_config, suspend_user)" },
+        "target": { "type": "string", "description": "Target entity or user affected" },
+        "details": { "type": "string", "description": "Human-readable description of change" },
+        "adminEmail": { "type": "string", "description": "Email of admin who triggered action" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Timestamp of action" }
+      },
+      "required": ["id", "action", "adminEmail", "timestamp"]
     },
     "AppList": {
       "title": "AppList",
@@ -114,6 +165,14 @@
     "/users/{userId}/items/{itemId}": {
       "schema": "ListItem",
       "description": "Tasks and grocery items belonging to user groups and lists"
+    },
+    "/system/{systemDocId}": {
+      "schema": "SystemConfig",
+      "description": "Global application configuration, feature flags, and broadcast announcements"
+    },
+    "/admin_audit_logs/{logId}": {
+      "schema": "AdminAuditLog",
+      "description": "Administrative actions audit trail"
     }
   }
 }
