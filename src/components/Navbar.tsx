@@ -2,7 +2,6 @@ import React from 'react';
 import {
   Menu,
   Settings,
-  Shield,
 } from 'lucide-react';
 import { Language, Theme, SyncStatus, UserSubscription, AppView } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -110,23 +109,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Right: Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {isAdmin && onOpenAdmin && (
-              <button
-                id="nav-admin-btn"
-                type="button"
-                onClick={onOpenAdmin}
-                title={language === 'ar' ? 'لوحة تحكم المدير' : 'Admin Console'}
-                className={`p-2 rounded-xl transition-all cursor-pointer border ${
-                  currentView === 'admin'
-                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border-purple-300 dark:border-purple-800 shadow-2xs'
-                    : 'text-neutral-600 dark:text-neutral-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 hover:text-purple-600 dark:hover:text-purple-300 border-transparent'
-                }`}
-              >
-                <Shield className="w-5 h-5" />
-              </button>
-            )}
-
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             {onOpenSettings && (
               <button
                 id="nav-settings-btn"
