@@ -22,14 +22,14 @@ import {
   Target,
   Palette,
 } from 'lucide-react';
-import { AppList, Language, ListType } from '../types';
+import { AppList, Language } from '../types';
 import { getTranslation } from '../locales/translations';
 
 interface ListModalProps {
   isOpen: boolean;
   onClose: () => void;
   listToEdit?: AppList | null;
-  onSave: (listData: { title: string; color: string; icon: string; description?: string; type?: ListType }) => void;
+  onSave: (listData: { title: string; color: string; icon: string; description?: string }) => void;
   language: Language;
 }
 
@@ -82,7 +82,6 @@ export const ListModal: React.FC<ListModalProps> = ({
   const [description, setDescription] = useState('');
   const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0].hex);
   const [selectedIcon, setSelectedIcon] = useState(AVAILABLE_ICONS[0].id);
-  const [listType, setListType] = useState<ListType>('groceries');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -91,13 +90,11 @@ export const ListModal: React.FC<ListModalProps> = ({
       setDescription(listToEdit.description || '');
       setSelectedColor(listToEdit.color || COLOR_PALETTE[0].hex);
       setSelectedIcon(listToEdit.icon || AVAILABLE_ICONS[0].id);
-      setListType(listToEdit.type || (listToEdit.id === 'list-work' || listToEdit.id === 'list-personal' ? 'tasks' : 'groceries'));
     } else {
       setTitle('');
       setDescription('');
       setSelectedColor(COLOR_PALETTE[0].hex);
-      setSelectedIcon('shopping-cart');
-      setListType('groceries');
+      setSelectedIcon(AVAILABLE_ICONS[0].id);
     }
     setError('');
   }, [listToEdit, isOpen]);
@@ -116,7 +113,6 @@ export const ListModal: React.FC<ListModalProps> = ({
       description: description.trim() || undefined,
       color: selectedColor,
       icon: selectedIcon,
-      type: listType,
     });
     onClose();
   };
@@ -129,17 +125,9 @@ export const ListModal: React.FC<ListModalProps> = ({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 dark:border-neutral-800">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-white shadow-xs"
-              style={{ backgroundColor: selectedColor }}
-            >
-              <FolderKanban className="w-4 h-4" />
-            </div>
-            <h2 className="text-base font-bold text-neutral-900 dark:text-neutral-100">
-              {listToEdit ? t.editList : t.newListTitle}
-            </h2>
-          </div>
+          <h2 className="text-base font-bold text-neutral-900 dark:text-neutral-100">
+            {listToEdit ? t.editList : t.newListTitle}
+          </h2>
           <button
             onClick={onClose}
             className="p-1.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
@@ -150,71 +138,6 @@ export const ListModal: React.FC<ListModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5">
-          {/* List Type Selection */}
-          <div>
-            <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-2">
-              {t.listType}
-            </label>
-            <div className="grid grid-cols-2 gap-2.5">
-              {/* Groceries Card */}
-              <button
-                type="button"
-                id="select-type-groceries"
-                onClick={() => {
-                  setListType('groceries');
-                  if (selectedIcon === 'check-square' || selectedIcon === 'briefcase') {
-                    setSelectedIcon('shopping-cart');
-                  }
-                }}
-                className={`p-3 rounded-xl border text-start transition-all cursor-pointer relative ${
-                  listType === 'groceries'
-                    ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
-                    : 'bg-neutral-50/50 dark:bg-neutral-800/40 border-neutral-200 dark:border-neutral-700/80 hover:border-neutral-300 dark:hover:border-neutral-600'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <div className={`p-1.5 rounded-lg ${listType === 'groceries' ? 'bg-emerald-600 text-white' : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300'}`}>
-                    <ShoppingCart className="w-4 h-4" />
-                  </div>
-                  <span className={`text-xs font-bold ${listType === 'groceries' ? 'text-emerald-900 dark:text-emerald-200' : 'text-neutral-800 dark:text-neutral-200'}`}>
-                    {t.groceryList}
-                  </span>
-                </div>
-                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-snug">
-                  {t.groceryListDesc}
-                </p>
-              </button>
-
-              {/* Tasks Card */}
-              <button
-                type="button"
-                id="select-type-tasks"
-                onClick={() => {
-                  setListType('tasks');
-                  if (selectedIcon === 'shopping-cart') {
-                    setSelectedIcon('check-square');
-                  }
-                }}
-                className={`p-3 rounded-xl border text-start transition-all cursor-pointer relative ${
-                  listType === 'tasks'
-                    ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs'
-                    : 'bg-neutral-50/50 dark:bg-neutral-800/40 border-neutral-200 dark:border-neutral-700/80 hover:border-neutral-300 dark:hover:border-neutral-600'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <div className={`p-1.5 rounded-lg ${listType === 'tasks' ? 'bg-indigo-600 text-white' : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300'}`}>
-                    <CheckSquare className="w-4 h-4" />
-                  </div>
-                  <span className={`text-xs font-bold ${listType === 'tasks' ? 'text-indigo-900 dark:text-indigo-200' : 'text-neutral-800 dark:text-neutral-200'}`}>
-                    {t.taskList}
-                  </span>
-                </div>
-                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-snug">
-                  {t.taskListDesc}
-                </p>
-              </button>
-            </div>
-          </div>
           {/* List Title */}
           <div>
             <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5">
