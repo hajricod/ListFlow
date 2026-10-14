@@ -2,6 +2,9 @@ import React from 'react';
 import {
   Menu,
   Settings,
+  Sun,
+  Moon,
+  Monitor,
 } from 'lucide-react';
 import { Language, Theme, SyncStatus, UserSubscription, AppView } from '../types';
 import { getTranslation } from '../locales/translations';
@@ -110,6 +113,23 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right: Actions */}
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            {onCycleTheme && (
+              <button
+                id="nav-theme-toggle-btn"
+                type="button"
+                onClick={onCycleTheme}
+                title={theme === 'dark' ? t.darkMode : theme === 'system' ? t.systemMode : t.lightMode}
+                className="p-2 rounded-xl text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors cursor-pointer border border-transparent"
+              >
+                {theme === 'dark' ? (
+                  <Moon className="w-5 h-5 text-indigo-400" />
+                ) : theme === 'system' ? (
+                  <Monitor className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <Sun className="w-5 h-5 text-amber-500" />
+                )}
+              </button>
+            )}
             {onOpenSettings && (
               <button
                 id="nav-settings-btn"

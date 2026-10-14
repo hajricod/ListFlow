@@ -156,6 +156,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
   const t = getTranslation(language);
   const isPro = isProUser(subscription);
   const [listSearch, setListSearch] = useState('');
+  const [listTypeFilter, setListTypeFilter] = useState<'all' | 'groceries' | 'tasks'>('all');
   const [menuAnchor, setMenuAnchor] = useState<{ list: AppList; rect: DOMRect } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -218,9 +219,12 @@ export const SideMenu: React.FC<SideMenuProps> = ({
     return { total, completed, progress };
   };
 
-  const filteredLists = lists.filter((l) =>
-    l.title.toLowerCase().includes(listSearch.trim().toLowerCase())
-  );
+  const filteredLists = lists.filter((l) => {
+    const isTask = l.type === 'tasks' || l.id === 'list-work' || l.id === 'list-personal';
+    if (listTypeFilter === 'groceries' && isTask) return false;
+    if (listTypeFilter === 'tasks' && !isTask) return false;
+    return l.title.toLowerCase().includes(listSearch.trim().toLowerCase());
+  });
 
   // Safe floating menu position calculations
   const getFloatingMenuStyle = () => {
@@ -310,6 +314,48 @@ export const SideMenu: React.FC<SideMenuProps> = ({
             </div>
           )}
 
+          {/* List Type Segment Selector: All, Groceries, Tasks */}
+          <div className="flex items-center p-1 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-[11px] font-semibold gap-1">
+            <button
+              type="button"
+              id="filter-lists-all"
+              onClick={() => setListTypeFilter('all')}
+              className={`flex-1 py-1 px-1.5 rounded-lg text-center transition-all cursor-pointer ${
+                listTypeFilter === 'all'
+                  ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-2xs font-bold'
+                  : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200'
+              }`}
+            >
+              {language === 'ar' ? 'الكل' : 'All'}
+            </button>
+            <button
+              type="button"
+              id="filter-lists-groceries"
+              onClick={() => setListTypeFilter('groceries')}
+              className={`flex-1 py-1 px-1.5 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                listTypeFilter === 'groceries'
+                  ? 'bg-white dark:bg-neutral-700 text-emerald-700 dark:text-emerald-300 shadow-2xs font-bold'
+                  : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200'
+              }`}
+            >
+              <span className="text-[10px]">🛒</span>
+              <span>{language === 'ar' ? 'مقاضي' : 'Groceries'}</span>
+            </button>
+            <button
+              type="button"
+              id="filter-lists-tasks"
+              onClick={() => setListTypeFilter('tasks')}
+              className={`flex-1 py-1 px-1.5 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                listTypeFilter === 'tasks'
+                  ? 'bg-white dark:bg-neutral-700 text-indigo-700 dark:text-indigo-300 shadow-2xs font-bold'
+                  : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200'
+              }`}
+            >
+              <span className="text-[10px]">📋</span>
+              <span>{language === 'ar' ? 'مهام' : 'Tasks'}</span>
+            </button>
+          </div>
+
           <button
             type="button"
             id="side-menu-new-list-btn"
@@ -367,6 +413,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
               const accentColor = list.color || '#10b981';
               const isShared = list.isShared || (list.collaboratorUids && list.collaboratorUids.length > 1) || (list.invitedEmails && list.invitedEmails.length > 0);
               const isReadOnly = list.myRole === 'read';
+              const isTask = list.type === 'tasks' || list.id === 'list-work' || list.id === 'list-personal';
 
               return (
                 <div
@@ -413,6 +460,16 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                             {list.title}
                           </span>
 
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[9px] font-bold shrink-0 ${
+                              isTask
+                                ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/40'
+                                : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40'
+                            }`}
+                          >
+                            {isTask ? (language === 'ar' ? 'مهام' : 'Tasks') : (language === 'ar' ? 'مقاضي' : 'Groceries')}
+                          </span>
+
                           {isReadOnly && (
                             <span
                               className="px-1 py-0.2 rounded bg-neutral-100 dark:bg-neutral-800 text-[9px] font-bold text-neutral-500 dark:text-neutral-400 shrink-0 flex items-center gap-0.5"
@@ -423,11 +480,16 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                           )}
                         </div>
 
-                        {list.description && (
-                          <span className="text-[10px] text-neutral-400 dark:text-neutral-500 truncate block max-w-[140px] sm:max-w-[160px] leading-tight">
-                            {list.description}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] text-neutral-400 dark:text-neutral-500 font-medium">
+                            {stats.completed}/{stats.total} {isTask ? (language === 'ar' ? 'مهام' : 'tasks') : (language === 'ar' ? 'أصناف' : 'items')}
                           </span>
-                        )}
+                          {list.description && (
+                            <span className="text-[10px] text-neutral-400 dark:text-neutral-500 truncate block max-w-[100px] sm:max-w-[120px] leading-tight">
+                              • {list.description}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 

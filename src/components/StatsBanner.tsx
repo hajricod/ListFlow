@@ -15,6 +15,7 @@ import {
   EyeOff,
   SlidersHorizontal,
   Check,
+  CheckSquare,
   Share2,
   Highlighter,
 } from 'lucide-react';
@@ -54,6 +55,8 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
   fontSize,
   searchQuery,
   onSearchChange,
+  activeList,
+  totalTasks = 0,
   completedTasks,
   highlightedTasks = 0,
   filterState,
@@ -113,6 +116,62 @@ export const StatsBanner: React.FC<StatsBannerProps> = ({
   return (
     <div className="w-full max-w-full space-y-3">
       <div className="flex flex-col gap-3">
+        {/* Active List Header & Type Banner */}
+        {activeList && (
+          <div className="flex items-center justify-between gap-3 px-1 py-0.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center shadow-2xs shrink-0"
+                style={{
+                  backgroundColor: `${activeList.color || '#10b981'}20`,
+                  color: activeList.color || '#10b981',
+                }}
+              >
+                {activeList.type === 'tasks' || activeList.id === 'list-work' || activeList.id === 'list-personal' ? (
+                  <CheckSquare className="w-4 h-4" />
+                ) : (
+                  <span className="text-sm">🛒</span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <h1 className="text-base sm:text-lg font-bold text-neutral-900 dark:text-neutral-100 truncate">
+                    {activeList.title}
+                  </h1>
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold border shadow-2xs shrink-0 ${
+                      activeList.type === 'tasks' || activeList.id === 'list-work' || activeList.id === 'list-personal'
+                        ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                        : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                    }`}
+                  >
+                    <span>{activeList.type === 'tasks' || activeList.id === 'list-work' || activeList.id === 'list-personal' ? '📋' : '🛒'}</span>
+                    <span>
+                      {activeList.type === 'tasks' || activeList.id === 'list-work' || activeList.id === 'list-personal'
+                        ? (language === 'ar' ? 'قائمة مهام' : 'Task List')
+                        : (language === 'ar' ? 'قائمة مقاضي' : 'Grocery List')}
+                    </span>
+                  </span>
+                </div>
+                {activeList.description && (
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
+                    {activeList.description}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Summary Pill */}
+            <div className="hidden sm:flex items-center gap-2 shrink-0">
+              <span className="px-2.5 py-1 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-xs font-semibold text-neutral-600 dark:text-neutral-300">
+                {activeList.type === 'tasks' || activeList.id === 'list-work' || activeList.id === 'list-personal'
+                  ? `${completedTasks}/${totalTasks} ${language === 'ar' ? 'مهام منجزة' : 'tasks done'}`
+                  : `${completedTasks}/${totalTasks} ${language === 'ar' ? 'في السلة' : 'in cart'}`}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Read-Only Notice Banner */}
         {isReadOnly && (
           <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between gap-2 shadow-2xs">

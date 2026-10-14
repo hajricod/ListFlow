@@ -16,7 +16,7 @@ import {
   ListTodo,
   Highlighter,
 } from 'lucide-react';
-import { ListGroup, ListItem, Language, Priority, SortOption } from '../types';
+import { ListGroup, ListItem, Language, ListType, Priority, SortOption } from '../types';
 import { getTranslation } from '../locales/translations';
 import { IconRenderer } from './IconRenderer';
 import { ItemRow } from './ItemRow';
@@ -27,6 +27,7 @@ interface GroupCardProps {
   items: ListItem[];
   allGroups: ListGroup[];
   language: Language;
+  listType?: ListType;
   searchQuery?: string;
   isReadOnly?: boolean;
   countHighlightedOnly?: boolean;
@@ -78,6 +79,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
   items,
   allGroups,
   language,
+  listType = 'groceries',
   searchQuery,
   isReadOnly = false,
   countHighlightedOnly = false,
@@ -517,7 +519,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
                 type="text"
                 value={quickInput}
                 onChange={(e) => setQuickInput(e.target.value)}
-                placeholder={t.addItemToGroup}
+                placeholder={listType === 'tasks' ? (t.addTaskToGroup || 'Add task to this section...') : t.addItemToGroup}
                 className="w-full h-9.5 ps-3.5 pe-10 text-xs sm:text-sm bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200/80 dark:border-neutral-700/80 rounded-xl text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all"
               />
               <button
@@ -545,7 +547,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
                 <ListTodo className="w-6 h-6 mx-auto mb-2 text-neutral-300 dark:text-neutral-600 stroke-1" />
                 <p className="text-xs font-medium">{t.emptyGroup}</p>
                 <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">
-                  {t.emptyGroupHint}
+                  {listType === 'tasks' ? (language === 'ar' ? 'لا توجد مهام في هذا القسم بعد' : 'No tasks in this section yet') : t.emptyGroupHint}
                 </p>
               </div>
             ) : (
@@ -555,6 +557,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
                   item={item}
                   groups={allGroups}
                   language={language}
+                  listType={listType}
                   searchQuery={searchQuery}
                   isReadOnly={isReadOnly}
                   onToggleComplete={onToggleComplete}

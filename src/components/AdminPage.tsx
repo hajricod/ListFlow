@@ -398,31 +398,31 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   return (
     <div className="w-full max-w-7xl 2xl:max-w-[1600px] mx-auto space-y-6 pb-12">
       {/* 1. Header Banner */}
-      <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-neutral-900 via-neutral-850 to-neutral-900 text-white shadow-xl border border-neutral-800 relative overflow-hidden">
-        <div className="absolute top-0 end-0 -mt-12 -me-12 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white shadow-xs dark:shadow-xl border border-neutral-200/90 dark:border-neutral-800/90 relative overflow-hidden transition-colors">
+        <div className="absolute top-0 end-0 -mt-12 -me-12 w-64 h-64 bg-emerald-500/10 dark:bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <button
               type="button"
               onClick={onBackToWorkspace}
               title={isArabic ? 'الرجوع لمساحة العمل' : 'Back to Workspace'}
-              className="p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer shrink-0"
+              className="p-2.5 rounded-2xl bg-neutral-100 hover:bg-neutral-200/80 dark:bg-neutral-800 dark:hover:bg-neutral-750 text-neutral-700 dark:text-neutral-200 border border-neutral-200/80 dark:border-neutral-700/80 transition-colors cursor-pointer shrink-0 active:scale-95"
             >
               <ArrowLeft className="w-5 h-5 rtl:rotate-180" />
             </button>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0 shadow-inner">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/90 dark:border-emerald-800/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 shadow-2xs">
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-black tracking-tight">
+                <h1 className="text-xl sm:text-2xl font-black tracking-tight text-neutral-900 dark:text-white">
                   {isArabic ? 'لوحة تحكم المدير' : 'Admin Console'}
                 </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-700/80">
                   {currentUser?.email === PRIMARY_ADMIN_EMAIL ? 'Super Admin' : 'Admin'}
                 </span>
               </div>
-              <p className="text-xs sm:text-sm text-neutral-300 mt-0.5">
+              <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 mt-0.5">
                 {isArabic
                   ? 'إدارة حسابات المستخدمين، الاشتراكات، الإعلانات العامة، وإعدادات النظام'
                   : 'Manage users, pro subscriptions, broadcast announcements, and system policies'}
@@ -435,7 +435,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
               type="button"
               onClick={loadDashboardData}
               disabled={isRefreshing}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white transition-colors cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-neutral-100 hover:bg-neutral-200/80 dark:bg-neutral-800 dark:hover:bg-neutral-750 text-neutral-700 dark:text-neutral-200 border border-neutral-200/80 dark:border-neutral-700/80 transition-colors cursor-pointer disabled:opacity-50 active:scale-95 shadow-2xs"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span>{isArabic ? 'تحديث البيانات' : 'Refresh Data'}</span>
@@ -443,7 +443,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
             <button
               type="button"
               onClick={onBackToWorkspace}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white transition-all cursor-pointer shadow-xs active:scale-95"
             >
               <span>{isArabic ? 'مساحة العمل' : 'Workspace'}</span>
             </button>
@@ -534,19 +534,25 @@ export const AdminPage: React.FC<AdminPageProps> = ({
       </div>
 
       {/* 3. Navigation Tabs */}
-      <div className="border-b border-neutral-200 dark:border-neutral-800 flex items-center gap-1 sm:gap-2 overflow-x-auto custom-scrollbar pb-1">
+      <div className="p-1 sm:p-1.5 rounded-2xl bg-neutral-100/90 dark:bg-neutral-900 border border-neutral-200/90 dark:border-neutral-800/90 flex items-center gap-1 sm:gap-1.5 overflow-x-auto custom-scrollbar shadow-2xs">
         <button
           type="button"
           onClick={() => setActiveTab('users')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shrink-0 ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shrink-0 active:scale-95 ${
             activeTab === 'users'
-              ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 shadow-xs'
-              : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              ? 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-50 shadow-xs border border-neutral-200/80 dark:border-neutral-700/80'
+              : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200 hover:bg-white/60 dark:hover:bg-neutral-800/50 border border-transparent'
           }`}
         >
-          <Users className="w-4 h-4" />
+          <Users className={`w-4 h-4 ${activeTab === 'users' ? 'text-emerald-600 dark:text-emerald-400' : 'text-neutral-500 dark:text-neutral-400'}`} />
           <span>{isArabic ? 'إدارة المستخدمين' : 'User Accounts'}</span>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-neutral-200 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-200">
+          <span
+            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+              activeTab === 'users'
+                ? 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/60'
+                : 'bg-neutral-200/80 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+            }`}
+          >
             {users.length}
           </span>
         </button>
@@ -554,32 +560,32 @@ export const AdminPage: React.FC<AdminPageProps> = ({
         <button
           type="button"
           onClick={() => setActiveTab('announcement')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shrink-0 ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shrink-0 active:scale-95 ${
             activeTab === 'announcement'
-              ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 shadow-xs'
-              : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              ? 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-50 shadow-xs border border-neutral-200/80 dark:border-neutral-700/80'
+              : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200 hover:bg-white/60 dark:hover:bg-neutral-800/50 border border-transparent'
           }`}
         >
-          <Bell className="w-4 h-4" />
+          <Bell className={`w-4 h-4 ${activeTab === 'announcement' ? 'text-amber-500' : 'text-neutral-500 dark:text-neutral-400'}`} />
           <span>{isArabic ? 'الإعلانات العامة' : 'Broadcast Banner'}</span>
           {announcement.enabled && (
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
           )}
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('config')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shrink-0 ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shrink-0 active:scale-95 ${
             activeTab === 'config'
-              ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 shadow-xs'
-              : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              ? 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-50 shadow-xs border border-neutral-200/80 dark:border-neutral-700/80'
+              : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200 hover:bg-white/60 dark:hover:bg-neutral-800/50 border border-transparent'
           }`}
         >
-          <Sliders className="w-4 h-4" />
+          <Sliders className={`w-4 h-4 ${activeTab === 'config' ? 'text-purple-600 dark:text-purple-400' : 'text-neutral-500 dark:text-neutral-400'}`} />
           <span>{isArabic ? 'إعدادات النظام' : 'System Policies'}</span>
           {systemConfig.maintenanceMode && (
-            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500 text-white">
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-500/15 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-500/30">
               MAINT
             </span>
           )}
@@ -588,15 +594,21 @@ export const AdminPage: React.FC<AdminPageProps> = ({
         <button
           type="button"
           onClick={() => setActiveTab('workspaces')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shrink-0 ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shrink-0 active:scale-95 ${
             activeTab === 'workspaces'
-              ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 shadow-xs'
-              : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              ? 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-50 shadow-xs border border-neutral-200/80 dark:border-neutral-700/80'
+              : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200 hover:bg-white/60 dark:hover:bg-neutral-800/50 border border-transparent'
           }`}
         >
-          <FolderKanban className="w-4 h-4" />
+          <FolderKanban className={`w-4 h-4 ${activeTab === 'workspaces' ? 'text-emerald-600 dark:text-emerald-400' : 'text-neutral-500 dark:text-neutral-400'}`} />
           <span>{isArabic ? 'مساحات العمل' : 'Workspaces Moderation'}</span>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-neutral-200 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-200">
+          <span
+            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+              activeTab === 'workspaces'
+                ? 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/60'
+                : 'bg-neutral-200/80 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+            }`}
+          >
             {workspaces.length}
           </span>
         </button>
@@ -604,14 +616,25 @@ export const AdminPage: React.FC<AdminPageProps> = ({
         <button
           type="button"
           onClick={() => setActiveTab('audit')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shrink-0 ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shrink-0 active:scale-95 ${
             activeTab === 'audit'
-              ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 shadow-xs'
-              : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              ? 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-50 shadow-xs border border-neutral-200/80 dark:border-neutral-700/80'
+              : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200 hover:bg-white/60 dark:hover:bg-neutral-800/50 border border-transparent'
           }`}
         >
-          <Clock className="w-4 h-4" />
+          <Clock className={`w-4 h-4 ${activeTab === 'audit' ? 'text-blue-600 dark:text-blue-400' : 'text-neutral-500 dark:text-neutral-400'}`} />
           <span>{isArabic ? 'سجل العمليات' : 'Audit Trail'}</span>
+          {auditLogs.length > 0 && (
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                activeTab === 'audit'
+                  ? 'bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200/70 dark:border-blue-800/60'
+                  : 'bg-neutral-200/80 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+              }`}
+            >
+              {auditLogs.length}
+            </span>
+          )}
         </button>
       </div>
 

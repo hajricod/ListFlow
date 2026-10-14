@@ -24,14 +24,16 @@ export const SEED_LISTS: Record<Language, AppList[]> = {
     {
       id: 'list-groceries',
       title: 'Weekly Groceries',
+      type: 'groceries',
       color: '#10b981', // Emerald
-      icon: 'check-square',
+      icon: 'shopping-cart',
       description: 'Weekly food essentials, fresh produce, and pantry staples',
       createdAt: new Date().toISOString(),
     },
     {
       id: 'list-work',
       title: 'Work Sprint',
+      type: 'tasks',
       color: '#6366f1', // Indigo
       icon: 'briefcase',
       description: 'Sprint milestones, client deliverables, and design tasks',
@@ -40,6 +42,7 @@ export const SEED_LISTS: Record<Language, AppList[]> = {
     {
       id: 'list-personal',
       title: 'Personal Goals',
+      type: 'tasks',
       color: '#f59e0b', // Amber
       icon: 'sparkles',
       description: 'Daily routines, reading list, and wellness tracking',
@@ -50,14 +53,16 @@ export const SEED_LISTS: Record<Language, AppList[]> = {
     {
       id: 'list-groceries',
       title: 'مقاضي الأسرة الأسبوعية',
+      type: 'groceries',
       color: '#10b981',
-      icon: 'check-square',
+      icon: 'shopping-cart',
       description: 'المستلزمات الأسبوعية والخضار والمؤونة',
       createdAt: new Date().toISOString(),
     },
     {
       id: 'list-work',
       title: 'مهام العمل والمشاريع',
+      type: 'tasks',
       color: '#6366f1',
       icon: 'briefcase',
       description: 'مراحل المشروع ومهام البرمجة والتصميم',
@@ -66,6 +71,7 @@ export const SEED_LISTS: Record<Language, AppList[]> = {
     {
       id: 'list-personal',
       title: 'الأهداف والعادات الشخصية',
+      type: 'tasks',
       color: '#f59e0b',
       icon: 'sparkles',
       description: 'العادات اليومية والرياضة وتطوير الذات',

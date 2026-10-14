@@ -21,6 +21,8 @@ export type GroceryUnit =
   | 'liters'
   | 'custom';
 
+export type ListType = 'groceries' | 'tasks';
+
 export interface ListItem {
   id: string;
   groupId: string;
@@ -33,7 +35,9 @@ export interface ListItem {
   completedAt?: string;
   createdAt: string;
   order?: number;
+  startDate?: string;
   dueDate?: string;
+  reminder?: string;
   priority?: Priority;
   tags?: string[];
   subtasks?: SubTask[];
@@ -59,6 +63,7 @@ export interface ShareMember {
 export interface AppList {
   id: string;
   title: string;
+  type?: ListType;
   color: string;
   icon: string;
   description?: string;

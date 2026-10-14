@@ -140,7 +140,7 @@ import {
   unshareUserListsOnSubscriptionCancel,
   syncAllLocalListsToFirestoreOnProUpgrade,
 } from './utils/firestoreSync';
-import { Plus, ListTodo, Layers, Users, Check, Pencil } from 'lucide-react';
+import { Plus, ListTodo, Layers, Users, Check, Pencil, Sun, Moon, Monitor } from 'lucide-react';
 import { IconRenderer } from './components/IconRenderer';
 
 export default function App() {
@@ -3785,22 +3785,92 @@ export default function App() {
               {activeList && (
                 <div
                   id="main-list-header"
-                  className="flex items-center justify-between gap-3 pt-1 pb-0.5"
+                  className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white dark:bg-neutral-900 border border-neutral-200/90 dark:border-neutral-800/90 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors"
                 >
-                  <div className="min-w-0">
-                    <h1
-                      id="main-list-title"
-                      className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100 truncate"
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div
+                      className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shrink-0 border transition-transform duration-200"
+                      style={{
+                        backgroundColor: `${activeListColor}18`,
+                        borderColor: `${activeListColor}35`,
+                        color: activeListColor,
+                      }}
                     >
-                      {activeList.title}
-                    </h1>
-                    {activeList.description && (
-                      <p
-                        id="main-list-description"
-                        className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 truncate mt-0.5"
+                      <IconRenderer name={activeList.icon || 'layers'} className="w-6 h-6" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h1
+                          id="main-list-title"
+                          className="text-lg sm:text-2xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100 truncate"
+                        >
+                          {activeList.title}
+                        </h1>
+                        {isShared && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
+                            <Users className="w-3 h-3" />
+                            <span>{language === 'ar' ? 'مشتركة' : 'Shared'}</span>
+                          </span>
+                        )}
+                        {totalItems > 0 && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200/60 dark:border-neutral-700/60">
+                            {collectedItems}/{totalItems} {language === 'ar' ? 'مكتمل' : 'done'}
+                          </span>
+                        )}
+                      </div>
+                      {activeList.description && (
+                        <p
+                          id="main-list-description"
+                          className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 truncate mt-1"
+                        >
+                          {activeList.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Header Actions (Theme Toggle & Edit List) */}
+                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                    {/* Dark / Light / System Mode Toggle Button */}
+                    <button
+                      type="button"
+                      id="header-theme-toggle-btn"
+                      onClick={cycleTheme}
+                      title={theme === 'dark' ? t.darkMode : theme === 'system' ? t.systemMode : t.lightMode}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold text-neutral-700 dark:text-neutral-200 bg-neutral-100 hover:bg-neutral-200/80 dark:bg-neutral-800 dark:hover:bg-neutral-700/80 border border-neutral-200/70 dark:border-neutral-700/70 transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-2xs"
+                    >
+                      {theme === 'dark' ? (
+                        <>
+                          <Moon className="w-4 h-4 text-indigo-400" />
+                          <span>{t.darkMode}</span>
+                        </>
+                      ) : theme === 'system' ? (
+                        <>
+                          <Monitor className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                          <span>{t.systemMode}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sun className="w-4 h-4 text-amber-500" />
+                          <span>{t.lightMode}</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Edit List Button */}
+                    {!isReadOnly && (
+                      <button
+                        type="button"
+                        id="header-edit-list-btn"
+                        onClick={() => {
+                          setSelectedListForEdit(activeList);
+                          setIsListModalOpen(true);
+                        }}
+                        title={t.editList}
+                        className="p-2 rounded-xl text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 bg-neutral-100/80 hover:bg-neutral-200/80 dark:bg-neutral-800/80 dark:hover:bg-neutral-700/80 border border-neutral-200/60 dark:border-neutral-700/60 transition-colors cursor-pointer active:scale-95"
                       >
-                        {activeList.description}
-                      </p>
+                        <Pencil className="w-4 h-4" />
+                      </button>
                     )}
                   </div>
                 </div>

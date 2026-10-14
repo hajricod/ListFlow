@@ -13,8 +13,13 @@ import {
   Highlighter,
   ArrowUp,
   ArrowDown,
+  Clock,
+  Calendar,
+  Bell,
+  CheckSquare,
+  Flag,
 } from 'lucide-react';
-import { ListItem, ListGroup, Language } from '../types';
+import { ListItem, ListGroup, Language, ListType } from '../types';
 import { getTranslation } from '../locales/translations';
 import { sounds } from '../utils/audio';
 
@@ -22,6 +27,7 @@ interface ItemRowProps {
   item: ListItem;
   groups: ListGroup[];
   language: Language;
+  listType?: ListType;
   searchQuery?: string;
   isReadOnly?: boolean;
   onToggleComplete: (id: string) => void;
@@ -75,6 +81,7 @@ export const ItemRow: React.FC<ItemRowProps> = ({
   item,
   groups,
   language,
+  listType = 'groceries',
   searchQuery,
   isReadOnly = false,
   onToggleComplete,
@@ -163,6 +170,19 @@ export const ItemRow: React.FC<ItemRowProps> = ({
 
   const otherGroups = groups.filter((g) => g.id !== item.groupId);
 
+  const formatDate = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   return (
     <div
       id={`grocery-item-${item.id}`}
@@ -206,10 +226,10 @@ export const ItemRow: React.FC<ItemRowProps> = ({
 
       {/* Inner contents wrapped with pointer-events-none while another item is dragged so drop target doesn't flicker */}
       <div className={`flex flex-col gap-1.5 w-full ${draggingItemId && draggingItemId !== item.id ? 'pointer-events-none' : ''}`}>
-        {/* Top Meta Bar: Drag Handle, Checkbox, Pinned, Quantity Badge & Actions */}
+        {/* Top Meta Bar: Drag Handle, Checkbox, Pinned, Quantity/Task Badges & Actions */}
         <div className="flex items-center justify-between gap-2">
-          {/* Left: Drag Grip, Checkbox, Pinned, Quantity */}
-          <div className="flex items-center gap-2 min-w-0">
+          {/* Left: Drag Grip, Checkbox, Pinned, and (Task Badges OR Quantity Counter) */}
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
             {/* Drag Grip Handle */}
             {!isReadOnly && (
               <div
@@ -220,89 +240,183 @@ export const ItemRow: React.FC<ItemRowProps> = ({
               </div>
             )}
 
-          {/* In-Cart Checkbox Button */}
-          <button
-            id={`checkbox-${item.id}`}
-            type="button"
-            onClick={!isReadOnly ? handleCheckboxClick : undefined}
-            disabled={isReadOnly}
-            className={`w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0 border ${
-              isReadOnly ? 'cursor-default opacity-80' : 'cursor-pointer'
-            } ${
-              item.completed
-                ? 'bg-emerald-500 border-emerald-500 text-white shadow-2xs'
-                : 'border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800 hover:border-emerald-500 dark:hover:border-emerald-400'
-            }`}
-            aria-label={item.completed ? t.toBuy : t.inCart}
-          >
-            {item.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-          </button>
+            {/* Checkbox Button */}
+            <button
+              id={`checkbox-${item.id}`}
+              type="button"
+              onClick={!isReadOnly ? handleCheckboxClick : undefined}
+              disabled={isReadOnly}
+              className={`w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0 border ${
+                isReadOnly ? 'cursor-default opacity-80' : 'cursor-pointer'
+              } ${
+                item.completed
+                  ? listType === 'tasks'
+                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-2xs'
+                    : 'bg-emerald-500 border-emerald-500 text-white shadow-2xs'
+                  : 'border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800 hover:border-emerald-500 dark:hover:border-emerald-400'
+              }`}
+              aria-label={item.completed ? t.toBuy : t.inCart}
+            >
+              {item.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+            </button>
 
-          {item.isPinned && (
-            <span title={t.pinItem} className="text-amber-500 dark:text-amber-400 shrink-0">
-              <Pin className="w-3.5 h-3.5 fill-amber-500" />
-            </span>
-          )}
-
-          {/* Quantity & Unit Pill with Quick Adjustment Buttons */}
-          {(item.quantity !== undefined || Boolean(item.unit)) && (
-            <div className="flex items-center gap-1">
-              {/* Quick Decrement */}
-              {!isReadOnly && onUpdateQuantity && item.quantity !== undefined && (
-                <button
-                  id={`qty-minus-${item.id}`}
-                  type="button"
-                  data-no-drag
-                  disabled={item.quantity <= 1}
-                  onClick={(e) => {
-                    if (item.quantity !== undefined && item.quantity > 1) {
-                      handleQuickQuantity(e, -1);
-                    }
-                  }}
-                  className={`w-6 h-6 sm:w-5 sm:h-5 rounded-md flex items-center justify-center transition-all ${
-                    item.quantity <= 1
-                      ? 'text-neutral-300 dark:text-neutral-600 cursor-not-allowed opacity-25 sm:opacity-0 sm:group-hover/item:opacity-25 pointer-events-none'
-                      : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer active:scale-95 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100'
-                  }`}
-                  title={t.decreaseQuantity || 'Decrease quantity'}
-                  aria-label={t.decreaseQuantity || 'Decrease quantity'}
-                >
-                  <Minus className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
-                </button>
-              )}
-
-              {/* Quantity Badge */}
-              <span
-                onClick={!isReadOnly ? () => onEditItem(item) : undefined}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold ${
-                  !isReadOnly ? 'cursor-pointer' : 'cursor-default'
-                } transition-colors ${
-                  item.completed
-                    ? 'bg-neutral-100 dark:bg-neutral-800/80 text-neutral-400 dark:text-neutral-500'
-                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60'
-                }`}
-              >
-                {item.quantity !== undefined && <span>{item.quantity}</span>}
-                {item.unit && <span className="font-normal opacity-85">{item.unit}</span>}
+            {item.isPinned && (
+              <span title={t.pinItem} className="text-amber-500 dark:text-amber-400 shrink-0">
+                <Pin className="w-3.5 h-3.5 fill-amber-500" />
               </span>
+            )}
 
-              {/* Quick Increment */}
-              {!isReadOnly && onUpdateQuantity && item.quantity !== undefined && (
-                <button
-                  id={`qty-plus-${item.id}`}
-                  type="button"
-                  data-no-drag
-                  onClick={(e) => handleQuickQuantity(e, 1)}
-                  className="w-6 h-6 sm:w-5 sm:h-5 rounded-md flex items-center justify-center text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 transition-all cursor-pointer active:scale-95"
-                  title={t.increaseQuantity || 'Increase quantity'}
-                  aria-label={t.increaseQuantity || 'Increase quantity'}
-                >
-                  <Plus className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+            {/* DIFFERENTIATION: Tasks show Priority / Dates / Reminders / Subtasks without counter; Groceries show Quantity Counter */}
+            {listType === 'tasks' ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {/* Priority Chip */}
+                {item.priority && (
+                  <span
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border ${
+                      item.priority === 'urgent'
+                        ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60'
+                        : item.priority === 'high'
+                        ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60'
+                        : item.priority === 'low'
+                        ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700'
+                        : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/60'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        item.priority === 'urgent'
+                          ? 'bg-rose-500'
+                          : item.priority === 'high'
+                          ? 'bg-amber-500'
+                          : item.priority === 'low'
+                          ? 'bg-neutral-400'
+                          : 'bg-blue-500'
+                      }`}
+                    />
+                    <span>
+                      {item.priority === 'urgent'
+                        ? (t.priorityUrgent || 'Urgent')
+                        : item.priority === 'high'
+                        ? (t.priorityHigh || 'High')
+                        : item.priority === 'low'
+                        ? (t.priorityLow || 'Low')
+                        : (t.priorityMedium || 'Medium')}
+                    </span>
+                  </span>
+                )}
+
+                {/* Due Date or Date Range */}
+                {(item.dueDate || item.startDate) && (
+                  <span
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border ${
+                      item.dueDate && !item.completed && new Date(item.dueDate).getTime() < Date.now()
+                        ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800'
+                        : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700'
+                    }`}
+                  >
+                    <Clock className="w-3 h-3 text-neutral-400 shrink-0" />
+                    <span>
+                      {item.startDate && item.dueDate
+                        ? `${formatDate(item.startDate)} – ${formatDate(item.dueDate)}`
+                        : item.dueDate
+                        ? `${t.due || 'Due'}: ${formatDate(item.dueDate)}`
+                        : `${t.starts || 'Starts'}: ${formatDate(item.startDate!)}`}
+                    </span>
+                  </span>
+                )}
+
+                {/* Reminder Badge */}
+                {item.reminder && (
+                  <span
+                    title={t.reminder || 'Reminder'}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+                  >
+                    <Bell className="w-3 h-3 text-amber-500 shrink-0" />
+                    <span>
+                      {item.reminder === 'at_start'
+                        ? (t.reminderAtStart || 'At start')
+                        : item.reminder === '15m'
+                        ? (t.reminder15m || '15m')
+                        : item.reminder === '1h'
+                        ? (t.reminder1h || '1h')
+                        : item.reminder === '1d'
+                        ? (t.reminder1d || '1d')
+                        : item.reminder}
+                    </span>
+                  </span>
+                )}
+
+                {/* Subtasks Count Badge */}
+                {item.subtasks && item.subtasks.length > 0 && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                    <CheckSquare className="w-3 h-3 text-indigo-500 shrink-0" />
+                    <span>
+                      {item.subtasks.filter((s) => s.completed).length}/{item.subtasks.length}
+                    </span>
+                  </span>
+                )}
+              </div>
+            ) : (
+              /* Grocery Quantity & Unit Pill with Quick Adjustment Stepper */
+              (item.quantity !== undefined || Boolean(item.unit)) && (
+                <div className="flex items-center gap-1">
+                  {/* Quick Decrement */}
+                  {!isReadOnly && onUpdateQuantity && item.quantity !== undefined && (
+                    <button
+                      id={`qty-minus-${item.id}`}
+                      type="button"
+                      data-no-drag
+                      disabled={item.quantity <= 1}
+                      onClick={(e) => {
+                        if (item.quantity !== undefined && item.quantity > 1) {
+                          handleQuickQuantity(e, -1);
+                        }
+                      }}
+                      className={`w-6 h-6 sm:w-5 sm:h-5 rounded-md flex items-center justify-center transition-all ${
+                        item.quantity <= 1
+                          ? 'text-neutral-300 dark:text-neutral-600 cursor-not-allowed opacity-25 sm:opacity-0 sm:group-hover/item:opacity-25 pointer-events-none'
+                          : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer active:scale-95 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100'
+                      }`}
+                      title={t.decreaseQuantity || 'Decrease quantity'}
+                      aria-label={t.decreaseQuantity || 'Decrease quantity'}
+                    >
+                      <Minus className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
+                    </button>
+                  )}
+
+                  {/* Quantity Badge */}
+                  <span
+                    onClick={!isReadOnly ? () => onEditItem(item) : undefined}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold ${
+                      !isReadOnly ? 'cursor-pointer' : 'cursor-default'
+                    } transition-colors ${
+                      item.completed
+                        ? 'bg-neutral-100 dark:bg-neutral-800/80 text-neutral-400 dark:text-neutral-500'
+                        : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60'
+                    }`}
+                  >
+                    {item.quantity !== undefined && <span>{item.quantity}</span>}
+                    {item.unit && <span className="font-normal opacity-85">{item.unit}</span>}
+                  </span>
+
+                  {/* Quick Increment */}
+                  {!isReadOnly && onUpdateQuantity && item.quantity !== undefined && (
+                    <button
+                      id={`qty-plus-${item.id}`}
+                      type="button"
+                      data-no-drag
+                      onClick={(e) => handleQuickQuantity(e, 1)}
+                      className="w-6 h-6 sm:w-5 sm:h-5 rounded-md flex items-center justify-center text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 transition-all cursor-pointer active:scale-95"
+                      title={t.increaseQuantity || 'Increase quantity'}
+                      aria-label={t.increaseQuantity || 'Increase quantity'}
+                    >
+                      <Plus className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
+                    </button>
+                  )}
+                </div>
+              )
+            )}
+          </div>
 
         {/* Right: Quick Reorder buttons & More Options Menu */}
         {!isReadOnly && (
